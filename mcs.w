@@ -7,6 +7,8 @@ reimplemented using ANSI \CEE/ using new data structures and
 algorithms.
 
 @i overview.w
+@i main.w
+
 @i history.w
 
 @**Index.
