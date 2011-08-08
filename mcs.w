@@ -178,9 +178,9 @@ daughter particles}@^daughter particle@>, and are stored as a
 linked-list. The pointer |daughter| points to the head of this linked
 list.
 
-@<Definition of a particle@>=
+@<Definition of a physics particle@>=
 struct particle_struct {
-        vect3d position;
+        vect3d momentum;
         double mass;  
       	double charge;
       	vect3d polarisation;
@@ -188,26 +188,23 @@ struct particle_struct {
       	struct particle_struct *next;
       	struct particle_struct *daughters;
 };
-typedef struct particle_struct particle;
+typedef struct particle_struct Particle;
 
 @ Function |create_particle| creates a new particle and returns a
 valid particle, or |NULL| if a new particle cannot be created.
 
 @<Create a new particle@>=
-particle *create_particle(vertex *v)
+Particle *create_particle(Vertex *v)
 {
-	particle *p = (particle *) malloc(sizeof(particle));
+	Particle *p = (Particle *) malloc(sizeof(Particle));
 	if (p) {
-	        @<Initialise new particle with the default values@>;
+	        @<Initialise new particle@>;
 		@<Add new particle to the generating vertex@>;
 	}
 	return p;
 }
 
-@ @<Initialise new particle with the default values@>=
-p->position.x = v->position.x;
-p->position.y = v->position.y;
-p->position.z = v->position.z;
+@ @<Initialise new particle@>=
 p->num_daughters = 0;
 p->daughters = NULL;
 
@@ -220,9 +217,9 @@ v->num_particles++;
 daughters.
 
 @<Destroy particle@>=
-void destroy_particle(particle *p)
+void destroy_particle(Particle *p)
 {
-	particle *t;
+	Particle *t;
 	if (p == NULL) return;
 	while (p->daughters) {
 	        t = p->daughters->next;
@@ -230,6 +227,26 @@ void destroy_particle(particle *p)
 		p->daughters = t;
 	}
 	free(p);
+}
+
+@ Print a primary including all of its secondary particles.
+
+@<Print particle tree@>=
+void print_particle(Particle *p)
+{
+	Particle *t;
+	if (p == NULL) return;
+	@<Print particle information@>;
+	@<Print daughter particles@>;
+}
+
+@ @<Print particle information@>=
+
+@ @<Print daughter particles@>=
+t = p->daughters;
+while (t) {
+	print_particle(t);
+	t = t->next;
 }
 
 @ @<Generate primary particles@>=
@@ -255,19 +272,19 @@ with it. These are stored as a linked-list.
 struct vertex_struct {
        vect3d position;
        uint32_t num_particles;
-       particle *particles;
+       Particle *particles;
        struct vertex_struct *next;
 };
-typedef struct vertex_struct vertex;
+typedef struct vertex_struct Vertex;
 
 @ Function |create_vertex| creates a new vertex, and associates the
 vertex with the supplied event. This functions returns a pointer to
 the vertex, or |NULL| if a new vertex could not be created.
 
 @<Create a new vertex@>=
-vertex *create_vertex(event *e)
+Vertex *create_vertex(Event *e)
 {
-	vertex *v = (vertex *) malloc(sizeof(vertex));
+	Vertex *v = (Vertex *) malloc(sizeof(Vertex));
 	if (v) {
 	        v->particles = NULL;
 	        v->num_particles = 0;
@@ -282,9 +299,9 @@ vertex *create_vertex(event *e)
 the particles associated with it.
 
 @<Destroy vertex@>=
-void destroy_vertex(vertex *v)
+void destroy_vertex(Vertex *v)
 {
-	particle *t;
+	Particle *t;
 	if (v == NULL) return;
 	while (v->particles) {
 	        t = v->particles->next;
@@ -292,6 +309,19 @@ void destroy_vertex(vertex *v)
 	        v->particles = t;	
 	}
 	free(v);
+}
+
+@ Print a vertex with all of its primary and secondary particles.
+
+@<Print vertex tree@>=
+void print_vertex(Vertex *v)
+{
+	if (v == NULL) return;
+	current_particle = v->particles;
+	while (current_particle) {
+	        print_particle(current_particle);
+		current_particle = current_particle->next;
+	}
 }
 
 @ @<Generate vertices@>=
@@ -302,6 +332,83 @@ for (j = 0; j < num_vertices; j++) {
 		@<Simulation has failed! Exit application@>;
 	}
 	@<Generate primary particles@>;
+}
+
+@** Particle gun.
+
+@<Definition of a particle gun@>=
+struct particle_gun_struct {
+       uint32_t num_particles; /* no. particles to generate */
+       vect3d position; /* vertex position */
+       vect3d momentum;
+       vect3d polarisation;
+       double energy;
+       double charge;
+};
+typedef struct particle_gun_struct Particle_gun;
+
+@ There should be only one particle gun.
+
+@<Create a particle gun@>=
+Particle_gun *create_particle_gun(uint32_t n)
+{
+	if (particle_gun) return particle_gun;
+        particle_gun = (Particle_gun *)	malloc(sizeof(Particle_gun));
+	if (particle_gun) {
+                particle_gun->num_particles = n;
+		particle_gun->position = zero_vector;
+		particle_gun->momentum = zero_vector;
+		particle_gun->polarisation = zero_vector;
+		particle_gun->energy = 0.0;
+		particle_gun->charge = 0.0;
+	}
+}
+
+@ All of the particles generated from a vertex will have the same
+physical quantities as currently defined by the particle gun 
+parameters. Hence, before generating a vertex, the particle gun must
+be initialised with the required parameters by invoking the
+corresponding |set_pg_*| functions. To generate particles with different
+physical quantities, different vertices must be generated after
+initialising the particle gun parameters as required.
+
+@ The number of particles to be generated with each activation of the
+particle gun.
+
+@<Set num particles to be generated by particle gun@>=
+void set_pg_num_particles(uint32_t n)
+{
+	particle_gun->num_particles = n;
+}
+
+@ @<Set position of particle gun@>=
+void set_pg_position(vect3d position)
+{
+	particle_gun->position = position;
+}
+
+@ @<Set momentum of particle gun@>=
+void set_pg_momentum(vect3d momentum)
+{
+	particle_gun->momentum = momentum;
+}
+
+@ @<Set polarisation of particle gun@>=
+void set_pg_polarisation(vect3d polarisation)
+{
+	particle_gun->polarisation = polarisation;
+}
+
+@ @<Set energy of particle gun@>=
+void set_pg_energy(double energy)
+{
+	particle_gun->energy = energy;
+}
+
+@ @<Set charge of particle gun@>=
+void set_pg_charge(double charge)
+{
+	particle_gun->charge = charge;
 }
 
 @** Events.
@@ -316,14 +423,14 @@ first be placed on one of the vertices of the event being simulated.
 struct event_struct {
        uint32_t id; /* event identifier */
        uint32_t num_vertices;
-       vertex *vertices;
+       Vertex *vertices;
 };
-typedef struct event_struct event;
+typedef struct event_struct Event;
 
 @ @<Create an event with the specified identifier@>=
-event *create_event(uint32_t id)
+Event *create_event(uint32_t id)
 {
-	event *e = (event *) malloc(sizeof(event));
+	Event *e = (Event *) malloc(sizeof(Event));
 	if (e) {
 	        e->id = id;
 		e->num_vertices = 0;
@@ -333,9 +440,9 @@ event *create_event(uint32_t id)
 }
 
 @ @<Destroy an event@>=
-void destroy_event(event *e)
+void destroy_event(Event *e)
 {
-	vertex *v;
+	Vertex *v;
 	if (e == NULL) return;
 	while (e->vertices) {
 	      v = e->vertices->next;
@@ -343,6 +450,20 @@ void destroy_event(event *e)
 	      e->vertices = v;
 	}
 	free(e);
+}
+
+@ Print event information, which is a tree with all of the vertices, primary
+particles, and secondary daughter particles.
+
+@<Print event tree@>=
+void print_event(Event *e)
+{
+	if (e == NULL) return;
+	current_vertex = e->vertices;
+	while (current_vertex) {
+	        print_vertex(current_vertex);
+		current_vertex = current_vertex->next;
+	}
 }
 
 @ To simulate an event, we first create an event object. Then, we
@@ -354,11 +475,14 @@ if (current_event == NULL) {
         fatal("failed to create event");
 	@<Simulation has failed! Exit application@>;
 }
-
-
+@<Set particle gun parameters@>;
 @<Generate vertices@>;
 @<Simulate the event@>;
 destroy_event(current_event);
+
+@** User specified.
+
+@<Set particle gun parameters@>=
 
 @** Running the simulation.
 
@@ -382,18 +506,21 @@ following macros: |fatal|, |warn|, and |info|.
 
 @ @<Global variables@>=
 uint32_t i, j, k, l, m, n; /* counters */
-event *current_event = NULL;
-vertex *current_vertex = NULL;
-particle *current_particle = NULL;
+Event *current_event = NULL;
+Vertex *current_vertex = NULL;
+Particle *current_particle = NULL;
 uint32_t num_events;
 uint32_t num_vertices;
 uint32_t num_particles;
+Particle_gun *particle_gun = NULL;
+vect3d zero_vector = { 0.0, 0.0, 0.0 };
 
 @ @<Global data structures@>=
 @<Definition of a three-dimensional vector@>;
-@<Definition of a particle@>;
+@<Definition of a physics particle@>;
 @<Definition of a vertex@>;
 @<Definition of an event@>;
+@<Definition of a particle gun@>;
 
 @ @<Global functions@>=
 @<Calculate vector magnitude@>;
@@ -404,6 +531,13 @@ uint32_t num_particles;
 @<Destroy vertex@>;
 @<Create an event with the specified identifier@>;
 @<Destroy an event@>;
+@<Create a particle gun@>;
+@<Set num particles to be generated by particle gun@>;
+@<Set position of particle gun@>;
+@<Set momentum of particle gun@>;
+@<Set polarisation of particle gun@>;
+@<Set energy of particle gun@>;
+@<Set charge of particle gun@>;
 
 @* History.
 The {\it Monte Carlo Simulator} project began in June 2011, when
