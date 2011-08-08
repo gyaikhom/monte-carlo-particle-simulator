@@ -1,5 +1,5 @@
 mcs: mcs.c
-	gcc -o mcs mcs.c -lm
+	gcc -Wall -o mcs mcs.c -lm
 
 mcs.c: mcs.w
 	ctangle mcs.w
