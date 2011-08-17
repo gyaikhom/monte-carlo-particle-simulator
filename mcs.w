@@ -737,6 +737,58 @@ fscanf(f, "(cylinder \"%[^\"]\" %lf %lf %lf %lf)\n",
        &p->radius, &p->height);
 
 @*2 Torus.
+A primitive torus stores the following information.
+
+@<Structure of a primitive torus@>=
+struct primitive_torus_struct {
+       @<Information common to all primitives@>;
+       @<Information that defines a primitive torus@>;
+};
+typedef struct primitive_torus_struct Torus;
+
+@ The geometry of a primitive torus can be defined parametrically as
+follows:
+
+\halign{\hfil $#$ & $#$ & $#$ \hfil \cr
+    x(u, v) & = & (R + r \cos{v}) \cos{u} \cr
+    y(u, v) & = & (R + r \cos{v}) \sin{u} \cr
+    z(u, v) & = & r \sin{v} \cr}
+
+\noindent where, parameters $u$ and $v$ specify angles in radians such
+that $0 \le u, v < 2\pi$. The length $R$ gives the distance from the
+center of the tube to the center of the torus, and the length $r$
+gives the radius of the tube. The parameters $R$ and $r$ are also
+referred to as the {\it major radius}@^major radius@> and the {\it
+minor radius}@^minor radius@>, respecticely; and their ratio is
+referred to as the {\it aspect ratio}@^aspect ratio@>.
+
+The origin of the torus' local coordinate frame is defined by
+its {\it center}@^center@>, and the orthogonal axes incident on
+this origin are aligned so that its $y$ axis is perpendicular to the
+radial surface emanating from the origin to the center of the tube.
+
+@<Information that defines a primitive torus@>=
+double major, minor;
+double u, v;
+
+@ The parameters for the torus geometry are supplied in the following
+format.
+
+\smallskip
+
+({\bf torus} ``name" $x$ $y$ $z$ $u$ $v$ $major$ $minor$)
+
+\smallskip
+
+For instance, the specification {\tt (torus "Torus A" 100.0 120.0
+150.0 0.0 359.999999 10.0 2.0)} initialises a solid torus named
+``Torus A" located at (100.0, 120.0, 150.0) in the world coordinate
+frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
+
+@<Read torus geometry from a file@>=
+fscanf(f, "(torus \"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
+       &p->u, &p->v, &p->major, &p->minor);
 
 @** Error handling.
 There are three message categories, which are printed using the
