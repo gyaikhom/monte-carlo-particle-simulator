@@ -645,11 +645,11 @@ geometry are supplied in the following format.
 
 \smallskip
 
-({\bf block} ``name" $x$ $y$ $z$ $length$ $width$ $height$)
+(``name" $x$ $y$ $z$ $length$ $width$ $height$)
 
 \smallskip
 
-For instance, the specification {\tt (block "Block A" 100.0 120.0
+For instance, the specification {\tt ("Block A" 100.0 120.0
 150.0 10.0 5.0 15.0)} initialises a new block named ``Block A" located
 at (100.0, 120.0, 150.0) in the world coordinate frame with length
 10.0, width 5.0 and height 15.0. We assume that all of the lengths are
@@ -657,7 +657,7 @@ specified using the same unit of measurement. We will discuss in the
 following sections how a unit of measurement is selected.
 
 @<Read block geometry from a file@>=
-fscanf(f, "(block \"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->length, &p->width, &p->height);
 
@@ -683,18 +683,18 @@ format.
 
 \smallskip
 
-({\bf sphere} ``name" $x$ $y$ $z$ $radius$)
+(``name" $x$ $y$ $z$ $radius$)
 
 \smallskip
 
-For instance, the specification {\tt (sphere "Sphere A" 100.0 120.0
+For instance, the specification {\tt ("Sphere A" 100.0 120.0
 150.0 10.0)} initialises a new solid sphere named ``Sphere A" located
 at (100.0, 120.0, 150.0) in the world coordinate frame with radius
 10.0. Again, we assume that the radius is specified in the chosen
 unit of measurement, yet to be discussed.
 
 @<Read sphere geometry from a file@>=
-fscanf(f, "(sphere \"%[^\"]\" %lf %lf %lf %lf)\n",
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->radius);
 
@@ -722,17 +722,17 @@ format.
 
 \smallskip
 
-({\bf cylinder} ``name" $x$ $y$ $z$ $radius$ $height$)
+(``name" $x$ $y$ $z$ $radius$ $height$)
 
 \smallskip
 
-For instance, the specification {\tt (cylinder "Cylinder A" 100.0 120.0
+For instance, the specification {\tt ("Cylinder A" 100.0 120.0
 150.0 10.0 20.0)} initialises a new solid cylinder named ``Cylinder A"
 located at (100.0, 120.0, 150.0) in the world coordinate frame with
 base radius 10.0 and height 20.0.
 
 @<Read cylinder geometry from a file@>=
-fscanf(f, "(cylinder \"%[^\"]\" %lf %lf %lf %lf)\n",
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->radius, &p->height);
 
@@ -776,19 +776,58 @@ format.
 
 \smallskip
 
-({\bf torus} ``name" $x$ $y$ $z$ $u$ $v$ $major$ $minor$)
+(``name" $x$ $y$ $z$ $u$ $v$ $major$ $minor$)
 
 \smallskip
 
-For instance, the specification {\tt (torus "Torus A" 100.0 120.0
+For instance, the specification {\tt ("Torus A" 100.0 120.0
 150.0 0.0 359.999999 10.0 2.0)} initialises a solid torus named
 ``Torus A" located at (100.0, 120.0, 150.0) in the world coordinate
 frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
 
 @<Read torus geometry from a file@>=
-fscanf(f, "(torus \"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->u, &p->v, &p->major, &p->minor);
+
+@ Read the geometry from the input file.
+
+@<Read geometry from input file@>=
+csg_tree *read_geometry(FILE *f)
+{
+	csg_tree *t;
+	char c;
+	while ((c = fgetc(f)) != EOF) {
+	        @<Process input command@>;
+	}
+	return t;
+
+error_invalid_file:
+	@<Cleanup resources allocated to invalid geometry@>;
+	return NULL;
+}
+
+@ @<Cleanup resources allocated to invalid geometry@>=
+
+@ @<Process input command@>=
+switch(c) {
+case 'b':
+	@<Read block geometry from a file@>;
+     	break;
+case 's':
+	@<Read sphere geometry from a file@>;
+     	break;
+case 'c':
+	@<Read cylinder geometry from a file@>;
+        break;
+case 't':
+        @<Read torus geometry from a file@>;
+        break;
+default:
+        goto error_invalid_file;
+}
+
+
 
 @** Error handling.
 There are three message categories, which are printed using the
@@ -850,7 +889,9 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Push particle into particle stack@>;
 @<Pop particle out of the particle stack@>;
 @<Tracking a particle@>;
+@<Set particle gun parameters@>;
 @<Read block geometry from a file@>;
+@<Read geometry from input file@>;
 
 @* History.
 The {\it Monte Carlo Simulator} project began in June 2011, when
