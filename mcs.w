@@ -699,6 +699,42 @@ fscanf(f, "(sphere \"%[^\"]\" %lf %lf %lf %lf)\n",
        &p->radius);
 
 @*2 Cylinder.
+A primitive cylinder stores the following information.
+
+@<Structure of a primitive cylinder@>=
+struct primitive_cylinder_struct {
+       @<Information common to all primitives@>;
+       @<Information that defines a primitive cylinder@>;
+};
+typedef struct primitive_cylinder_struct Cylinder;
+
+@ The geometry of a cylinder is defined by its base radius and its
+height.  The origin of the block's local coordinate frame is defined by
+its {\it centroid}@^centroid@>, and the orthogonal axes incident on
+this origin, i.e., the $x$, $y$ and $z$ axes of the local coordinate
+frame, are aligned so that $y$ axis is perpendicular to the base.
+
+@<Information that defines a primitive cylinder@>=
+double radius, height;
+
+@ The parameters for the cylinder geometry are supplied in the following
+format.
+
+\smallskip
+
+({\bf cylinder} ``name" $x$ $y$ $z$ $radius$ $height$)
+
+\smallskip
+
+For instance, the specification {\tt (cylinder "Cylinder A" 100.0 120.0
+150.0 10.0 20.0)} initialises a new solid cylinder named ``Cylinder A"
+located at (100.0, 120.0, 150.0) in the world coordinate frame with
+base radius 10.0 and height 20.0.
+
+@<Read cylinder geometry from a file@>=
+fscanf(f, "(cylinder \"%[^\"]\" %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
+       &p->radius, &p->height);
 
 @*2 Torus.
 
