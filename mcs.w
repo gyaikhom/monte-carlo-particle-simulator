@@ -557,6 +557,151 @@ void track_particle()
 	info("traking a particle");
 }
 
+@** Constructive Solid Geometry.
+The tracking happens inside a closed world, and we must define this
+world by specifying the solids that are included in this world. We use
+{\it Constructive Solid Geometry}@^Constructive Solid Geometry@> to
+define solids in the simulation world. Most of the concepts used in this
+implementation is based on the books {\it Geometric and Solid
+Modelling: An Introduction} by Christoph M. Hoffman [Morgan Kaufmann
+Publishers, Inc., (1989)] and {\it An Integrated Introduction to
+Computer Graphics and Geometric Modelling} by Ronald Goldman [CRC
+Press (2009)].
+
+In constructive solid geometry, complex solids are built from
+primitive solids by combining them using well defined
+operations. These operations include transformations, such as scaling
+and translation, and set-theoretic operations on the volume defined by
+two solids. New solids are defined by recursively combining existing
+solids using these operations.
+
+@*1 Standard Primitives.
+We use four {\it standard primitives}@^standard primitives@> that
+define closed solid volumes. These are: the {\it
+parallelepiped}@^parallelepiped@>, the {\it sphere}@^sphere@>,
+the {\it cylinder}@^cylinder@>, and the {\it torus}@^torus@>. These
+primitives are generic and can take different shapes and form. Hence,
+to use a given primitive while building a new solid, each primitive
+must first be initialised by providing the specific parameters which
+define its shape and form.
+
+It is important to note here that, in each of the following sections,
+we specify only the relevant details. Additional details will be
+incorporated when we discuss other aspects of the solids. For
+instance, at the moment we are only concerned with the geometry of the
+solids, and not with their material properties. Hence, the
+details concerning their material properties will be added later on,
+when we discuss materials.
+
+@ Every primitive has a {\it unique identifier}@^unique identifier@>
+and a {\it unique name}@^unique name@>. A unique human-readable name
+is supplied by the user to each instance of a primitive, as discussed
+in |@<Read block geometry from a file@>|. From this name, the
+corresponding unique identifier is generated internally for use by
+the various algorithms.
+
+@d PRIMITIVE_NAME_MAX_LEN 100
+@<Information common to all primitives@>=
+uint32_t id; /* unique primitive identifier */
+char name[PRIMITIVE_NAME_MAX_LEN];
+
+@ In addition to the {\it global coordinate frame}@^global coordinate frame@>
+defined by the simulation world, each initialised primitive also
+defines a {\it local coordinate frame}@^local coordinate frame@>.
+The origin of this coordinate frame is used by the geometry
+construction algorithm to place the primitive inside the simulation
+world. Consequently, all translations of a primitive in the simulation
+world can be considered as the translation of its origin.
+
+@<Information common to all primitives@>=
+vect3d origin;
+
+@*2 Parallelepiped.
+For simplicity of exposition, we shall refer to a parallelepiped as
+a {\it block}@^block@>. A primitive block stores the following
+information.
+
+@<Structure of a primitive block@>=
+struct primitive_block_struct {
+       @<Information common to all primitives@>;
+       @<Information that defines a primitive block@>;
+};
+typedef struct primitive_block_struct Block;
+
+@ The geometry of a block is defined by its length, width and
+height. The origin of the block's local coordinate frame is defined by
+its {\it centroid}@^centroid@>, and the orthogonal axes incident on
+this origin, i.e., the $x$, $y$ and $z$ axes of the local coordinate
+frame, are aligned respectively in parallel to its length, height and
+width.
+
+@<Information that defines a primitive block@>=
+double length, height, width;
+
+@ The parameters that are required to initialise a standard primitive
+is read from an input file. These parameters must be supplied using
+specific formatting requirements. The parameters for the block
+geometry are supplied in the following format.
+
+\smallskip
+
+({\bf block} ``name" $x$ $y$ $z$ $length$ $width$ $height$)
+
+\smallskip
+
+For instance, the specification {\tt (block "Block A" 100.0 120.0
+150.0 10.0 5.0 15.0)} initialises a new block named ``Block A" located
+at (100.0, 120.0, 150.0) in the world coordinate frame with length
+10.0, width 5.0 and height 15.0. We assume that all of the lengths are
+specified using the same unit of measurement. We will discuss in the
+following sections how a unit of measurement is selected.
+
+@<Read block geometry from a file@>=
+fscanf(f, "(block \"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
+       &p->length, &p->width, &p->height);
+
+@*2 Sphere.
+A primitive sphere stores the following information.
+
+@<Structure of a primitive sphere@>=
+struct primitive_sphere_struct {
+       @<Information common to all primitives@>;
+       @<Information that defines a primitive sphere@>;
+};
+typedef struct primitive_sphere_struct Sphere;
+
+@ The geometry of a sphere is defined by its radius, and the origin of
+its local coordinate frame is defined by the sphere's {\it
+center}@^center@>.
+
+@<Information that defines a primitive sphere@>=
+double radius;
+
+@ The parameters for the sphere geometry are supplied in the following
+format.
+
+\smallskip
+
+({\bf sphere} ``name" $x$ $y$ $z$ $radius$)
+
+\smallskip
+
+For instance, the specification {\tt (sphere "Sphere A" 100.0 120.0
+150.0 10.0)} initialises a new solid sphere named ``Sphere A" located
+at (100.0, 120.0, 150.0) in the world coordinate frame with radius
+10.0. Again, we assume that the radius is specified in the chosen
+unit of measurement, yet to be discussed.
+
+@<Read sphere geometry from a file@>=
+fscanf(f, "(sphere \"%[^\"]\" %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
+       &p->radius);
+
+@*2 Cylinder.
+
+@*2 Torus.
+
 @** Error handling.
 There are three message categories, which are printed using the
 following macros: |fatal|, |warn|, and |info|.
@@ -613,6 +758,7 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Push particle into particle stack@>;
 @<Pop particle out of the particle stack@>;
 @<Tracking a particle@>;
+@<Read block geometry from a file@>;
 
 @* History.
 The {\it Monte Carlo Simulator} project began in June 2011, when
