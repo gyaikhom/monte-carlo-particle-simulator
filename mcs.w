@@ -823,6 +823,10 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Definition of an event@>;
 @<Definition of a particle gun@>;
 @<Definition of a stack@>;
+@<Structure of a primitive block@>;
+@<Structure of a primitive sphere@>;
+@<Structure of a primitive cylinder@>;
+@<Structure of a primitive torus@>;
 
 @ @<Global functions@>=
 @<Calculate vector magnitude@>;
