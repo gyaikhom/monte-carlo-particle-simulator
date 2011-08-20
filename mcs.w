@@ -585,7 +585,40 @@ to use a given primitive while building a new solid, each primitive
 must first be initialised by providing the specific parameters which
 define its shape and form.
 
-It is important to note here that, in each of the following sections,
+@<Type definitions@>=
+typedef enum {
+	BLOCK = 0, SPHERE, CYLINDER, TORUS
+} Primitive_type;
+
+@ Forward declaration of data structures that represent data that are
+specific to a given primitive type. Their structure will be defined in
+the following sections.
+
+@<Type definitions@>=
+typedef struct primitive_block_struct Block;
+typedef struct primitive_sphere_struct Sphere;
+typedef struct primitive_cylinder_struct Cylinder;
+typedef struct primitive_torus_struct Torus;
+
+@ The first field of all primitive data stores a primitive type. This
+is used while deciding the manner in which a primitive must be
+processed: based on this type, we choose the appropriate union
+field.
+
+@<Container for a primitive@>=
+struct primitive_container_struct {
+	Primitive_type type;
+	@<Information common to all primitives@>;
+	union {
+       	        Block b;
+       		Sphere s;
+       		Cylinder c;
+       		Torus t;
+	};
+};
+typedef struct primitive_container_struct Primitive;
+
+@ It is important to note here that, in each of the following sections,
 we specify only the relevant details. Additional details will be
 incorporated when we discuss other aspects of the solids. For
 instance, at the moment we are only concerned with the geometry of the
@@ -623,10 +656,8 @@ information.
 
 @<Structure of a primitive block@>=
 struct primitive_block_struct {
-       @<Information common to all primitives@>;
        @<Information that defines a primitive block@>;
 };
-typedef struct primitive_block_struct Block;
 
 @ The geometry of a block is defined by its length, width and
 height. The origin of the block's local coordinate frame is defined by
@@ -658,18 +689,17 @@ following sections how a unit of measurement is selected.
 
 @<Read block geometry from a file@>=
 fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->length, &p->width, &p->height);
+       p->b.name, &p->b.origin.x, &p->b.origin.y, &p->b.origin.z,
+       &p->b.length, &p->b.width, &p->b.height);
+p->type = BLOCK;
 
 @*2 Sphere.
 A primitive sphere stores the following information.
 
 @<Structure of a primitive sphere@>=
 struct primitive_sphere_struct {
-       @<Information common to all primitives@>;
        @<Information that defines a primitive sphere@>;
 };
-typedef struct primitive_sphere_struct Sphere;
 
 @ The geometry of a sphere is defined by its radius, and the origin of
 its local coordinate frame is defined by the sphere's {\it
@@ -695,18 +725,17 @@ unit of measurement, yet to be discussed.
 
 @<Read sphere geometry from a file@>=
 fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->radius);
+       p->s.name, &p->s.origin.x, &p->s.origin.y, &p->s.origin.z,
+       &p->s.radius);
+p->type = SPHERE;
 
 @*2 Cylinder.
 A primitive cylinder stores the following information.
 
 @<Structure of a primitive cylinder@>=
 struct primitive_cylinder_struct {
-       @<Information common to all primitives@>;
        @<Information that defines a primitive cylinder@>;
 };
-typedef struct primitive_cylinder_struct Cylinder;
 
 @ The geometry of a cylinder is defined by its base radius and its
 height.  The origin of the block's local coordinate frame is defined by
@@ -733,18 +762,17 @@ base radius 10.0 and height 20.0.
 
 @<Read cylinder geometry from a file@>=
 fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->radius, &p->height);
+       p->c.name, &p->c.origin.x, &p->c.origin.y, &p->c.origin.z,
+       &p->c.radius, &p->c.height);
+p->type = CYLINDER;
 
 @*2 Torus.
 A primitive torus stores the following information.
 
 @<Structure of a primitive torus@>=
 struct primitive_torus_struct {
-       @<Information common to all primitives@>;
        @<Information that defines a primitive torus@>;
 };
-typedef struct primitive_torus_struct Torus;
 
 @ The geometry of a primitive torus can be defined parametrically as
 follows:
@@ -787,15 +815,105 @@ frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
 
 @<Read torus geometry from a file@>=
 fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->u, &p->v, &p->major, &p->minor);
+       p->t.name, &p->t.origin.x, &p->t.origin.y, &p->t.origin.z,
+       &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
+p->type = TORUS;
+
+@*1 Constructive Solid Geometry Tree.
+All solids are built from primitive solids by using regularised
+set-theoretic operators. These operators work on the volume defined by
+the primitive solids. There are three regularised set-theoretic
+operators: {\it union}@^union@>, {\it intersection}@^intersection@>
+and {\it difference}@^difference@>, which respectively
+defines the volume union, intersection and difference of two solid
+primitives.
+
+Further to these operators, transformation and translation
+operators are defined, which changes the shape, form, orientation and
+location of the solid primitives relative to the world coordinate
+frame. These are unary operators, as compared to the binary
+set-theoretic operators.
+
+@<Type definitions@>=
+enum CSG_Operator {
+	UNION = 1, INTERSECTION, DIFFERENCE,
+	TRANSLATE, SCALE, ROTATE
+};
+
+@ To build a solid, the required operators must be applied to several
+solid primitives in a specific order. This order is expressed
+using a binary tree, referred to as the {\it Constructive
+Solid Geometry Tree}@^Constructive Solid Geometry Tree@>, or {\it
+CSG Tree}@^CSG Tree@> for short. This structure stores a pointer to
+the root node, and maintains several house-keeping data.
+
+@<Structure of a constructive solid geometry tree@>=
+typedef struct csg_node_struct CSG_Node;
+struct csg_tree_struct {
+       @<House-keeping data@>;
+       CSG_Node *root; /* pointer to the CSG root */
+};
+typedef struct csg_tree_struct CSG_Tree;
+
+@ We only maintain the overall statistics for the entire CSG tree. If
+we wish to obtain statistical information for a given sub-solid, and
+there are multiple solids in the CSG tree, then the this information
+must be derived at runtime by traversing the sub-tree which represents
+the selected solid. We do this to minimise the memory footprint for
+storing each tree node.
+
+@f uint16_t int
+@<House-keeping data@>=
+uint16_t num_primitives;
+uint16_t num_union;
+uint16_t num_intersect;
+uint16_t num_difference;
+uint16_t num_translate;
+uint16_t num_rotate;
+uint16_t num_scale;
+
+@ The leaf nodes of a CSG tree stores a solid primitive, and the internal
+nodes store operators, or parameters. If the operator is binary (i.e., the
+set-theoretic operators) both left and right children point to solids;
+otherwise, we use the left child to represent the unary operator, and the
+right child to represent the operator parameters (e.g., the
+displacement if we are translating a solid, or the scaling factor if
+we are scaling a solid, etc.). To differentiate between node types,
+each node stores a |CSG_Operator| field. This field is set to zero if
+the node is either a leaf, or stores the parameter of a unary
+operator; otherwise, the node stores an operator.
+
+@<Structure of a CSG tree node@>=
+typedef union csg_node_data CSG_Data;
+struct csg_node_struct {
+       CSG_Operator op; /* operator if value $> 0$; parameter or leaf,
+       otherwise */
+       CSG_Data data; /* data relevant to the node */
+       CSG_Node *left, *right; /* pointers to the left and right subtrees */
+};
+
+@ Operator nodes that do not represent set-theoretic operators
+requires additional information. For a unary operator, such data
+consists of parameters; and for solid nodes, a pointer to the solid.
+
+@<Structure of the data stored in a node@>=
+union csg_node_data {
+       struct translate_parameters t;
+       struct rotate_paramters r;
+       struct scale_parameters s;
+       Primitive *p;
+};
+
+@*2 Regularised set-theoretic operators.
+
+@*2 Translation and transformation operators.
 
 @ Read the geometry from the input file.
 
 @<Read geometry from input file@>=
-csg_tree *read_geometry(FILE *f)
+CSG_Tree *read_geometry(FILE *f)
 {
-	csg_tree *t;
+	CSG_Tree *t;
 	char c;
 	while ((c = fgetc(f)) != EOF) {
 	        @<Process input command@>;
