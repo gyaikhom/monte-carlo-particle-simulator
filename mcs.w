@@ -835,10 +835,10 @@ frame. These are unary operators, as compared to the binary
 set-theoretic operators.
 
 @<Type definitions@>=
-enum CSG_Operator {
+typedef enum {
 	UNION = 1, INTERSECTION, DIFFERENCE,
 	TRANSLATE, SCALE, ROTATE
-};
+} CSG_Operator;
 
 @ To build a solid, the required operators must be applied to several
 solid primitives in a specific order. This order is expressed
@@ -893,9 +893,9 @@ solid.
 
 @<Structure of the data stored in a leaf node@>=
 union csg_leaf_union {
-       struct translate_parameters t;
-       struct rotate_paramters r;
-       struct scale_parameters s;
+       struct translation_parameters t;
+       struct rotation_parameters r;
+       struct scaling_parameters s;
        Primitive *p;
 };
 typedef union csg_leaf_union CSG_Leaf;
@@ -908,8 +908,7 @@ operator.
 
 @<Structure of a CSG tree node@>=
 struct csg_node_struct {
-       CSG_Operator op; /* operator if value $> 0$; parameter or leaf,
-       otherwise */
+       CSG_Operator op; /* operator if value $> 0$; parameter or leaf, otherwise */
        union {
                CSG_Leaf leaf;
 	       CSG_Internal internal;
@@ -917,13 +916,196 @@ struct csg_node_struct {
 };
 
 
-@*2 Regularised set-theoretic operators.
+@*2 Union.
 
-@*2 Translation and transformation operators.
+The union of two solids is defined as the volume which consist of
+points that are both 
 
-@ Read the geometry from the input file.
+, intersection and difference of two solids are specified in the
+geometry input file using the following format.
 
-@<Read geometry from input file@>=
+\smallskip
+
+(``result" ``left solid" ``right solid")
+
+\smallskip
+
+\noindent where, ``left solid" and ``right solid" are the names of the
+operands, and the result of the operation is stored using the name
+``result". Both operands could be primitive solids, or intermediate
+solids that is defined by a CSG sub-tree. The order of the operands
+are important when applying the difference operator.
+
+For instance, the specification {\tt ("D1" "Cylinder A" "Torus A")}
+for the difference of two solids means, stores in "D1" the difference
+of subtracting the volume defined by "Torus A" from the volume defined
+by solid "Cylinder A".
+
+@<Read binary operation from a file@>=
+fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+&op_result, &op_left, &op_right);
+
+
+@*2 Translation.
+
+Translation relocates a solid by displacing its origin in the $x$, $y$
+and $z$ axes. Hence, the paramaters for a translation operator is
+specified as a |displacement| vector. The unit of displacement depends
+on the unit chosen by the user when specifying the CSG tree.
+
+@<Structure for translation parameters@>=
+struct translation_parameters {
+       vect3d displacement; /* displacement of solid origin */
+};
+
+@ @<Read translation operation from a file@>=
+@<Read translation parameters@>;
+@<Find the target solid for the translation@>;
+@<Create translation parameter node@>; 
+@<Create translation operator node@>;
+
+@ The translation parameters are specified in the geometry input file
+using the following format.
+
+\smallskip
+
+(``solid" dx dy dz)
+
+\smallskip
+
+\noindent where, ``solid" is the name of the target solid which we
+wish to translate, and $dx$, $dy$ and $dz$ are the respective
+displacements along the $x$, $y$ and $z$ axes. For instance, the
+translation specification {\tt ("D1" 10.0 50.0 20.0)} means, translate
+the solid associated with the name ``D1" by displacing its origin by
+10.0 units along the $x$ axis, 50.0 units along the $y$ axis, and 20.0
+units along the $z$ axis.
+
+@<Read translation parameters@>=
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n", &op_target, &op_x, &op_y, &op_z);
+input_file_current_line++;
+
+@ In order for a translation to be applicable, the supplied target
+solid must already exists within the system, either by prior
+definition as a primitive solid, or as an intermediate solid
+defined by a CSG subtree.
+
+@<Find the target solid for the translation@>=
+if ((target_solid = find_solid(op_target)) == NULL) {
+        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+	"Could not find solid named '%s'\n", input_file_name,
+	input_file_current_line, op_target);
+	goto error_invalid_file;
+}
+
+@ We now have a valid translation, so create the parameter leaf
+node which will become the right-child of the translation operator node.
+
+@<Create translation parameter node@>=
+if ((parameter_node = create_csg_node()) != NULL) {
+        parameter_node->op = 0; /* this is a leaf node */
+	parameter_node->leaf.t.displacement.x = op_x;
+	parameter_node->leaf.t.displacement.y = op_y;
+	parameter_node->leaf.t.displacement.z = op_z;
+}
+
+@ Finally, create the translation operator node, and attach the target
+solid and the parameter node.
+
+@<Create translation operator node@>=
+if ((operator_node = create_csg_node()) != NULL) {
+        operator_node->op = TRANSLATE; /* this is an internal node */
+	operator_node->internal->left = target_solid;
+	operator_node->internal->right = parameter_node;
+}
+
+@*2 Rotation.
+
+We rotate a solid relative to an axis. The angle of rotation
+$\theta$ is specified in {\it radians}@^radians@>. If $\theta < 0$, we
+have {\it clockwise rotation}@^clockwise rotation@>; if $\theta > 0$,
+we have {\it anticlockwise rotation}@^anticlockwise rotation@>.
+When $\theta = 0$, no rotation is applied. In order to
+apply a rotation, we also need an {\it axis of rotation}@^axis of rotation@>.
+This is specified as a unit vector@^unit vector@> named |axis|.
+
+@<Structure for rotation parameters@>=
+struct rotation_parameters {
+       double theta; /* angle of rotation in radians */
+       vect3d axis; /* axis of rotation (unit vector) */
+};
+
+@*2 Scaling.
+
+Scaling increases or decreases the volume of a solid. The amount of
+scaling applied with respect to each of the axes are specified using a
+|scale| vector. If the scaling factors are all zero, scaling is not
+applied. A scaling transformation maintains the shape and the form of
+the solid if and only if the scaling factor along all of the axes are
+equal.
+
+@<Structure for scaling parameters@>=
+struct scaling_parameters {
+       vect3d scale; /* scaling factor */
+};
+
+
+@*1 The geometry input file.
+The geometry of the solids and their placement and orientation within
+the world is specified in the input file. The grammar for this input
+file is very simple. The file consist of several commands, where an
+entire line of text is used to specify a specific command. Each
+command has the following format:
+
+\smallskip
+
+$\langle command \rangle \langle parameters \rangle \langle newline \rangle$
+
+\smallskip
+
+Here, $\langle command \rangle$ is a single character code, which
+defines its intended action. The commands and their intended actions
+are as follows: 
+
+\smallskip
+
+$$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
+B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
+u, i, d & Carry out a union, intersection, or difference.\cr
+t, r, s & Translate, rotate, or scale the solid.\cr
+}}$$
+
+\smallskip
+
+To support this intended action, the user must supply all of the
+required parameters in the $\langle parameters \rangle$
+field. Finally, every command must be terminated by a $\langle newline
+\rangle$ character. The following is an example:
+
+\bigskip
+
+{\tt
+T ("Torus A" 100.0 120.0 150.0 0.0 359.999999 10.0 2.0)
+
+C ("Cylinder A" 110.0 120.0 150.0 10.0 20.0)
+
+C ("Cylinder B" 120.0 120.0 150.0 10.0 20.0)
+
+u ("U1" "Torus A" "Cylinder A")
+
+d ("D1" "U1" "Cylinder B")
+
+t ("D1" 10.0 50.0 20.0)
+
+s ("D1" 10.0 20.0 30.0)
+}
+
+\bigskip
+
+We have already discussed how the $\langle parameters \rangle$ field
+is specified in the respective sections.
+
+@ @<Read geometry from input file@>=
 CSG_Tree *read_geometry(FILE *f)
 {
 	CSG_Tree *t;
@@ -987,6 +1169,7 @@ Particle_stack particle_stack;
 vect3d zero_vector = { 0.0, 0.0, 0.0 };
 
 @ @<Global data structures@>=
+@<Type definitions@>;
 @<Definition of a three-dimensional vector@>;
 @<Definition of a physics particle@>;
 @<Definition of a vertex@>;
@@ -997,6 +1180,15 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Structure of a primitive sphere@>;
 @<Structure of a primitive cylinder@>;
 @<Structure of a primitive torus@>;
+@<Container for a primitive@>;
+@<Structure of a constructive solid geometry tree@>;
+@<Structure of a CSG internal node@>;
+@<Structure for translation parameters@>;
+@<Structure for rotation parameters@>;
+@<Structure for scaling parameters@>;
+@<Structure of the data stored in a leaf node@>;
+@<Structure of a CSG tree node@>;
+
 
 @ @<Global functions@>=
 @<Calculate vector magnitude@>;
