@@ -857,14 +857,15 @@ typedef struct csg_tree_struct CSG_Tree;
 
 @ We only maintain the overall statistics for the entire CSG tree. If
 we wish to obtain statistical information for a given sub-solid, and
-there are multiple solids in the CSG tree, then the this information
-must be derived at runtime by traversing the sub-tree which represents
-the selected solid. We do this to minimise the memory footprint for
-storing each tree node.
+there are multiple solids in the CSG tree, then this information
+must be derived at runtime by traversing the sub-tree which
+corresponds to the selected solid. We only store the overall
+statistics to minimise the memory footprint for storing each tree
+node.
 
 @f uint16_t int
 @<House-keeping data@>=
-uint16_t num_primitives;
+uint16_t num_primitive;
 uint16_t num_union;
 uint16_t num_intersect;
 uint16_t num_difference;
@@ -872,37 +873,49 @@ uint16_t num_translate;
 uint16_t num_rotate;
 uint16_t num_scale;
 
-@ The leaf nodes of a CSG tree stores a solid primitive, and the internal
-nodes store operators, or parameters. If the operator is binary (i.e., the
-set-theoretic operators) both left and right children point to solids;
-otherwise, we use the left child to represent the unary operator, and the
-right child to represent the operator parameters (e.g., the
-displacement if we are translating a solid, or the scaling factor if
-we are scaling a solid, etc.). To differentiate between node types,
-each node stores a |CSG_Operator| field. This field is set to zero if
-the node is either a leaf, or stores the parameter of a unary
-operator; otherwise, the node stores an operator.
+@ The internal nodes of a CSG tree store operators. If the operator
+stored is binary (i.e., the set-theoretic operators) both left and
+right children point to solids. If the operator is unary, the left
+child points to a solid, and the right child stores the operator
+parameters (e.g., the displacement if we are translating a solid, or
+the scaling factor if we are scaling a solid, etc.).
 
-@<Structure of a CSG tree node@>=
-typedef union csg_node_data CSG_Data;
-struct csg_node_struct {
-       CSG_Operator op; /* operator if value $> 0$; parameter or leaf,
-       otherwise */
-       CSG_Data data; /* data relevant to the node */
+@<Structure of a CSG internal node@>=
+struct csg_internal_node_struct {
        CSG_Node *left, *right; /* pointers to the left and right subtrees */
 };
+typedef struct csg_internal_node_struct CSG_Internal;
 
-@ Operator nodes that do not represent set-theoretic operators
-requires additional information. For a unary operator, such data
-consists of parameters; and for solid nodes, a pointer to the solid.
+@ CSG leaf nodes that store solids or unary operator parameters,
+require additional data. For a node with an unary operator, this
+consists of operator parameters; and for solid nodes, a pointer to the
+solid.
 
-@<Structure of the data stored in a node@>=
-union csg_node_data {
+@<Structure of the data stored in a leaf node@>=
+union csg_leaf_union {
        struct translate_parameters t;
        struct rotate_paramters r;
        struct scale_parameters s;
        Primitive *p;
 };
+typedef union csg_leaf_union CSG_Leaf;
+
+@ To differentiate between node types, each node stores a
+|CSG_Operator| field. This field is set to zero if the node is a leaf
+(i.e., the node either stores a solid, or stores the parameter of a
+unary operator); otherwise, the node is an internal node and stores an
+operator.
+
+@<Structure of a CSG tree node@>=
+struct csg_node_struct {
+       CSG_Operator op; /* operator if value $> 0$; parameter or leaf,
+       otherwise */
+       union {
+               CSG_Leaf leaf;
+	       CSG_Internal internal;
+       };
+};
+
 
 @*2 Regularised set-theoretic operators.
 
