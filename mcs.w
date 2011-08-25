@@ -926,12 +926,13 @@ $$\vcenter{(``target" ``left solid" ``right solid")}$$
 Here, ``left solid" and ``right solid" are the names of the
 union operands, and the result of the union is to be stored using the
 name ``target". For the union command to be valid, no solid with the
-name ``target" must already exists within the system. Both operands
-could be primitive solids, or intermediate solids that are defined by
-a CSG sub-tree, and they are not required to share space (i.e., the
-solids may be detached from one another). Because the union operator
-is {\it commutative}@^commutative operator@>, the order of the
-operands are unimportant.
+name ``target" must already exists within the system. Whereas, both
+operands must already exists within the system and could represent
+primitive solids, or intermediate solids that are defined by a CSG
+sub-tree. They are not required to share space (i.e., the solids may
+be detached from one another). Because the union operator is {\it
+commutative}@^commutative operator@>, the order of the operands are
+unimportant.
 
 For instance, the union specification {\tt ("U1" "Cylinder A" "Torus
 A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
@@ -955,21 +956,21 @@ the system. If they are, we create a new operator node and make its
 left and right subtrees point to these existing solids.
 
 @<Create union operator node@>=
-@<Find solid that corresponds to the left operand@>;
-@<Find solid that corresponds to the right operand@>;
+@<Find solid that corresponds to the left-hand operand@>;
+@<Find solid that corresponds to the right-hand operand@>;
 @<Create new union operator node@>;
 
-@ @<Find solid that corresponds to the left operand@>=
+@ @<Find solid that corresponds to the left-hand operand@>=
 if ((left_solid = find_solid(op_left)) == NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+        fprintf(stderr, "%s[%d] Invalid geometry specification... "@/
 	"Solid named '%s' does not exists\n", input_file_name,
 	input_file_current_line, op_left);
 	goto error_invalid_file;
 }
 
-@ @<Find solid that corresponds to the right operand@>=
+@ @<Find solid that corresponds to the right-hand operand@>=
 if ((right_solid = find_solid(op_right)) == NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+        fprintf(stderr, "%s[%d] Invalid geometry specification... "@/
 	"Solid named '%s' does not exists\n", input_file_name,
 	input_file_current_line, op_right);
 	goto error_invalid_file;
