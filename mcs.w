@@ -919,9 +919,9 @@ struct csg_node_struct {
 @*2 Union.
 
 The union of two solids is defined as the volume which consist of
-points that are both inside those solids. In the geometry input file,
-the union of two solids are defined using the following format:
-$$\vcenter{(``target" ``left solid" ``right solid")}$$
+points that are {\bf inside either of} these solids. In the geometry
+input file, the union of two solids are defined using the following
+format: $$\vcenter{(``target" ``left solid" ``right solid")}$$
 
 Here, ``left solid" and ``right solid" are the names of the
 union operands, and the result of the union is to be stored using the
@@ -932,7 +932,10 @@ primitive solids, or intermediate solids that are defined by a CSG
 sub-tree. They are not required to share space (i.e., the solids may
 be detached from one another). Because the union operator is {\it
 commutative}@^commutative operator@>, the order of the operands are
-unimportant.
+unimportant. However, for performance considerations, it is advisable
+to order the solids so that the solid on the left requires the least
+amount of computation to determine inclusion (i.e., determination of
+whether a point exists inside the solid).
 
 For instance, the union specification {\tt ("U1" "Cylinder A" "Torus
 A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
