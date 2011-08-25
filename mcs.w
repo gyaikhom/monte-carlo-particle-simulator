@@ -931,7 +931,7 @@ operands must already exists within the system and could represent
 primitive solids, or intermediate solids that are defined by a CSG
 sub-tree. They are not required to share space (i.e., the solids may
 be detached from one another). Because the union operator is {\it
-commutative}@^commutative operator@>, the order of the operands are
+commutative}@^commutative operator@>, the order of the operands is
 unimportant. However, for performance considerations, it is advisable
 to order the solids so that the solid on the left requires the least
 amount of computation to determine inclusion (i.e., determination of
@@ -941,12 +941,14 @@ For instance, the union specification {\tt ("U1" "Cylinder A" "Torus
 A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
 and stores the result using the name ``U1".
 
-@<Read union operation from a file@>=
+@ @<Read union operation from a file@>=
 fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 &op_target, &op_left, &op_right);
-if ((target_solid = find_solid(op_target)) == NULL) {
-        @<Create union operator node@>;
-} else {
+@<Check that the target does not already exists@>;
+@<Create union operator node@>;
+
+@ @<Check that the target does not already exists@>=
+if ((target_solid = find_solid(op_target)) != NULL) {
         fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
 	"Solid named '%s' already exists\n", input_file_name,
 	input_file_current_line, op_target);
@@ -990,13 +992,125 @@ if ((operator_node = create_csg_node()) == NULL) {
 	input_file_name, input_file_current_line);
 	goto error_invalid_file;
 } else {
-        operator_node->op = UNION; /* this is an operator internal node */
+        operator_node->op = UNION; /* this is an internal node */
 	operator_node->internal->left = left_solid;
 	operator_node->internal->right = right_solid;
 	register_solid(operator_node, op_target); /* register operator
 	node using the target name */
 }
 
+@*2 Intersection.
+
+The intersection of two solids is defined as the volume which consist of
+points that are {\bf both inside} these solids. In the geometry input file,
+the intersection is specified using the same format as that of union:
+$$\vcenter{(``target" ``left solid" ``right solid")}$$
+
+Here, ``left solid" and ``right solid" are the names of the
+intersection operands, and the result of the intersection is to be
+stored using the name ``target". For the intersection command to be
+valid, no solid with the name ``target" must already exists within the
+system. Whereas, both operands must already exists within the system
+and could represent primitive solids, or intermediate solids that are
+defined by a CSG sub-tree. Because the intersection operator is {\it
+commutative}@^commutative operator@>, the order of the operands is
+unimportant.
+
+For instance, the intersection specification {\tt ("I1" "Cylinder A" "Torus
+A")} finds the intersection of two solids named ``Cylinder A" and ``Torus A"
+and stores the result using the name ``I1".
+
+@ @<Read intersection operation from a file@>=
+fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+&op_target, &op_left, &op_right);
+@<Check that the target does not already exists@>;
+@<Create intersection operator node@>;
+
+@ We are now ready to create a intersection operator. But first, we
+must ensure that the solids specified as the operands already exists
+within the system. If they are, we create a new operator node and make
+its left and right subtrees point to these existing solids.
+
+@<Create intersection operator node@>=
+@<Find solid that corresponds to the left-hand operand@>;
+@<Find solid that corresponds to the right-hand operand@>;
+@<Create new intersection operator node@>;
+
+@ When a new intersection operator node is created, we are actually
+creating a new {\it intermediate solid}@^intermediate solid@>. Hence,
+this new solid must be registered with the system, so that they may be
+used by later commands. 
+
+@<Create new intersection operator node@>=
+if ((operator_node = create_csg_node()) == NULL) {
+        fprintf(stderr, "%s[%d] Failed to create intersection operator	node\n"@/
+	input_file_name, input_file_current_line);
+	goto error_invalid_file;
+} else {
+        operator_node->op = INTERSECTION; /* this is an internal node */
+	operator_node->internal->left = left_solid;
+	operator_node->internal->right = right_solid;
+	register_solid(operator_node, op_target); /* register operator
+	node using the target name */
+}
+
+
+@*2 Difference.
+
+The difference between two solids is defined as the volume which
+consist of points that are {\bf inside the first} solid, but {\bf not
+inside the second}. In the geometry input file, the difference
+is specified using the same format as that of union and intersection:
+$$\vcenter{(``target" ``left solid" ``right solid")}$$
+
+Here, ``left solid" and ``right solid" are the names of the operands,
+and the difference is to be stored using the name ``target". For the
+difference command to be valid, no solid with the name ``target" must
+already exists within the system. Whereas, both operands must already
+exists within the system and could represent primitive solids, or
+intermediate solids that are defined by a CSG sub-tree. Because the
+difference operator is {\it non-commutative}@^non-commutative operator@>,
+the order of the operands is important. Hence, the
+difference consists of all the points that are inside the left-hand
+operand, but not inside the right-hand operand.
+
+For instance, the difference specification {\tt ("D1" "Cylinder A"
+"Torus A")} finds the difference by subtracting ``Torus A" from
+``Cylinder A", and stores the result using the name ``D1".
+
+@ @<Read difference operation from a file@>=
+fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+&op_target, &op_left, &op_right);
+@<Check that the target does not already exists@>;
+@<Create difference operator node@>;
+
+@ We are now ready to create a difference operator. But first, we
+must ensure that the solids specified as the operands already exists
+within the system. If they are, we create a new operator node and make
+its left and right subtrees point to these existing solids.
+
+@<Create difference operator node@>=
+@<Find solid that corresponds to the left-hand operand@>;
+@<Find solid that corresponds to the right-hand operand@>;
+@<Create new difference operator node@>;
+
+@ When a new difference operator node is created, we are actually
+creating a new {\it intermediate solid}@^intermediate solid@>. Hence,
+this new solid must be registered with the system, so that they may be
+used by later commands. 
+
+@<Create new difference operator node@>=
+if ((operator_node = create_csg_node()) == NULL) {
+        fprintf(stderr, "%s[%d] Failed to create difference operator	node\n"@/
+	input_file_name, input_file_current_line);
+	goto error_invalid_file;
+} else {
+        operator_node->op = DIFFERENCE; /* this is an internal node */
+	operator_node->internal->left = left_solid;
+	operator_node->internal->right = right_solid;
+	register_solid(operator_node, op_target); /* register operator
+	node using the target name */
+}
 
 @*2 Translation.
 
