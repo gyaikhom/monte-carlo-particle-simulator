@@ -944,16 +944,24 @@ and stores the result using the name ``U1".
 @ @<Read union operation from a file@>=
 fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 &op_target, &op_left, &op_right);
+input_file_current_line++;
 @<Check that the target does not already exists@>;
 @<Create union operator node@>;
 
 @ @<Check that the target does not already exists@>=
 if ((target_solid = find_solid(op_target)) != NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
-	"Solid named '%s' already exists\n", input_file_name,
-	input_file_current_line, op_target);
-	goto error_invalid_file;
+        @<Exit after cleanup: solid already exists@>;
 }
+
+@ To increase clarity and to reduce code size, we keep recurring error
+messages in common code-blocks, and jump to these blocks as
+required. When it comes to implementing error handling, such as this,
+where we wish to terminate the application after cleanup, I prefer
+{\tt goto} statements. This is where bending the rules of {\it
+structured programming} leads to cleaner and smaller code.
+
+@<Exit after cleanup: solid already exists@>=
+goto solid_exists_exit_after_cleanup;
 
 @ We are now ready to create a union operator. But first, we must
 ensure that the solids specified as the operands already exists within
@@ -967,18 +975,15 @@ left and right subtrees point to these existing solids.
 
 @ @<Find solid that corresponds to the left-hand operand@>=
 if ((left_solid = find_solid(op_left)) == NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification... "@/
-	"Solid named '%s' does not exists\n", input_file_name,
-	input_file_current_line, op_left);
-	goto error_invalid_file;
+        @<Exit after cleanup: solid does not exists@>;
 }
+
+@ @<Exit after cleanup: solid does not exists@>=
+goto no_solid_exists_exit_after_cleanup;
 
 @ @<Find solid that corresponds to the right-hand operand@>=
 if ((right_solid = find_solid(op_right)) == NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification... "@/
-	"Solid named '%s' does not exists\n", input_file_name,
-	input_file_current_line, op_right);
-	goto error_invalid_file;
+        @<Exit after cleanup: solid does not exists@>;
 }
 
 @ When a new union operator node is created, we are actually creating
@@ -988,9 +993,7 @@ later commands.
 
 @<Create new union operator node@>=
 if ((operator_node = create_csg_node()) == NULL) {
-        fprintf(stderr, "%s[%d] Failed to create union operator	node\n"@/
-	input_file_name, input_file_current_line);
-	goto error_invalid_file;
+        @<Exit after cleanup: failed to create operator node@>;
 } else {
         operator_node->op = UNION; /* this is an internal node */
 	operator_node->internal->left = left_solid;
@@ -998,6 +1001,9 @@ if ((operator_node = create_csg_node()) == NULL) {
 	register_solid(operator_node, op_target); /* register operator
 	node using the target name */
 }
+
+@ @<Exit after cleanup: failed to create operator node@>=
+goto create_operator_failed_exit_after_cleanup;
 
 @*2 Intersection.
 
@@ -1023,6 +1029,7 @@ and stores the result using the name ``I1".
 @ @<Read intersection operation from a file@>=
 fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 &op_target, &op_left, &op_right);
+input_file_current_line++;
 @<Check that the target does not already exists@>;
 @<Create intersection operator node@>;
 
@@ -1043,9 +1050,7 @@ used by later commands.
 
 @<Create new intersection operator node@>=
 if ((operator_node = create_csg_node()) == NULL) {
-        fprintf(stderr, "%s[%d] Failed to create intersection operator	node\n"@/
-	input_file_name, input_file_current_line);
-	goto error_invalid_file;
+        @<Exit after cleanup: failed to create operator node@>;
 } else {
         operator_node->op = INTERSECTION; /* this is an internal node */
 	operator_node->internal->left = left_solid;
@@ -1053,7 +1058,6 @@ if ((operator_node = create_csg_node()) == NULL) {
 	register_solid(operator_node, op_target); /* register operator
 	node using the target name */
 }
-
 
 @*2 Difference.
 
@@ -1081,6 +1085,7 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 @ @<Read difference operation from a file@>=
 fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 &op_target, &op_left, &op_right);
+input_file_current_line++;
 @<Check that the target does not already exists@>;
 @<Create difference operator node@>;
 
@@ -1101,9 +1106,7 @@ used by later commands.
 
 @<Create new difference operator node@>=
 if ((operator_node = create_csg_node()) == NULL) {
-        fprintf(stderr, "%s[%d] Failed to create difference operator	node\n"@/
-	input_file_name, input_file_current_line);
-	goto error_invalid_file;
+        @<Exit after cleanup: failed to create operator node@>;
 } else {
         operator_node->op = DIFFERENCE; /* this is an internal node */
 	operator_node->internal->left = left_solid;
@@ -1114,19 +1117,23 @@ if ((operator_node = create_csg_node()) == NULL) {
 
 @*2 Translation.
 
-Translation relocates a solid by displacing its origin in the $x$, $y$
-and $z$ axes. Hence, the paramaters for a translation operator is
-specified as a |displacement| vector. The unit of displacement depends
-on the unit chosen by the user when specifying the CSG tree.
+Translation relocates a solid by displacing the solid's origin in the
+$x$, $y$ and $z$ axes with respect to the world coordinate frame. The
+paramaters for a translation operator is specified as a |displacement|
+vector. The unit of displacement depends on the unit chosen by the
+user when specifying the CSG tree; however, this unit does not matter
+within the system since all measurement units are normalised
+internally, so that all measurements in a given category can be
+combined readily with other measurements in the same category.
 
 @<Structure for translation parameters@>=
 struct translation_parameters {
-       vect3d displacement; /* displacement of solid origin */
+       vect3d displacement; /* displacement of solid's origin */
 };
 
 @ @<Read translation operation from a file@>=
 @<Read translation parameters@>;
-@<Find the target solid for the translation@>;
+@<Find the target solid for the operation@>;
 @<Create translation parameter node@>; 
 @<Create translation operator node@>;
 
@@ -1135,11 +1142,11 @@ using the following format.
 
 \smallskip
 
-(``solid" dx dy dz)
+(``target" $dx$ $dy$ $dz$)
 
 \smallskip
 
-\noindent where, ``solid" is the name of the target solid which we
+\noindent where, ``target" is the name of the target solid which we
 wish to translate, and $dx$, $dy$ and $dz$ are the respective
 displacements along the $x$, $y$ and $z$ axes. For instance, the
 translation specification {\tt ("D1" 10.0 50.0 20.0)} means, translate
@@ -1156,30 +1163,48 @@ solid must already exists within the system, either by prior
 definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
-@<Find the target solid for the translation@>=
+@<Find the target solid for the operation@>=
 if ((target_solid = find_solid(op_target)) == NULL) {
-        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
-	"Could not find solid named '%s'\n", input_file_name,
-	input_file_current_line, op_target);
-	goto error_invalid_file;
+        @<Exit after cleanup: solid does not exists@>;
 }
 
 @ We now have a valid translation, so create the parameter leaf
-node which will become the right-child of the translation operator node.
+node which will become the right-child of the translation operator
+node.
+
+{\bf Note:} We could have applied the translation immediately to the
+target solid, instead of creating a separate parameter node. However,
+creating a parametr node allows us to retain the original state of the
+target solid. At the moment, I am doubtful that this is the correct
+way of doing things, since we could significantly improve performance
+by applying the translation directly to the target, so that future
+references to the solid already incorporates the required
+translation. Nonetheless, this is not true if the target 
+is an intermediate solid, hence, we will leave the translation
+parameters separated from the target. In future revisions, we might
+choose to apply the translations directly, at least for primitive
+solids.
 
 @<Create translation parameter node@>=
-if ((parameter_node = create_csg_node()) != NULL) {
+if ((parameter_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create parameter node@>;
+} else {
         parameter_node->op = 0; /* this is a parameter leaf node */
 	parameter_node->leaf.t.displacement.x = op_x;
 	parameter_node->leaf.t.displacement.y = op_y;
 	parameter_node->leaf.t.displacement.z = op_z;
 }
 
+@ @<Exit after cleanup: failed to create parameter node@>=
+goto create_parameter_failed_exit_after_cleanup;
+
 @ Finally, create the translation operator node, and attach the target
 solid and the parameter node.
 
 @<Create translation operator node@>=
-if ((operator_node = create_csg_node()) != NULL) {
+if ((operator_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create operator node@>;
+} else {
         operator_node->op = TRANSLATE; /* this is an operator internal node */
 	operator_node->internal->left = target_solid;
 	operator_node->internal->right = parameter_node;
@@ -1190,16 +1215,83 @@ if ((operator_node = create_csg_node()) != NULL) {
 We rotate a solid relative to an axis. The angle of rotation
 $\theta$ is specified in {\it radians}@^radians@>. If $\theta < 0$, we
 have {\it clockwise rotation}@^clockwise rotation@>; if $\theta > 0$,
-we have {\it anticlockwise rotation}@^anticlockwise rotation@>.
+we have {\it counter-clockwise rotation}@^counter-clockwise rotation@>.
 When $\theta = 0$, no rotation is applied. In order to
 apply a rotation, we also need an {\it axis of rotation}@^axis of rotation@>.
-This is specified as a unit vector@^unit vector@> named |axis|.
+This is specified as a unit vector@^unit vector@> named |axis|, which
+is defined relative to the origin of the world coordinate frame.
 
 @<Structure for rotation parameters@>=
 struct rotation_parameters {
        double theta; /* angle of rotation in radians */
-       vect3d axis; /* axis of rotation (unit vector) */
+       vect3d axis; /* axis of rotation (unit vector from origin of world
+       coordinate frame) */
 };
+
+@ @<Read rotation operation from a file@>=
+@<Read rotation parameters@>;
+@<Find the target solid for the operation@>;
+@<Create rotation parameter node@>; 
+@<Create rotation operator node@>;
+
+@ The rotation parameters are specified in the geometry input file
+using the following format.
+
+\smallskip
+
+(``target" $\theta$ $ux$ $uy$ $uz$)
+
+\smallskip
+
+\noindent where, ``target" is the name of the target solid which we
+wish to rotate by a degree of $\theta$ radians relative to the axis
+defined by the unit vector with components $ux$, $uy$ and $uz$
+respective along the $x$, $y$ and $z$ axes. For instance, the
+rotation specification {\tt ("R1" 90.0 1.0 0.0 0.0)} means,
+rotate the solid associated with the name ``R1" by 90.0 degree radians
+relative to the $x$-axis in world coordinate frame.
+
+@<Read rotation parameters@>=
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n", &op_target, &op_theta, &op_x, &op_y, &op_z);
+input_file_current_line++;
+
+@ In order for a rotation to be applicable, the supplied target
+solid must already exists within the system, either by prior
+definition as a primitive solid, or as an intermediate solid
+defined by a CSG subtree.
+
+@<Find the target solid for the operation@>=
+if ((target_solid = find_solid(op_target)) == NULL) {
+        @<Exit after cleanup: solid does not exists@>;
+}
+
+@ We now have a valid rotation, so create the parameter leaf node.
+
+@<Create rotation parameter node@>=
+if ((parameter_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create parameter node@>;
+} else {
+        parameter_node->op = 0; /* this is a parameter leaf node */
+	parameter_node->leaf.r.theta = op_theta; /* angle of rotation */
+	parameter_node->leaf.r.axis.x = op_x;
+	parameter_node->leaf.r.axis.y = op_y;
+	parameter_node->leaf.r.axis.z = op_z;
+}
+
+@ @<Exit after cleanup: failed to create parameter node@>=
+goto create_parameter_failed_exit_after_cleanup;
+
+@ Finally, create the rotation operator node, and attach the target
+solid and the parameter node.
+
+@<Create rotation operator node@>=
+if ((operator_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create operator node@>;
+} else {
+        operator_node->op = ROTATE; /* this is an operator internal node */
+	operator_node->internal->left = target_solid;
+	operator_node->internal->right = parameter_node;
+}
 
 @*2 Scaling.
 
@@ -1208,13 +1300,75 @@ scaling applied with respect to each of the axes are specified using a
 |scale| vector. If the scaling factors are all zero, scaling is not
 applied. A scaling transformation maintains the shape and the form of
 the solid if and only if the scaling factor along all of the axes are
-equal.
+equal. This is referred to as {\it uniform scaling}@^uniform scaling@>.
 
 @<Structure for scaling parameters@>=
 struct scaling_parameters {
        vect3d scale; /* scaling factor */
 };
 
+@ @<Read scaling operation from a file@>=
+@<Read scaling parameters@>;
+@<Find the target solid for the operation@>;
+@<Create scaling parameter node@>; 
+@<Create scaling operator node@>;
+
+@ The scaling parameters are specified in the geometry input file
+using the following format.
+
+\smallskip
+
+(``target" $sx$ $sy$ $sz$)
+
+\smallskip
+
+\noindent where, ``target" is the name of the target solid which we
+wish to scale by the scaling factors $ux$, $uy$ and $uz$ along the
+$x$, $y$ and $z$ axes, respectively. For instance, the scaling
+specification {\tt ("S1" 1.0 2.0 3.0)} means, increase the scale of
+the solid associated with the name ``S1" by a factor of 2.0 and 3.0
+respectively along the $y$ and $z$ axes in world coordinate frame.
+
+@<Read scaling parameters@>=
+fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n", &op_target, &op_x, &op_y, &op_z);
+input_file_current_line++;
+
+@ In order for a scaling to be applicable, the supplied target
+solid must already exists within the system, either by prior
+definition as a primitive solid, or as an intermediate solid
+defined by a CSG subtree.
+
+@<Find the target solid for the operation@>=
+if ((target_solid = find_solid(op_target)) == NULL) {
+        @<Exit after cleanup: solid does not exists@>;
+}
+
+@ We now have a valid scaling, so create the parameter leaf node.
+
+@<Create scaling parameter node@>=
+if ((parameter_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create parameter node@>;
+} else {
+        parameter_node->op = 0; /* this is a parameter leaf node */
+	parameter_node->leaf.s.scale.x = op_x;
+	parameter_node->leaf.s.scale.y = op_y;
+	parameter_node->leaf.s.scale.z = op_z;
+}
+
+@ @<Exit after cleanup: failed to create parameter node@>=
+goto create_parameter_failed_exit_after_cleanup;
+
+@ Finally, create the scaling operator node, and attach the target
+solid and the parameter node.
+
+@<Create scaling operator node@>=
+if ((operator_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create operator node@>;
+} else {
+        operator_node->op = SCALE; /* this is an operator internal node */
+	operator_node->internal->left = target_solid;
+	operator_node->internal->right = parameter_node;
+}
 
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
@@ -1280,13 +1434,10 @@ CSG_Tree *read_geometry(FILE *f)
 	        @<Process input command@>;
 	}
 	return t;
-
-error_invalid_file:
-	@<Cleanup resources allocated to invalid geometry@>;
+	
+	@<Handle geometry file errors@>; 
 	return NULL;
 }
-
-@ @<Cleanup resources allocated to invalid geometry@>=
 
 @ @<Process input command@>=
 switch(c) {
@@ -1306,6 +1457,47 @@ default:
         goto error_invalid_file;
 }
 
+@ When we cannot recover from an error (e.g., incorrect input file),
+we must exit the system after cleaning up the resources that were
+allocated by previous commands. Furthermore, the system must also
+alert the user about the error. This section defines all of the exit
+points and the corresponding error messages.
+
+@<Handle geometry file errors@>=
+@<Alert failure to create operator node@>;
+@<Alert failure to create parameter node@>;
+@<Alert solid already exists@>;
+@<Alert solid does not exists@>;
+error_invalid_file:@/
+	@<Cleanup resources allocated to invalid geometry@>;
+
+@ @<Alert failure to create operator node@>=
+create_operator_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%d] Failed to create operator node\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert failure to create parameter node@>=
+create_parameter_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%d] Failed to create parameter node\n",
+input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert solid already exists@>=
+solid_exists_exit_after_cleanup:@/
+fprintf(stderr, "%s[%d] Invalid geometry specification... ",
+"Solid named '%s' already exists\n", input_file_name,
+input_file_current_line, op_target);
+goto error_invalid_file;
+
+@ @<Alert solid does not exists@>=
+no_solid_exists_exit_after_cleanup:@/
+fprintf(stderr, "%s[%d] Invalid geometry specification... ",
+	"Solid named '%s' does not exists\n", input_file_name,
+	input_file_current_line, op_left);
+goto error_invalid_file;
+
+@ @<Cleanup resources allocated to invalid geometry@>=
 
 
 @** Error handling.
