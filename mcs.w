@@ -1,3 +1,5 @@
+\def\hash{\char35}
+
 @** Introduction.
 The {\it Monte Carlo Simulator}, \.{MCS} in short, is a simulation
 package for high-energy physics. It uses Monte Carlo techniques for
@@ -599,6 +601,7 @@ typedef struct primitive_block_struct Block;
 typedef struct primitive_sphere_struct Sphere;
 typedef struct primitive_cylinder_struct Cylinder;
 typedef struct primitive_torus_struct Torus;
+typedef struct csg_node_struct CSG_Node;
 
 @ The first field of all primitive data stores a primitive type. This
 is used while deciding the manner in which a primitive must be
@@ -618,6 +621,16 @@ struct primitive_container_struct {
 };
 typedef struct primitive_container_struct Primitive;
 
+@ @<Create a primitive solid@>=
+Primitive *create_primitive_solid() {
+        return NULL;
+}
+
+@ @<Destroy a primitive solid@>=
+void destroy_primitive_solid(Primitive *primitive) {
+        free(primitive);
+}
+
 @ It is important to note here that, in each of the following sections,
 we specify only the relevant details. Additional details will be
 incorporated when we discuss other aspects of the solids. For
@@ -629,14 +642,14 @@ when we discuss materials.
 @ Every primitive has a {\it unique identifier}@^unique identifier@>
 and a {\it unique name}@^unique name@>. A unique human-readable name
 is supplied by the user to each instance of a primitive, as discussed
-in |@<Read block geometry from a file@>|. From this name, the
+in |@<Read block geometry@>|. From this name, the
 corresponding unique identifier is generated internally for use by
 the various algorithms.
 
-@d PRIMITIVE_NAME_MAX_LEN 100
+@d MAX_LEN_SOLID_NAME 128
 @<Information common to all primitives@>=
 uint32_t id; /* unique primitive identifier */
-char name[PRIMITIVE_NAME_MAX_LEN];
+char name[MAX_LEN_SOLID_NAME];
 
 @ In addition to the {\it global coordinate frame}@^global coordinate frame@>
 defined by the simulation world, each initialised primitive also
@@ -658,6 +671,14 @@ information.
 struct primitive_block_struct {
        @<Information that defines a primitive block@>;
 };
+
+@ We use the following variables while reading input data from a file.
+
+@<Global variables@>=
+char input_file_name[MAX_LEN_FILENAME]; /* current input file */
+uint32_t input_file_current_line; /* current line in current input file */
+Primitive *p; /* used during initialisation of primitive solids */
+CSG_Node *internal_node, *leaf_node;
 
 @ The geometry of a block is defined by its length, width and
 height. The origin of the block's local coordinate frame is defined by
@@ -687,11 +708,48 @@ at (100.0, 120.0, 150.0) in the world coordinate frame with length
 specified using the same unit of measurement. We will discuss in the
 following sections how a unit of measurement is selected.
 
-@<Read block geometry from a file@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
-       p->b.name, &p->b.origin.x, &p->b.origin.y, &p->b.origin.z,
+@<Read block geometry@>=
+@<Create a new primitive solid@>;
+@<Initialise primitive block with relevant data@>;
+@<Register the primitive solid@>;
+
+@ @<Create a new primitive solid@>=
+if ((p = create_primitive_solid()) == NULL) {
+        @<Exit after cleanup: failed to create primitive solid@>;
+}
+
+@ To increase clarity and to reduce code size, we keep recurring error
+messages in common code-blocks, and jump to these blocks as
+required. When it comes to implementing error handling, such as this,
+where we wish to terminate the application after cleanup, I prefer
+{\tt goto} statements. This is where bending the rules of {\it
+structured programming} leads to cleaner and smaller code.
+
+@<Exit after cleanup: failed to create primitive solid@>=
+goto create_primitive_failed_exit_after_cleanup;
+
+@ @<Initialise primitive block with relevant data@>=
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->b.length, &p->b.width, &p->b.height);
+input_file_current_line++;
+if (read_count == EOF || read_count != 7) {
+        destroy_primitive_solid(p);
+        @<Exit after cleanup: failed to read from file@>;
+}
 p->type = BLOCK;
+
+@ @<Exit after cleanup: failed to read from file@>=
+goto failed_read_exit_after_cleanup;
+
+@ @<Register the primitive solid@>=
+if ((leaf_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create leaf node@>;
+} else {
+        leaf_node->op = 0; /* this is a primitive solid leaf node */
+	leaf_node->leaf.p = p;
+	register_solid(leaf_node, p->name);
+}
 
 @*2 Sphere.
 A primitive sphere stores the following information.
@@ -723,11 +781,22 @@ at (100.0, 120.0, 150.0) in the world coordinate frame with radius
 10.0. Again, we assume that the radius is specified in the chosen
 unit of measurement, yet to be discussed.
 
-@<Read sphere geometry from a file@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->s.name, &p->s.origin.x, &p->s.origin.y, &p->s.origin.z,
+@<Read sphere geometry@>=
+@<Create a new primitive solid@>;
+@<Initialise primitive sphere with relevant data@>;
+@<Register the primitive solid@>;
+
+@ @<Initialise primitive sphere with relevant data@>=
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->s.radius);
+input_file_current_line++;
+if (read_count == EOF || read_count != 5) {
+        destroy_primitive_solid(p);
+        @<Exit after cleanup: failed to read from file@>;
+}
 p->type = SPHERE;
+
 
 @*2 Cylinder.
 A primitive cylinder stores the following information.
@@ -760,10 +829,20 @@ For instance, the specification {\tt ("Cylinder A" 100.0 120.0
 located at (100.0, 120.0, 150.0) in the world coordinate frame with
 base radius 10.0 and height 20.0.
 
-@<Read cylinder geometry from a file@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->c.name, &p->c.origin.x, &p->c.origin.y, &p->c.origin.z,
+@<Read cylinder geometry@>=
+@<Create a new primitive solid@>;
+@<Initialise primitive cylinder with relevant data@>;
+@<Register the primitive solid@>;
+
+@ @<Initialise primitive cylinder with relevant data@>=
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->c.radius, &p->c.height);
+input_file_current_line++;
+if (read_count == EOF || read_count != 6) {
+        destroy_primitive_solid(p);
+        @<Exit after cleanup: failed to read from file@>;
+}
 p->type = CYLINDER;
 
 @*2 Torus.
@@ -813,11 +892,22 @@ For instance, the specification {\tt ("Torus A" 100.0 120.0
 ``Torus A" located at (100.0, 120.0, 150.0) in the world coordinate
 frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
 
-@<Read torus geometry from a file@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
-       p->t.name, &p->t.origin.x, &p->t.origin.y, &p->t.origin.z,
+@<Read torus geometry@>=
+@<Create a new primitive solid@>;
+@<Initialise primitive torus with relevant data@>;
+@<Register the primitive solid@>;
+
+@ @<Initialise primitive torus with relevant data@>=
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
+       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
+input_file_current_line++;
+if (read_count == EOF || read_count != 8) {
+        destroy_primitive_solid(p);
+        @<Exit after cleanup: failed to read from file@>;
+}
 p->type = TORUS;
+
 
 @*1 Constructive Solid Geometry Tree.
 All solids are built from primitive solids by using regularised
@@ -848,7 +938,6 @@ CSG Tree}@^CSG Tree@> for short. This structure stores a pointer to
 the root node, and maintains several house-keeping data.
 
 @<Structure of a constructive solid geometry tree@>=
-typedef struct csg_node_struct CSG_Node;
 struct csg_tree_struct {
        @<House-keeping data@>;
        CSG_Node *root; /* pointer to the CSG root */
@@ -915,6 +1004,40 @@ struct csg_node_struct {
        };
 };
 
+@*2 Solid registry.
+
+@ @<Register a solid using a specified name@>=
+CSG_Node *register_solid(CSG_Node *solid, const char *name) {
+	 return NULL;
+}
+
+@ @<Find the solid associated with a specified name@>=
+CSG_Node *find_solid(const char *name) {
+	 return NULL;
+}
+
+@ @<Create a CSG node@>=
+CSG_Node *create_csg_node() {
+	 return NULL;
+}
+
+@ @<Destroy a CSG node@>=
+void destroy_csg_node(CSG_Node *csg_node) {
+	 free(csg_node);
+}
+
+@ While reading in the operations, we use the following variables to
+store temporary values. Since each operation is defined independently
+of other operations before and after, these variables can be shared by
+all of the operation commands without confusion.
+
+@d MAX_LEN_FILENAME 256
+@<Global variables@>=
+double op_x, op_y, op_z, op_theta;
+char op_target[MAX_LEN_SOLID_NAME];
+char op_left[MAX_LEN_SOLID_NAME], op_right[MAX_LEN_SOLID_NAME];
+char *solid_name; /* points to name of solid while alerting error */
+CSG_Node *target_solid, *left_solid, *right_solid;
 
 @*2 Union.
 
@@ -941,26 +1064,22 @@ For instance, the union specification {\tt ("U1" "Cylinder A" "Torus
 A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
 and stores the result using the name ``U1".
 
-@ @<Read union operation from a file@>=
-fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
-&op_target, &op_left, &op_right);
+@ @<Read union operation@>=
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+	   op_target, op_left, op_right);
 input_file_current_line++;
+if (read_count == EOF || read_count != 3)
+        @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create union operator node@>;
 
 @ @<Check that the target does not already exists@>=
 if ((target_solid = find_solid(op_target)) != NULL) {
+        solid_name = op_target;
         @<Exit after cleanup: solid already exists@>;
 }
 
-@ To increase clarity and to reduce code size, we keep recurring error
-messages in common code-blocks, and jump to these blocks as
-required. When it comes to implementing error handling, such as this,
-where we wish to terminate the application after cleanup, I prefer
-{\tt goto} statements. This is where bending the rules of {\it
-structured programming} leads to cleaner and smaller code.
-
-@<Exit after cleanup: solid already exists@>=
+@ @<Exit after cleanup: solid already exists@>=
 goto solid_exists_exit_after_cleanup;
 
 @ We are now ready to create a union operator. But first, we must
@@ -975,6 +1094,7 @@ left and right subtrees point to these existing solids.
 
 @ @<Find solid that corresponds to the left-hand operand@>=
 if ((left_solid = find_solid(op_left)) == NULL) {
+        solid_name = op_left;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -983,6 +1103,7 @@ goto no_solid_exists_exit_after_cleanup;
 
 @ @<Find solid that corresponds to the right-hand operand@>=
 if ((right_solid = find_solid(op_right)) == NULL) {
+        solid_name = op_right;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -992,17 +1113,17 @@ solid must be registered with the system, so that they may be used by
 later commands. 
 
 @<Create new union operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = UNION; /* this is an internal node */
-	operator_node->internal->left = left_solid;
-	operator_node->internal->right = right_solid;
-	register_solid(operator_node, op_target); /* register operator
+        internal_node->op = UNION; /* this is an internal node */
+	internal_node->internal.left = left_solid;
+	internal_node->internal.right = right_solid;
+	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 }
 
-@ @<Exit after cleanup: failed to create operator node@>=
+@ @<Exit after cleanup: failed to create internal node@>=
 goto create_operator_failed_exit_after_cleanup;
 
 @*2 Intersection.
@@ -1026,10 +1147,12 @@ For instance, the intersection specification {\tt ("I1" "Cylinder A" "Torus
 A")} finds the intersection of two solids named ``Cylinder A" and ``Torus A"
 and stores the result using the name ``I1".
 
-@ @<Read intersection operation from a file@>=
-fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
-&op_target, &op_left, &op_right);
+@ @<Read intersection operation@>=
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+	   op_target, op_left, op_right);
 input_file_current_line++;
+if (read_count == EOF || read_count != 3)
+        @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create intersection operator node@>;
 
@@ -1049,13 +1172,13 @@ this new solid must be registered with the system, so that they may be
 used by later commands. 
 
 @<Create new intersection operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = INTERSECTION; /* this is an internal node */
-	operator_node->internal->left = left_solid;
-	operator_node->internal->right = right_solid;
-	register_solid(operator_node, op_target); /* register operator
+        internal_node->op = INTERSECTION; /* this is an internal node */
+	internal_node->internal.left = left_solid;
+	internal_node->internal.right = right_solid;
+	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 }
 
@@ -1082,10 +1205,12 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 "Torus A")} finds the difference by subtracting ``Torus A" from
 ``Cylinder A", and stores the result using the name ``D1".
 
-@ @<Read difference operation from a file@>=
-fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
-&op_target, &op_left, &op_right);
+@ @<Read difference operation@>=
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+	   op_target, op_left, op_right);
 input_file_current_line++;
+if (read_count == EOF || read_count != 3)
+        @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create difference operator node@>;
 
@@ -1105,13 +1230,13 @@ this new solid must be registered with the system, so that they may be
 used by later commands. 
 
 @<Create new difference operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = DIFFERENCE; /* this is an internal node */
-	operator_node->internal->left = left_solid;
-	operator_node->internal->right = right_solid;
-	register_solid(operator_node, op_target); /* register operator
+        internal_node->op = DIFFERENCE; /* this is an internal node */
+	internal_node->internal.left = left_solid;
+	internal_node->internal.right = right_solid;
+	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 }
 
@@ -1131,7 +1256,7 @@ struct translation_parameters {
        vect3d displacement; /* displacement of solid's origin */
 };
 
-@ @<Read translation operation from a file@>=
+@ @<Read translation operation@>=
 @<Read translation parameters@>;
 @<Find the target solid for the operation@>;
 @<Create translation parameter node@>; 
@@ -1155,8 +1280,12 @@ the solid associated with the name ``D1" by displacing its origin by
 units along the $z$ axis.
 
 @<Read translation parameters@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n", &op_target, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+	   op_target, &op_x, &op_y, &op_z);
 input_file_current_line++;
+if (read_count == EOF || read_count != 4)
+        @<Exit after cleanup: failed to read from file@>;
+
 
 @ In order for a translation to be applicable, the supplied target
 solid must already exists within the system, either by prior
@@ -1165,6 +1294,7 @@ defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
 if ((target_solid = find_solid(op_target)) == NULL) {
+        solid_name = op_target;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -1186,28 +1316,28 @@ choose to apply the translations directly, at least for primitive
 solids.
 
 @<Create translation parameter node@>=
-if ((parameter_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create parameter node@>;
+if ((leaf_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        parameter_node->op = 0; /* this is a parameter leaf node */
-	parameter_node->leaf.t.displacement.x = op_x;
-	parameter_node->leaf.t.displacement.y = op_y;
-	parameter_node->leaf.t.displacement.z = op_z;
+        leaf_node->op = 0; /* this is a parameter leaf node */
+	leaf_node->leaf.t.displacement.x = op_x;
+	leaf_node->leaf.t.displacement.y = op_y;
+	leaf_node->leaf.t.displacement.z = op_z;
 }
 
-@ @<Exit after cleanup: failed to create parameter node@>=
+@ @<Exit after cleanup: failed to create leaf node@>=
 goto create_parameter_failed_exit_after_cleanup;
 
 @ Finally, create the translation operator node, and attach the target
 solid and the parameter node.
 
 @<Create translation operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = TRANSLATE; /* this is an operator internal node */
-	operator_node->internal->left = target_solid;
-	operator_node->internal->right = parameter_node;
+        internal_node->op = TRANSLATE; /* this is an operator internal node */
+	internal_node->internal.left = target_solid;
+	internal_node->internal.right = leaf_node;
 }
 
 @*2 Rotation.
@@ -1228,7 +1358,7 @@ struct rotation_parameters {
        coordinate frame) */
 };
 
-@ @<Read rotation operation from a file@>=
+@ @<Read rotation operation@>=
 @<Read rotation parameters@>;
 @<Find the target solid for the operation@>;
 @<Create rotation parameter node@>; 
@@ -1252,8 +1382,11 @@ rotate the solid associated with the name ``R1" by 90.0 degree radians
 relative to the $x$-axis in world coordinate frame.
 
 @<Read rotation parameters@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n", &op_target, &op_theta, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
+	   op_target, &op_theta, &op_x, &op_y, &op_z);
 input_file_current_line++;
+if (read_count == EOF || read_count != 5)
+        @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a rotation to be applicable, the supplied target
 solid must already exists within the system, either by prior
@@ -1262,35 +1395,33 @@ defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
 if ((target_solid = find_solid(op_target)) == NULL) {
+        solid_name = op_target;
         @<Exit after cleanup: solid does not exists@>;
 }
 
 @ We now have a valid rotation, so create the parameter leaf node.
 
 @<Create rotation parameter node@>=
-if ((parameter_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create parameter node@>;
+if ((leaf_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        parameter_node->op = 0; /* this is a parameter leaf node */
-	parameter_node->leaf.r.theta = op_theta; /* angle of rotation */
-	parameter_node->leaf.r.axis.x = op_x;
-	parameter_node->leaf.r.axis.y = op_y;
-	parameter_node->leaf.r.axis.z = op_z;
+        leaf_node->op = 0; /* this is a parameter leaf node */
+	leaf_node->leaf.r.theta = op_theta; /* angle of rotation */
+	leaf_node->leaf.r.axis.x = op_x;
+	leaf_node->leaf.r.axis.y = op_y;
+	leaf_node->leaf.r.axis.z = op_z;
 }
-
-@ @<Exit after cleanup: failed to create parameter node@>=
-goto create_parameter_failed_exit_after_cleanup;
 
 @ Finally, create the rotation operator node, and attach the target
 solid and the parameter node.
 
 @<Create rotation operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = ROTATE; /* this is an operator internal node */
-	operator_node->internal->left = target_solid;
-	operator_node->internal->right = parameter_node;
+        internal_node->op = ROTATE; /* this is an operator internal node */
+	internal_node->internal.left = target_solid;
+	internal_node->internal.right = leaf_node;
 }
 
 @*2 Scaling.
@@ -1307,7 +1438,7 @@ struct scaling_parameters {
        vect3d scale; /* scaling factor */
 };
 
-@ @<Read scaling operation from a file@>=
+@ @<Read scaling operation@>=
 @<Read scaling parameters@>;
 @<Find the target solid for the operation@>;
 @<Create scaling parameter node@>; 
@@ -1330,8 +1461,11 @@ the solid associated with the name ``S1" by a factor of 2.0 and 3.0
 respectively along the $y$ and $z$ axes in world coordinate frame.
 
 @<Read scaling parameters@>=
-fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n", &op_target, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+	   op_target, &op_x, &op_y, &op_z);
 input_file_current_line++;
+if (read_count == EOF || read_count != 4)
+        @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a scaling to be applicable, the supplied target
 solid must already exists within the system, either by prior
@@ -1340,34 +1474,32 @@ defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
 if ((target_solid = find_solid(op_target)) == NULL) {
+        solid_name = op_target;
         @<Exit after cleanup: solid does not exists@>;
 }
 
 @ We now have a valid scaling, so create the parameter leaf node.
 
 @<Create scaling parameter node@>=
-if ((parameter_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create parameter node@>;
+if ((leaf_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        parameter_node->op = 0; /* this is a parameter leaf node */
-	parameter_node->leaf.s.scale.x = op_x;
-	parameter_node->leaf.s.scale.y = op_y;
-	parameter_node->leaf.s.scale.z = op_z;
+        leaf_node->op = 0; /* this is a parameter leaf node */
+	leaf_node->leaf.s.scale.x = op_x;
+	leaf_node->leaf.s.scale.y = op_y;
+	leaf_node->leaf.s.scale.z = op_z;
 }
-
-@ @<Exit after cleanup: failed to create parameter node@>=
-goto create_parameter_failed_exit_after_cleanup;
 
 @ Finally, create the scaling operator node, and attach the target
 solid and the parameter node.
 
 @<Create scaling operator node@>=
-if ((operator_node = create_csg_node()) == NULL) {
-        @<Exit after cleanup: failed to create operator node@>;
+if ((internal_node = create_csg_node()) == NULL) {
+        @<Exit after cleanup: failed to create internal node@>;
 } else {
-        operator_node->op = SCALE; /* this is an operator internal node */
-	operator_node->internal->left = target_solid;
-	operator_node->internal->right = parameter_node;
+        internal_node->op = SCALE; /* this is an operator internal node */
+	internal_node->internal.left = target_solid;
+	internal_node->internal.right = leaf_node;
 }
 
 @*1 The geometry input file.
@@ -1393,6 +1525,7 @@ $$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
 B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
 u, i, d & Carry out a union, intersection, or difference.\cr
 t, r, s & Translate, rotate, or scale the solid.\cr
+\hash\ & Begin comment line. Stop at the first newline character.\cr 
 }}$$
 
 \smallskip
@@ -1405,11 +1538,17 @@ field. Finally, every command must be terminated by a $\langle newline
 \bigskip
 
 {\tt
+\hash\ Define primitive solids
+
 T ("Torus A" 100.0 120.0 150.0 0.0 359.999999 10.0 2.0)
 
 C ("Cylinder A" 110.0 120.0 150.0 10.0 20.0)
 
 C ("Cylinder B" 120.0 120.0 150.0 10.0 20.0)
+
+\
+
+\hash\ Operation on primitive solids
 
 u ("U1" "Torus A" "Cylinder A")
 
@@ -1423,37 +1562,98 @@ s ("D1" 10.0 20.0 30.0)
 \bigskip
 
 We have already discussed how the $\langle parameters \rangle$ field
-is specified in the respective sections.
+is specified in their respective sections.
 
 @ @<Read geometry from input file@>=
-CSG_Tree *read_geometry(FILE *f)
+CSG_Tree *read_geometry(const char *fname)
 {
-	CSG_Tree *t;
+	FILE *f;
+	CSG_Tree *t = NULL;
 	char c;
+	@<Open input geometry file@>;
 	while ((c = fgetc(f)) != EOF) {
+		@<Discard comments, white spaces and empty lines@>;
 	        @<Process input command@>;
 	}
+	fclose(f);
 	return t;
 	
-	@<Handle geometry file errors@>; 
+	@<Handle geometry file errors@>;
 	return NULL;
+}
+
+@ We use the temporary variable |input_file_name| to store the name of
+the file that is currently being processed, so that if we wish, we
+might generate the name of the file at runtime (e.g., by appending
+prefix and suffix strings to a base filename).
+
+@<Open input geometry file@>=
+input_file_current_line = 0;
+strcpy(input_file_name, fname); /* generate filename */
+if ((f = fopen(input_file_name, "r")) == NULL) {
+        fprintf(stderr, "Failed to open input geometry file: %s\n",
+	        input_file_name);
+	return NULL;
+}
+
+@ To improve readability, we allow comments, empty lines and
+indentation of commands.
+
+@<Discard comments, white spaces and empty lines@>=
+@<Discard comment lines@>;
+@<Discard indentations@>;
+@<Discard empty lines@>;
+
+@ @<Discard comment lines@>=
+if (c == '#') {
+        while ((c = fgetc(f)) != EOF && c != '\n'); /* gobble comments */
+	if (c == EOF) break; /* done reading input file */
+}
+
+@ @<Discard indentations@>=
+if (c == ' ' || c == '\t') continue;
+
+@ @<Discard empty lines@>=
+if (c == '\n') {
+        input_file_current_line++;
+	continue;
 }
 
 @ @<Process input command@>=
 switch(c) {
-case 'b':
-	@<Read block geometry from a file@>;
+case 'B':
+	@<Read block geometry@>;
      	break;
-case 's':
-	@<Read sphere geometry from a file@>;
+case 'S':
+	@<Read sphere geometry@>;
      	break;
-case 'c':
-	@<Read cylinder geometry from a file@>;
+case 'C':
+	@<Read cylinder geometry@>;
+        break;
+case 'T':
+        @<Read torus geometry@>;
+        break;
+case 'u':
+        @<Read union operation@>;
+        break;
+case 'i':
+        @<Read intersection operation@>;
+        break;
+case 'd':
+        @<Read difference operation@>;
         break;
 case 't':
-        @<Read torus geometry from a file@>;
+        @<Read translation operation@>;
+        break;
+case 'r':
+        @<Read rotation operation@>;
+        break;
+case 's':
+        @<Read scaling operation@>;
         break;
 default:
+	fprintf(stderr, "%s[%u] Invalid command '%c' in input file",
+	input_file_name, input_file_current_line, c);
         goto error_invalid_file;
 }
 
@@ -1464,37 +1664,52 @@ alert the user about the error. This section defines all of the exit
 points and the corresponding error messages.
 
 @<Handle geometry file errors@>=
+@<Alert error while reading file@>;
+@<Alert failure to create primitive solid@>;
 @<Alert failure to create operator node@>;
 @<Alert failure to create parameter node@>;
 @<Alert solid already exists@>;
 @<Alert solid does not exists@>;
 error_invalid_file:@/
-	@<Cleanup resources allocated to invalid geometry@>;
+@<Cleanup resources allocated to invalid geometry@>;
+fclose(f);
+
+@ @<Alert error while reading file@>=
+failed_read_exit_after_cleanup:@/
+fprintf(stderr, "Failed to read file '%s' at line %u\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert failure to create primitive solid@>=
+create_primitive_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] Failed to create primitive solid\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
 
 @ @<Alert failure to create operator node@>=
 create_operator_failed_exit_after_cleanup:@/
-fprintf(stderr, "%s[%d] Failed to create operator node\n",
+fprintf(stderr, "%s[%u] failed to create internal node\n",
 	input_file_name, input_file_current_line);
 goto error_invalid_file;
 
 @ @<Alert failure to create parameter node@>=
 create_parameter_failed_exit_after_cleanup:@/
-fprintf(stderr, "%s[%d] Failed to create parameter node\n",
+fprintf(stderr, "%s[%u] failed to create leaf node\n",
 input_file_name, input_file_current_line);
 goto error_invalid_file;
 
 @ @<Alert solid already exists@>=
 solid_exists_exit_after_cleanup:@/
-fprintf(stderr, "%s[%d] Invalid geometry specification... ",
+fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
 "Solid named '%s' already exists\n", input_file_name,
-input_file_current_line, op_target);
+input_file_current_line, solid_name);
 goto error_invalid_file;
 
 @ @<Alert solid does not exists@>=
 no_solid_exists_exit_after_cleanup:@/
-fprintf(stderr, "%s[%d] Invalid geometry specification... ",
+fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
 	"Solid named '%s' does not exists\n", input_file_name,
-	input_file_current_line, op_left);
+	input_file_current_line, solid_name);
 goto error_invalid_file;
 
 @ @<Cleanup resources allocated to invalid geometry@>=
@@ -1513,8 +1728,10 @@ following macros: |fatal|, |warn|, and |info|.
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 @ @<Global variables@>=
+int read_count; /* returned by fscanf() */
 uint32_t i, j, k, l, m, n; /* counters */
 Event *current_event = NULL;
 Vertex *current_vertex = NULL;
@@ -1571,7 +1788,12 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Pop particle out of the particle stack@>;
 @<Tracking a particle@>;
 @<Set particle gun parameters@>;
-@<Read block geometry from a file@>;
+@<Register a solid using a specified name@>;
+@<Create a primitive solid@>;
+@<Destroy a primitive solid@>;
+@<Create a CSG node@>;
+@<Destroy a CSG node@>;
+@<Find the solid associated with a specified name@>;
 @<Read geometry from input file@>;
 
 @* History.
