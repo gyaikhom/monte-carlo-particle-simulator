@@ -919,31 +919,79 @@ struct csg_node_struct {
 @*2 Union.
 
 The union of two solids is defined as the volume which consist of
-points that are both 
+points that are both inside those solids. In the geometry input file,
+the union of two solids are defined using the following format:
+$$\vcenter{(``target" ``left solid" ``right solid")}$$
 
-, intersection and difference of two solids are specified in the
-geometry input file using the following format.
+Here, ``left solid" and ``right solid" are the names of the
+union operands, and the result of the union is to be stored using the
+name ``target". For the union command to be valid, no solid with the
+name ``target" must already exists within the system. Both operands
+could be primitive solids, or intermediate solids that are defined by
+a CSG sub-tree, and they are not required to share space (i.e., the
+solids may be detached from one another). Because the union operator
+is {\it commutative}@^commutative operator@>, the order of the
+operands are unimportant.
 
-\smallskip
+For instance, the union specification {\tt ("U1" "Cylinder A" "Torus
+A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
+and stores the result using the name ``U1".
 
-(``result" ``left solid" ``right solid")
-
-\smallskip
-
-\noindent where, ``left solid" and ``right solid" are the names of the
-operands, and the result of the operation is stored using the name
-``result". Both operands could be primitive solids, or intermediate
-solids that is defined by a CSG sub-tree. The order of the operands
-are important when applying the difference operator.
-
-For instance, the specification {\tt ("D1" "Cylinder A" "Torus A")}
-for the difference of two solids means, stores in "D1" the difference
-of subtracting the volume defined by "Torus A" from the volume defined
-by solid "Cylinder A".
-
-@<Read binary operation from a file@>=
+@<Read union operation from a file@>=
 fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
-&op_result, &op_left, &op_right);
+&op_target, &op_left, &op_right);
+if ((target_solid = find_solid(op_target)) == NULL) {
+        @<Create union operator node@>;
+} else {
+        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+	"Solid named '%s' already exists\n", input_file_name,
+	input_file_current_line, op_target);
+	goto error_invalid_file;
+}
+
+@ We are now ready to create a union operator. But first, we must
+ensure that the solids specified as the operands already exists within
+the system. If they are, we create a new operator node and make its
+left and right subtrees point to these existing solids.
+
+@<Create union operator node@>=
+@<Find solid that corresponds to the left operand@>;
+@<Find solid that corresponds to the right operand@>;
+@<Create new union operator node@>;
+
+@ @<Find solid that corresponds to the left operand@>=
+if ((left_solid = find_solid(op_left)) == NULL) {
+        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+	"Solid named '%s' does not exists\n", input_file_name,
+	input_file_current_line, op_left);
+	goto error_invalid_file;
+}
+
+@ @<Find solid that corresponds to the right operand@>=
+if ((right_solid = find_solid(op_right)) == NULL) {
+        fprintf(stderr, "%s[%d] Invalid geometry specification...\n"@/
+	"Solid named '%s' does not exists\n", input_file_name,
+	input_file_current_line, op_right);
+	goto error_invalid_file;
+}
+
+@ When a new union operator node is created, we are actually creating
+a new {\it intermediate solid}@^intermediate solid@>. Hence, this new
+solid must be registered with the system, so that they may be used by
+later commands. 
+
+@<Create new union operator node@>=
+if ((operator_node = create_csg_node()) == NULL) {
+        fprintf(stderr, "%s[%d] Failed to create union operator	node\n"@/
+	input_file_name, input_file_current_line);
+	goto error_invalid_file;
+} else {
+        operator_node->op = UNION; /* this is an operator internal node */
+	operator_node->internal->left = left_solid;
+	operator_node->internal->right = right_solid;
+	register_solid(operator_node, op_target); /* register operator
+	node using the target name */
+}
 
 
 @*2 Translation.
@@ -1003,7 +1051,7 @@ node which will become the right-child of the translation operator node.
 
 @<Create translation parameter node@>=
 if ((parameter_node = create_csg_node()) != NULL) {
-        parameter_node->op = 0; /* this is a leaf node */
+        parameter_node->op = 0; /* this is a parameter leaf node */
 	parameter_node->leaf.t.displacement.x = op_x;
 	parameter_node->leaf.t.displacement.y = op_y;
 	parameter_node->leaf.t.displacement.z = op_z;
@@ -1014,7 +1062,7 @@ solid and the parameter node.
 
 @<Create translation operator node@>=
 if ((operator_node = create_csg_node()) != NULL) {
-        operator_node->op = TRANSLATE; /* this is an internal node */
+        operator_node->op = TRANSLATE; /* this is an operator internal node */
 	operator_node->internal->left = target_solid;
 	operator_node->internal->right = parameter_node;
 }
