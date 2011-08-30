@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 	@<Parse command line arguments@>;
 	@<Process input files@>;
 	@<Create physics tables@>;
-	@<Create and process events@>;
+	/* Create and process events */
 	@<Clean up the system@>;
 	return 0;
 }
@@ -113,6 +113,7 @@ int main(int argc, char *argv[])
 @ @<Parse command line arguments@>=
 
 @ @<Process input files@>=
+read_geometry("test.geom");
 
 @ @<Create physics tables@>=
 
@@ -122,6 +123,7 @@ for (i = 0; i < num_events; i++) {
 }
 
 @ @<Clean up the system@>=
+@<Destroy the hash table of solids@>;
 
 @** Vectors.
 
@@ -1127,7 +1129,7 @@ all of the operation commands without confusion.
 @d MAX_LEN_FILENAME 256
 @<Global variables@>=
 double op_x, op_y, op_z, op_theta;
-char op_target[MAX_LEN_SOLID_NAME];
+char op_target[MAX_LEN_SOLID_NAME], op_solid[MAX_LEN_SOLID_NAME];
 char op_left[MAX_LEN_SOLID_NAME], op_right[MAX_LEN_SOLID_NAME];
 char *solid_name; /* points to name of solid while alerting error */
 CSG_Node *target_solid, *left_solid, *right_solid;
@@ -1353,30 +1355,32 @@ struct translation_parameters {
 @<Read translation parameters@>;
 @<Find the target solid for the operation@>;
 @<Create translation parameter node@>; 
-@<Create translation operator node@>;
+@<Create and register translation operator node@>;
 
 @ The translation parameters are specified in the geometry input file
 using the following format:
 
 \smallskip
 
-(``target" $dx$ $dy$ $dz$)
+(``target'' ``solid'' $dx$ $dy$ $dz$)
 
 \smallskip
 
-\noindent where, ``target" is the name of the target solid which we
-wish to translate, and $dx$, $dy$ and $dz$ are the respective
-displacements along the $x$, $y$ and $z$ axes. For instance, the
-translation specification {\tt ("D1" 10.0 50.0 20.0)} means, translate
-the solid associated with the name ``D1" by displacing its origin by
-10.0 units along the $x$ axis, 50.0 units along the $y$ axis, and 20.0
-units along the $z$ axis.
+\noindent where, ``target'' is the name of the target solid which is
+obtained by translating ``solid''. The lengths $dx$, $dy$ and $dz$ are
+the respective displacements along the $x$, $y$ and $z$ axes in the
+world coordinate frame. For instance, the translation specification
+{\tt ("T1" "Solid" 10.0 50.0 20.0)} means, translate the solid
+associated with the name ``Solid'' by displacing its origin by 10.0
+units along the $x$ axis, 50.0 units along the $y$ axis, and 20.0
+units along the $z$ axis, and register this intermediate solid as
+``T1''.
 
 @<Read translation parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
-	   op_target, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
+	   op_target, op_solid, &op_x, &op_y, &op_z);
 input_file_current_line++;
-if (read_count == EOF || read_count != 4)
+if (read_count == EOF || read_count != 5)
         @<Exit after cleanup: failed to read from file@>;
 
 
@@ -1386,8 +1390,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_target)) == NULL) {
-        solid_name = op_target;
+if ((target_solid = find_solid(op_solid)) == NULL) {
+        solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -1424,7 +1428,7 @@ goto create_parameter_failed_exit_after_cleanup;
 @ Finally, create the translation operator node, and attach the target
 solid and the parameter node.
 
-@<Create translation operator node@>=
+@<Create and register translation operator node@>=
 if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
@@ -1432,6 +1436,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
 }
+register_solid(internal_node, op_target);
 
 @*2 Rotation.
 
@@ -1455,30 +1460,31 @@ struct rotation_parameters {
 @<Read rotation parameters@>;
 @<Find the target solid for the operation@>;
 @<Create rotation parameter node@>; 
-@<Create rotation operator node@>;
+@<Create and register rotation operator node@>;
 
 @ The rotation parameters are specified in the geometry input file
 using the following format:
 
 \smallskip
 
-(``target" $\theta$ $ux$ $uy$ $uz$)
+(``target'' ``solid'' $\theta$ $ux$ $uy$ $uz$)
 
 \smallskip
 
-\noindent where, ``target" is the name of the target solid which we
-wish to rotate by a degree of $\theta$ radians relative to the axis
-defined by the unit vector with components $ux$, $uy$ and $uz$
+\noindent where, ``target'' is the name of the solid which is obtained
+by rotating ``solid'' by an angle of $\theta$ radians relative to the
+axis defined by the unit vector with components $ux$, $uy$ and $uz$
 respective along the $x$, $y$ and $z$ axes. For instance, the
-rotation specification {\tt ("R1" 90.0 1.0 0.0 0.0)} means,
-rotate the solid associated with the name ``R1" by 90.0 degree radians
-relative to the $x$-axis in world coordinate frame.
+rotation specification {\tt ("R1" "Solid" 90.0 1.0 0.0 0.0)} means,
+rotate the solid associated with the name ``Solid'' by 90.0 degree
+radians relative to the $x$-axis in world coordinate frame and
+register this intermediate solid as ``R1''.
 
 @<Read rotation parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-	   op_target, &op_theta, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)\n",
+	   op_target, op_solid, &op_theta, &op_x, &op_y, &op_z);
 input_file_current_line++;
-if (read_count == EOF || read_count != 5)
+if (read_count == EOF || read_count != 6)
         @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a rotation to be applicable, the supplied target
@@ -1487,8 +1493,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_target)) == NULL) {
-        solid_name = op_target;
+if ((target_solid = find_solid(op_solid)) == NULL) {
+        solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -1508,7 +1514,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 @ Finally, create the rotation operator node, and attach the target
 solid and the parameter node.
 
-@<Create rotation operator node@>=
+@<Create and register rotation operator node@>=
 if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
@@ -1516,6 +1522,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
 }
+register_solid(internal_node, op_target);
 
 @*2 Scaling.
 
@@ -1535,29 +1542,30 @@ struct scaling_parameters {
 @<Read scaling parameters@>;
 @<Find the target solid for the operation@>;
 @<Create scaling parameter node@>; 
-@<Create scaling operator node@>;
+@<Create and register scaling operator node@>;
 
 @ The scaling parameters are specified in the geometry input file
 using the following format:
 
 \smallskip
 
-(``target" $sx$ $sy$ $sz$)
+(``target" ``solid'' $sx$ $sy$ $sz$)
 
 \smallskip
 
-\noindent where, ``target" is the name of the target solid which we
-wish to scale by the scaling factors $ux$, $uy$ and $uz$ along the
-$x$, $y$ and $z$ axes, respectively. For instance, the scaling
-specification {\tt ("S1" 1.0 2.0 3.0)} means, increase the scale of
-the solid associated with the name ``S1" by a factor of 2.0 and 3.0
-respectively along the $y$ and $z$ axes in world coordinate frame.
+\noindent where, ``target'' is the name of the solid which is obtained
+after scaling ``solid'' by the scaling factors $ux$, $uy$ and $uz$
+along the $x$, $y$ and $z$ axes, respectively. For instance, the
+scaling specification {\tt ("S1" "Solid" 1.0 2.0 3.0)} means, increase
+the scale of the solid associated with the name ``Solid'' by a factor
+of 2.0 and 3.0 respectively along the $y$ and $z$ axes in world
+coordinate frame and register this intermediate solid as ``S1''. 
 
 @<Read scaling parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
-	   op_target, &op_x, &op_y, &op_z);
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
+	   op_target, op_solid, &op_x, &op_y, &op_z);
 input_file_current_line++;
-if (read_count == EOF || read_count != 4)
+if (read_count == EOF || read_count != 5)
         @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a scaling to be applicable, the supplied target
@@ -1566,8 +1574,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_target)) == NULL) {
-        solid_name = op_target;
+if ((target_solid = find_solid(op_solid)) == NULL) {
+        solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
 
@@ -1586,7 +1594,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 @ Finally, create the scaling operator node, and attach the target
 solid and the parameter node.
 
-@<Create scaling operator node@>=
+@<Create and register scaling operator node@>=
 if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
@@ -1594,6 +1602,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
 }
+register_solid(internal_node, op_target);
 
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
@@ -1647,9 +1656,9 @@ u ("U1" "Torus A" "Cylinder A")
 
 d ("D1" "U1" "Cylinder B")
 
-t ("D1" 10.0 50.0 20.0)
+t ("T1" "D1" 10.0 50.0 20.0)
 
-s ("D1" 10.0 20.0 30.0)
+s ("S1" "T1" 10.0 20.0 30.0)
 }
 
 \bigskip
@@ -1714,6 +1723,7 @@ if (c == '\n') {
 }
 
 @ @<Process input command@>=
+printf("reading...%c\n", c);
 switch(c) {
 case 'B':
 	@<Read block geometry@>;
