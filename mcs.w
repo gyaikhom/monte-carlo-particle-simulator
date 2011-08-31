@@ -106,6 +106,7 @@ int main(int argc, char *argv[])
 	@<Process input files@>;
 	@<Create physics tables@>;
 	/* Create and process events */
+	print_csg_tree(csg_tree.root, 0);
 	@<Clean up the system@>;
 	return 0;
 }
@@ -123,7 +124,7 @@ for (i = 0; i < num_events; i++) {
 }
 
 @ @<Clean up the system@>=
-@<Destroy the hash table of solids@>;
+destroy_csg_tree(csg_tree.root);
 
 @** Vectors.
 
@@ -744,12 +745,13 @@ CSG_Node *internal_node, *leaf_node;
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->b.length, &p->b.width, &p->b.height);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 7) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = BLOCK;
+++csg_tree.num_primitive;
 
 @ @<Exit after cleanup: failed to read from file@>=
 goto failed_read_exit_after_cleanup;
@@ -758,7 +760,7 @@ goto failed_read_exit_after_cleanup;
 if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        leaf_node->op = 0; /* this is a primitive solid leaf node */
+        leaf_node->op = SOLID; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
 	register_solid(leaf_node, p->name);
 }
@@ -802,13 +804,13 @@ unit of measurement, yet to be discussed.
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->s.radius);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 5) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = SPHERE;
-
+++csg_tree.num_primitive;
 
 @*2 Cylinder.
 A primitive cylinder stores the following information.
@@ -850,12 +852,13 @@ base radius 10.0 and height 20.0.
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->c.radius, &p->c.height);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 6) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = CYLINDER;
+++csg_tree.num_primitive;
 
 @*2 Torus.
 A primitive torus stores the following information.
@@ -913,13 +916,13 @@ frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
        p->name, &p->origin.x, &p->origin.y, &p->origin.z,
        &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 8) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = TORUS;
-
+++csg_tree.num_primitive;
 
 @*1 Constructive Solid Geometry Tree.
 All solids in the simulation world are built from instances of
@@ -1040,10 +1043,8 @@ for (i = 0; i < MAX_CSG_NODES; ++i)
 
 @ We destroy the hash table by freeing all of the CSG nodes.
 
-@<Destroy the hash table of solids@>=
+@<Reset the hash table of solids@>=
 for (i = 0; i < MAX_CSG_NODES; ++i) {
-        if (csg_tree.table[i] == NULL) continue;
-        destroy_csg_node(csg_tree.table[i]);
 	csg_tree.table[i] = NULL;
 }
 
@@ -1114,13 +1115,6 @@ CSG_Node *create_csg_node() {
         return temp;
 }
 
-@ @<Destroy a CSG node@>=
-void destroy_csg_node(CSG_Node *csg_node) {
-        if (csg_node->op == 0)
-                destroy_primitive_solid(csg_node->leaf.p);
-	free(csg_node);
-}
-
 @ While reading in the operations, we use the following variables to
 store temporary values. Since each operation is defined independently
 of other operations before and after, these variables can be shared by
@@ -1162,7 +1156,7 @@ and stores the result using the name ``U1".
 @ @<Read union operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 	   op_target, op_left, op_right);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 3)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1216,6 +1210,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.right = right_solid;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
+	++csg_tree.num_union;
 }
 
 @ @<Exit after cleanup: failed to create internal node@>=
@@ -1245,7 +1240,7 @@ and stores the result using the name ``I1".
 @ @<Read intersection operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 	   op_target, op_left, op_right);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 3)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1275,6 +1270,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.right = right_solid;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
+	++csg_tree.num_intersect;
 }
 
 @*2 Difference.
@@ -1303,7 +1299,7 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 @ @<Read difference operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
 	   op_target, op_left, op_right);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 3)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1333,6 +1329,7 @@ if ((internal_node = create_csg_node()) == NULL) {
 	internal_node->internal.right = right_solid;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
+	++csg_tree.num_difference;
 }
 
 @*2 Translation.
@@ -1379,7 +1376,7 @@ units along the $z$ axis, and register this intermediate solid as
 @<Read translation parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 5)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1416,7 +1413,7 @@ solids.
 if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        leaf_node->op = 0; /* this is a parameter leaf node */
+        leaf_node->op = PARAMETER; /* this is a parameter leaf node */
 	leaf_node->leaf.t.displacement.x = op_x;
 	leaf_node->leaf.t.displacement.y = op_y;
 	leaf_node->leaf.t.displacement.z = op_z;
@@ -1435,8 +1432,10 @@ if ((internal_node = create_csg_node()) == NULL) {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
+	register_solid(internal_node, op_target);
+	++csg_tree.num_translate;
 }
-register_solid(internal_node, op_target);
+
 
 @*2 Rotation.
 
@@ -1483,7 +1482,7 @@ register this intermediate solid as ``R1''.
 @<Read rotation parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)\n",
 	   op_target, op_solid, &op_theta, &op_x, &op_y, &op_z);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 6)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1504,7 +1503,7 @@ if ((target_solid = find_solid(op_solid)) == NULL) {
 if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        leaf_node->op = 0; /* this is a parameter leaf node */
+        leaf_node->op = PARAMETER; /* this is a parameter leaf node */
 	leaf_node->leaf.r.theta = op_theta; /* angle of rotation */
 	leaf_node->leaf.r.axis.x = op_x;
 	leaf_node->leaf.r.axis.y = op_y;
@@ -1521,8 +1520,10 @@ if ((internal_node = create_csg_node()) == NULL) {
         internal_node->op = ROTATE; /* this is an operator internal node */
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
+	register_solid(internal_node, op_target);
+	++csg_tree.num_rotate;
 }
-register_solid(internal_node, op_target);
+
 
 @*2 Scaling.
 
@@ -1564,7 +1565,7 @@ coordinate frame and register this intermediate solid as ``S1''.
 @<Read scaling parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
-input_file_current_line++;
+++input_file_current_line;
 if (read_count == EOF || read_count != 5)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1585,7 +1586,7 @@ if ((target_solid = find_solid(op_solid)) == NULL) {
 if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        leaf_node->op = 0; /* this is a parameter leaf node */
+        leaf_node->op = PARAMETER; /* this is a parameter leaf node */
 	leaf_node->leaf.s.scale.x = op_x;
 	leaf_node->leaf.s.scale.y = op_y;
 	leaf_node->leaf.s.scale.z = op_z;
@@ -1601,8 +1602,9 @@ if ((internal_node = create_csg_node()) == NULL) {
         internal_node->op = SCALE; /* this is an operator internal node */
 	internal_node->internal.left = target_solid;
 	internal_node->internal.right = leaf_node;
+	register_solid(internal_node, op_target);
+	++csg_tree.num_scale;
 }
-register_solid(internal_node, op_target);
 
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
@@ -1718,12 +1720,11 @@ if (c == ' ' || c == '\t') continue;
 
 @ @<Discard empty lines@>=
 if (c == '\n') {
-        input_file_current_line++;
+        ++input_file_current_line;
 	continue;
 }
 
 @ @<Process input command@>=
-printf("reading...%c\n", c);
 switch(c) {
 case 'B':
 	@<Read block geometry@>;
@@ -1783,10 +1784,71 @@ goto invalid_csg_tree_exit_after_cleanup;
 
 @<Function to count number of primitive solids in a CSG tree@>=
 uint32_t count_primitive_solids(CSG_Node *temp) {
-	 if (temp->op == 0) return 1; /* a primitive solid */
-	 if (temp->op == 1) return 0; /* a parameter node */
+	 if (temp->op == SOLID) return 1; /* a primitive solid */
+	 if (temp->op == PARAMETER) return 0; /* a parameter node */
 	 return (count_primitive_solids(temp->internal.left) + 
 	        count_primitive_solids(temp->internal.right));
+}
+
+@ @<Function to destroy the CSG tree@>=
+void destroy_csg_tree(CSG_Node *temp) {
+        if (temp->op == SOLID) {
+                destroy_primitive_solid(temp->leaf.p);
+                free(temp);
+                return;
+        }
+	if (temp->op == PARAMETER) {
+	        free(temp);
+                return;
+        }
+        destroy_csg_tree(temp->internal.left);
+	destroy_csg_tree(temp->internal.right);
+	free(temp);
+}
+
+@ Print the CSG tree using {\sl preorder tree traversal}.
+@^preorder tree traversal@>
+
+@<Function to print the CSG tree@>=
+void print_csg_tree(CSG_Node *temp, uint32_t indent) {
+        if (temp->op == SOLID) {
+                for (i = 0; i < indent; ++i) printf("\t");
+                printf("solid\n");
+                return;
+        }
+        if (temp->op == PARAMETER) {
+                for (i = 0; i < indent; ++i) printf("\t");
+                printf("parameter\n");
+                return;
+        }
+	print_csg_tree(temp->internal.left, indent + 1);
+	@<Print intermediate node information@>;
+        print_csg_tree(temp->internal.right, indent + 1);
+}
+
+@ @<Print intermediate node information@>=
+for (i = 0; i < indent; ++i) printf("\t");
+switch(temp->op) {
+case UNION:
+        printf("union\n");
+        break;
+case INTERSECTION:
+        printf("intersection\n");
+        break;
+case DIFFERENCE:
+        printf("difference\n");
+        break;
+case TRANSLATE:
+        printf("translate\n");
+        break;
+case ROTATE:
+        printf("rotate\n");
+        break;
+case SCALE:
+        printf("scale\n");
+        break;
+default:
+        printf("unknown\n");
 }
 
 @ When we cannot recover from an error (e.g., incorrect input file),
@@ -1932,9 +1994,10 @@ vect3d zero_vector = { 0.0, 0.0, 0.0 };
 @<Create a primitive solid@>;
 @<Destroy a primitive solid@>;
 @<Create a CSG node@>;
-@<Destroy a CSG node@>;
 @<Find the solid associated with a specified |name|@>;
 @<Function to count number of primitive solids in a CSG tree@>;
+@<Function to destroy the CSG tree@>;
+@<Function to print the CSG tree@>;
 @<Read geometry from input file@>;
 
 @* History.
