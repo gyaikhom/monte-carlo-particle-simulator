@@ -114,7 +114,10 @@ int main(int argc, char *argv[])
 @ @<Parse command line arguments@>=
 
 @ @<Process input files@>=
-read_geometry("test.geom");
+if (read_geometry("test.geom")) {
+        fprintf(stderr, "Application will now exit...\n");
+        exit(1);
+}
 
 @ @<Create physics tables@>=
 
@@ -739,7 +742,7 @@ char input_file_name[MAX_LEN_FILENAME]; /* current input file */
 uint32_t input_file_current_line; /* current line in current input file */
 int read_count; /* returned by fscanf() */
 Primitive *p; /* used during initialisation of primitive solids */
-CSG_Node *internal_node, *leaf_node;
+CSG_Node *internal_node, *leaf_node, *temp_node;
 
 @ @<Initialise primitive block with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
@@ -1038,15 +1041,53 @@ CSG_Tree csg_tree; /* defines solids in the simulation world */
 @ Before using the hash table, it must be initialised.
 
 @<Initialise the hash table of solids@>=
-for (i = 0; i < MAX_CSG_NODES; ++i)
-        csg_tree.table[i] = NULL;
+@<Reset the hash table of solids@>;
 
-@ We destroy the hash table by freeing all of the CSG nodes.
+@ Reset the hash table, which unregisters all of the solids. Since the
+hash table and the CSG tree are linked to one another, we must also
+discard the current CSG tree. The following code must only be invoked
+on hash tables with valid CSG trees; for error handling, use 
+|@<Destroy the hash table of solids@>| instead, because it can handle
+detached CSG nodes.
 
 @<Reset the hash table of solids@>=
+destroy_csg_tree(csg_tree.root);
+csg_tree.root = NULL;
+for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
+
+@ We destroy the hash table by freeing all of the CSG nodes. The hash
+table is destroyed explicitly only when we encounter a fatal error
+that requires shutting down the application. This frees up all of the
+CSG nodes which correspond to existing primitive solids, parameters
+and operators. This is different from freeing resources using the
+|destroy_csg_tree()| function because |destroy_csg_tree()| requires
+that the CSG tree is valid, and that no CSG node is detached. During
+fatal failures we cannot guarantee that the CSG tree is valid,
+hence, we destroy the hash table instead.
+
+Note here that, since parameter nodes are not part of the hash table,
+we must also destroy the right nodes if they are parameter nodes.
+
+@<Destroy the hash table of solids@>=
 for (i = 0; i < MAX_CSG_NODES; ++i) {
+        temp_node = csg_tree.table[i];
+        if (temp_node == NULL) continue;
+        if (temp_node->op == SOLID) {
+                destroy_primitive_solid(temp_node->leaf.p);
+        } else {
+                @<Destroy parameter node if any@>;
+        }
+        free(temp_node);
 	csg_tree.table[i] = NULL;
 }
+
+@ Parameter nodes are only accessible through the corresponding
+translation or transformation operator node. If present, they are the
+right child of the parent operator node.
+
+@<Destroy parameter node if any@>=
+if (temp_node->op >= TRANSLATE)
+        free(temp_node->internal.right);
 
 @ We store and retrieve solids using the following functions:
 
@@ -1784,6 +1825,7 @@ goto invalid_csg_tree_exit_after_cleanup;
 
 @<Function to count number of primitive solids in a CSG tree@>=
 uint32_t count_primitive_solids(CSG_Node *temp) {
+         if (temp == NULL) return 0;
 	 if (temp->op == SOLID) return 1; /* a primitive solid */
 	 if (temp->op == PARAMETER) return 0; /* a parameter node */
 	 return (count_primitive_solids(temp->internal.left) + 
@@ -1792,6 +1834,7 @@ uint32_t count_primitive_solids(CSG_Node *temp) {
 
 @ @<Function to destroy the CSG tree@>=
 void destroy_csg_tree(CSG_Node *temp) {
+        if (temp == NULL) return;
         if (temp->op == SOLID) {
                 destroy_primitive_solid(temp->leaf.p);
                 free(temp);
@@ -1811,6 +1854,7 @@ void destroy_csg_tree(CSG_Node *temp) {
 
 @<Function to print the CSG tree@>=
 void print_csg_tree(CSG_Node *temp, uint32_t indent) {
+        if (temp == NULL) return;
         if (temp->op == SOLID) {
                 for (i = 0; i < indent; ++i) printf("\t");
                 printf("solid\n");
@@ -1871,7 +1915,8 @@ fclose(f);
 
 @ @<Alert error while reading file@>=
 failed_read_exit_after_cleanup:@/
-fprintf(stderr, "Failed to read file '%s' at line %u\n",
+fprintf(stderr, "Failed to read file '%s' at line %u\n"
+        "\tInvalid formatting of parameters\n",
 	input_file_name, input_file_current_line);
 goto error_invalid_file;
 
@@ -1916,6 +1961,8 @@ fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
 goto error_invalid_file;
 
 @ @<Cleanup resources allocated to invalid geometry@>=
+fprintf(stderr, "Cleaning up resources...\n");
+@<Destroy the hash table of solids@>;
 
 
 @** Error handling.
