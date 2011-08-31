@@ -765,6 +765,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 } else {
         leaf_node->op = SOLID; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
+	leaf_node->parent = NULL;
 	register_solid(leaf_node, p->name);
 }
 
@@ -1013,21 +1014,33 @@ union csg_leaf_union {
 };
 typedef union csg_leaf_union CSG_Leaf;
 
-@ To differentiate between node types, each node stores a
-|CSG_Operator| field. This field is set to zero if the node is a leaf
-(i.e., the node either stores a solid, or stores the parameter of a
-unary operator); otherwise, the node is an internal node and stores an
-operator.
+@ The data structure |csg_node_struct| encapsulates a generic CSG
+node. It can store different types of information depending on the
+type of the node.
 
 @<Structure of a CSG tree node@>=
 struct csg_node_struct {
-       CSG_Operator op; /* operator if value $> 1$; parameter if value
-       $=1$; solid if value $=0$ */
+       @<Information common to all CSG nodes@>;
        union {
                CSG_Leaf leaf;
 	       CSG_Internal internal;
        };
 };
+
+@ To differentiate between node types, each node stores a
+|CSG_Operator| field. This field determines if a node is a primitive
+solid node, a parameter node, or an intermediate solid node (i.e.,
+operator node).
+
+@<Information common to all CSG nodes@>=
+CSG_Operator op; /* operator if value $> 1$; parameter if value
+       $=1$; solid if value $=0$ */
+char name[MAX_LEN_SOLID_NAME]; /* from input geometry file */
+
+@ Each node also stores a pointer to its parent.
+@<Information common to all CSG nodes@>=
+CSG_Node *parent; /* pointer to parent node */
+
 
 @*2 Solid registry.
 The {\sl solid registry}@^solid registry@> is a hash table where we
@@ -1055,8 +1068,8 @@ destroy_csg_tree(csg_tree.root);
 csg_tree.root = NULL;
 for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
 
-@ We destroy the hash table by freeing all of the CSG nodes. The hash
-table is destroyed explicitly only when we encounter a fatal error
+@ We destroy the hash table by freeing up all of the CSG nodes. The
+hash table is destroyed explicitly only when we encounter a fatal error
 that requires shutting down the application. This frees up all of the
 CSG nodes which correspond to existing primitive solids, parameters
 and operators. This is different from freeing resources using the
@@ -1072,9 +1085,9 @@ we must also destroy the right nodes if they are parameter nodes.
 for (i = 0; i < MAX_CSG_NODES; ++i) {
         temp_node = csg_tree.table[i];
         if (temp_node == NULL) continue;
-        if (temp_node->op == SOLID) {
-                destroy_primitive_solid(temp_node->leaf.p);
-        } else {
+        if (temp_node->op == SOLID)
+               destroy_primitive_solid(temp_node->leaf.p);
+        else {
                 @<Destroy parameter node if any@>;
         }
         free(temp_node);
@@ -1129,6 +1142,7 @@ CSG_Node *register_solid(CSG_Node *solid, char *name) {
 	 @<Calculate the hash value |h| for the string pointed to by
 	 |name|@>;
 	 if (csg_tree.table[h] == NULL) {
+                 strcpy(solid->name, name);
 	         csg_tree.table[h] = solid;
 		 @<Set current solid as the root of the CSG tree@>;
 		 return solid;
@@ -1247,12 +1261,18 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = UNION; /* this is an internal node */
-	internal_node->internal.left = left_solid;
-	internal_node->internal.right = right_solid;
+	@<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 	++csg_tree.num_union;
 }
+
+@ @<Set parents, and pointers to intermediate solids@>=
+internal_node->internal.left = left_solid;
+internal_node->internal.right = right_solid;
+internal_node->parent = NULL;
+left_solid->parent = internal_node;
+right_solid->parent = internal_node;
 
 @ @<Exit after cleanup: failed to create internal node@>=
 goto create_operator_failed_exit_after_cleanup;
@@ -1307,8 +1327,7 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = INTERSECTION; /* this is an internal node */
-	internal_node->internal.left = left_solid;
-	internal_node->internal.right = right_solid;
+        @<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 	++csg_tree.num_intersect;
@@ -1366,8 +1385,7 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = DIFFERENCE; /* this is an internal node */
-	internal_node->internal.left = left_solid;
-	internal_node->internal.right = right_solid;
+	@<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
 	++csg_tree.num_difference;
@@ -1471,11 +1489,17 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
-	internal_node->internal.left = target_solid;
-	internal_node->internal.right = leaf_node;
+        @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
 	++csg_tree.num_translate;
 }
+
+@ @<Set target, parameters and parent pointers@>=
+internal_node->internal.left = target_solid;
+internal_node->internal.right = leaf_node;
+internal_node->parent = NULL;
+target_solid->parent = internal_node;
+leaf_node->parent = internal_node;
 
 
 @*2 Rotation.
@@ -1559,8 +1583,7 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = ROTATE; /* this is an operator internal node */
-	internal_node->internal.left = target_solid;
-	internal_node->internal.right = leaf_node;
+        @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
 	++csg_tree.num_rotate;
 }
@@ -1641,8 +1664,7 @@ if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = SCALE; /* this is an operator internal node */
-	internal_node->internal.left = target_solid;
-	internal_node->internal.right = leaf_node;
+        @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
 	++csg_tree.num_scale;
 }
@@ -1856,13 +1878,11 @@ void destroy_csg_tree(CSG_Node *temp) {
 void print_csg_tree(CSG_Node *temp, uint32_t indent) {
         if (temp == NULL) return;
         if (temp->op == SOLID) {
-                for (i = 0; i < indent; ++i) printf("\t");
-                printf("solid\n");
+                @<Print primitive solid information@>;
                 return;
         }
         if (temp->op == PARAMETER) {
-                for (i = 0; i < indent; ++i) printf("\t");
-                printf("parameter\n");
+                @<Print operator parameters@>;
                 return;
         }
 	print_csg_tree(temp->internal.left, indent + 1);
@@ -1870,26 +1890,76 @@ void print_csg_tree(CSG_Node *temp, uint32_t indent) {
         print_csg_tree(temp->internal.right, indent + 1);
 }
 
+@ @<Print primitive solid information@>=
+for (i = 0; i < indent; ++i) printf("\t");
+p = temp->leaf.p;
+switch(p->type) {
+case BLOCK: printf("BLOCK (%s) : %lf %lf %lf %lf %lf %lf\n",
+        temp->name, p->origin.x, p->origin.y, p->origin.z,
+        p->b.length, p->b.width, p->b.height);
+        break;
+case SPHERE: printf("SPHERE (%s) : %lf %lf %lf %lf\n",
+        temp->name, p->origin.x, p->origin.y, p->origin.z,
+        p->s.radius);
+        break;
+case CYLINDER: printf("CYLINDER (%s) : %lf %lf %lf %lf %lf\n",
+        temp->name, p->origin.x, p->origin.y, p->origin.z,
+        p->c.radius, p->c.height);
+        break;
+case TORUS: printf("TORUS (%s) :  %lf %lf %lf %lf %lf %lf %lf\n",
+        temp->name, p->origin.x, p->origin.y, p->origin.z,
+        p->t.u, p->t.v, p->t.major, p->t.minor);
+        break;
+default:
+        printf("unknown\n");
+}
+
+@ Print the parameters for transformation or translation.
+
+@d vect3d_comp(V) (V).x, (V).y, (V).z
+@<Print operator parameters@>=
+for (i = 0; i < indent; ++i) printf("\t");
+switch(temp->parent->op) {
+case TRANSLATE:
+        temp_vector = temp->leaf.t.displacement;
+        printf("displacement: (%lf, %lf, %lf)\n",
+        vect3d_comp(temp_vector));
+        break;
+case ROTATE:
+        temp_vector = temp->leaf.r.axis;
+        printf("angle: %lf, axis: (%lf, %lf, %lf)\n",
+        temp->leaf.r.theta,
+        vect3d_comp(temp_vector));
+        break;
+case SCALE:
+        temp_vector = temp->leaf.s.scale;
+        printf("scaling factor: (%lf, %lf, %lf)\n",
+        vect3d_comp(temp_vector));
+        break;
+default:
+        printf("unknown\n");
+}
+
 @ @<Print intermediate node information@>=
 for (i = 0; i < indent; ++i) printf("\t");
 switch(temp->op) {
 case UNION:
-        printf("union\n");
+        printf("union: %s\n", temp->name);
         break;
 case INTERSECTION:
-        printf("intersection\n");
+        printf("intersection: %s\n", temp->name);
         break;
 case DIFFERENCE:
-        printf("difference\n");
+        printf("difference: %s\n", temp->name);
         break;
 case TRANSLATE:
-        printf("translate\n");
+        printf("translate: %s\n", temp->name);
         break;
 case ROTATE:
-        printf("rotate\n");
+        printf("rotate: %s\n", temp->name);
         break;
 case SCALE:
-        printf("scale\n");
+        printf("scale: %s\n", temp->name);
         break;
 default:
         printf("unknown\n");
@@ -1990,7 +2060,7 @@ uint32_t num_vertices = 5;
 uint32_t num_particles = 5;
 Particle_gun particle_gun;
 Particle_stack particle_stack;
-vect3d zero_vector = { 0.0, 0.0, 0.0 };
+vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 
 @ @<Global data structures@>=
 @<Type definitions@>;
