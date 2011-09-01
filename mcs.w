@@ -145,6 +145,29 @@ double vect3d_magnitude(vect3d *v)
 		    v->z * v->z);
 }
 
+@ @<Calculate vector difference@>=
+vect3d vect3d_difference(vect3d *u, vect3d *v)
+{
+	vect3d r;
+	r.x = u->x - v->x;
+	r.y = u->y - v->y;
+	r.z = u->z - v->z;
+	return r;
+}
+
+@ Function |vect3d_distance(u, v)| calculates the distance between the
+three-dimensional points defined by the vectors |u| and |v|.
+
+@<Calculate vector distance@>=
+double vect3d_distance(vect3d *u, vect3d *v)
+{
+	double x, y, z;
+	x = u->x - v->x;
+	y = u->y - v->y;
+	z = u->z - v->z;
+	return sqrt(x * x + y * y + z * z);
+}
+
 @ @<Normalise a vector@>=
 vect3d vect3d_normalize(vect3d *v)
 {
@@ -2157,9 +2180,9 @@ p->b.z1 = p->origin.z + p->b.width;
 tested. Also let the three intervals $[x_0, x_1]$, $[y_0,
 y_1]$ and $[z_0, z_1]$ respectively define the containment range for
 the block along the $x$, $y$ and $z$ axes in the world coordinate
-frame. Then the vector is:
+frame. Then the point defined by the vector |v| is:
 
-$$\vcenter{\halign{\hfil # & # & # \hfil \cr
+$$\vcenter{\halign{\hfil # & # \hfil \cr
 outside the block if & $(x < x_0 \vee x > x_1) \vee (y < y_0 \vee y >
 y_1) \vee (z < z_0 \vee z > z_1)$,\cr
 inside the block if & $(x > x_0 \wedge x < x_1) \wedge (y >
@@ -2179,9 +2202,28 @@ Containment is_inside_block(Primitive *p, vect3d *v)
 	return SURFACE;
 }
 
-@ @<Function to test containment inside a sphere@>=
+@*3 Containment inside a solid sphere.
+We determine the containment of a point inside a sphere by calculating
+the distance of the point from the sphere's origin. Let $\delta$ be
+the distance of the point from the origin of the sphere. Then the
+point defined by the vector |v| is:
+
+$$\vcenter{\halign{\hfil # & # \hfil \cr
+outside the sphere if & $(\delta > radius)$,\cr
+inside the sphere if & $(\delta < radius)$, and\cr
+on the surface, & otherwise.\cr
+}}$$
+
+During containment testing, the origin of the sphere always coincides
+with the origin of the world coordinate frame. Hence, to determine
+$\delta$, we only need to calculate the magnitude of the vector |v|.
+
+@<Function to test containment inside a sphere@>=
 Containment is_inside_sphere(Primitive *p, vect3d *v)
 {
+	double delta = vect3d_magnitude(v);
+	if (delta > p->s.radius) return OUTSIDE;
+	if (delta < p->s.radius) return INSIDE;
 	return SURFACE;
 }
 
@@ -2259,6 +2301,8 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 
 @ @<Global functions@>=
 @<Calculate vector magnitude@>;
+@<Calculate vector difference@>
+@<Calculate vector distance@>;
 @<Normalise a vector@>;
 @<Create particle@>;
 @<Create vertex@>;
