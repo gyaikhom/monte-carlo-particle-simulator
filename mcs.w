@@ -1758,11 +1758,11 @@ field. Finally, every command must be terminated by a $\langle newline
 {\tt
 \hash\ Define primitive solids
 
-T ("Torus A" 100.0 120.0 150.0 0.0 359.999999 10.0 2.0)
+T ("Torus A" 0.0 359.999999 10.0 2.0)
 
-C ("Cylinder A" 110.0 120.0 150.0 10.0 20.0)
+C ("Cylinder A" 10.0 20.0)
 
-C ("Cylinder B" 120.0 120.0 150.0 10.0 20.0)
+C ("Cylinder B" 10.0 20.0)
 
 \
 
