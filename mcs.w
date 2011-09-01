@@ -903,7 +903,20 @@ if (read_count == EOF || read_count != 6) {
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = CYLINDER;
+@<Prepare cylinder for containment testing@>;
 ++csg_tree.num_primitive;
+
+@ @<Prepare cylinder for containment testing@>=
+@<Half the height the cylinder@>;
+@<Calculate containment range for the cylinder@>;
+
+@ When checking containment, we require half of the cylinder
+|height|, because the origin of the cylinder is given by its
+centroid. Hence, although the |height| were specified in full, we
+shall store their halves internally.
+
+@<Half the height the cylinder@>=
+p->c.height /= 2.0;
 
 @*2 Torus.
 A primitive torus stores the following information.
@@ -2161,7 +2174,7 @@ vector is inside, outside, or on the surface of the block by testing
 its $x$, $y$ and $z$ components against the corresponding range.
 
 @<Information that defines a primitive block@>=
-double x0, x1, y0, y1, z0, z1; /* containment range */
+double x0, x1, y0, y1, z0, z1; /* containment range (i.e., bounding box) */
 
 @ Note here that the dimensions |length|, |height| and |width|
 correspond respectively to the $x$, $y$ and $z$ axes in world
@@ -2227,11 +2240,56 @@ Containment is_inside_sphere(Primitive *p, vect3d *v)
 	return SURFACE;
 }
 
-@ @<Function to test containment inside a cylinder@>=
+@*3 Containment inside a solid cylinder.
+During containment testing, the origin of the cylinder coincides with
+the origin of the world coordinate frame; and the normals at the
+center of the circular bases of the cylinder are parallel to the
+$y$-axis. Hence, to test containment of a point inside a cylinder, we
+first check if the $y$-component of vector |v| is within the range
+defined by the two parallel circular faces of the cylinder. Secondly,
+we check if the distance of the vector |v| from the origin on the
+$xz$-plane is within the area subscribed on the same plane by the
+circular surface of the cylinder.
+
+@<Information that defines a primitive cylinder@>=
+double y0, y1; /* containment range of cylinder height */
+
+@ Note here that the dimension |height| corresponds to the $y$-axis
+in world coordinate frame, and that we are adding or subtracting
+half-lengths of the cylinder length.
+
+@<Calculate containment range for the cylinder@>=
+p->c.y0 = p->origin.y - p->c.height;
+p->c.y1 = p->origin.y + p->c.height;
+
+@ Let $(x, y, z)$ represent the components of this vector |v|. Also
+let $\delta$ represent the magnitude of the two-dimensional 
+projection of vector |v| on the $xz$-plane. Then the point
+defined by vector |v| is:
+
+$$\vcenter{\halign{\hfil # & # \hfil \cr
+outside the cylinder if & $(z < z_0 \vee z > z_1) \vee (\delta > |radius|)$,\cr
+inside the cylinder if & $(z > z_0 \wedge z < z_1) \wedge (\delta < |radius|)$, and\cr
+on the surface, & otherwise.\cr
+}}$$
+
+@<Function to test containment inside a cylinder@>=
 Containment is_inside_cylinder(Primitive *p, vect3d *v)
 {
+        double delta;
+	if (v->y < p->c.y0 || v->y > p->c.y1) return OUTSIDE;
+	@<Calculate distance of the two-dimensional $xz$-projection@>;
+	if (delta > p->c.radius) return OUTSIDE;
+	if (v->y > p->c.y0 && v->y < p->c.y1 && delta < p->c.radius) return INSIDE;
 	return SURFACE;
 }
+
+@ Since the origin of the cylinder coincides with the origin of the
+world coordinate frame during containment testing, the magnitude of
+the two-dimensional projection gives the required distance. 
+
+@<Calculate distance of the two-dimensional $xz$-projection@>=
+delta = sqrt(v->x * v->x + v->z * v->z);
 
 @ @<Function to test containment inside a torus@>=
 Containment is_inside_torus(Primitive *p, vect3d *v)
