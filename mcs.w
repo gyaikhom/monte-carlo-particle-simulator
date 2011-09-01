@@ -692,12 +692,13 @@ char name[MAX_LEN_SOLID_NAME];
 defined by the simulation world, each initialised primitive also
 defines a {\sl local coordinate frame}@^local coordinate frame@>.
 The origin of this coordinate frame is used by the geometry
-construction algorithm to place the primitive inside the simulation
-world. Consequently, all translations of a primitive in the simulation
-world can be considered as the translation of its origin.
-
-@<Information common to all primitives@>=
-vect3d origin;
+construction algorithm to {\it conceptually} place a primitive inside
+the simulation world. By design, a primitive solid is created in such
+a way that its origin always coincides with the origin of the
+world coordinate frame. Any translation or transformation henceforth
+is recorded separately in a binary tree. This will become clearer once
+we reach the section on {\sl Constructive Solid Geometry Tree}.
+@^Constructive Solid Geometry Tree@>
 
 @*2 Parallelepiped.
 For simplicity of exposition, we shall refer to a parallelepiped as
@@ -726,16 +727,16 @@ geometry are supplied in the following format.
 
 \smallskip
 
-(``name" $x$ $y$ $z$ $length$ $width$ $height$)
+(``name" $length$ $width$ $height$)
 
 \smallskip
 
-For instance, the specification {\tt ("Block A" 100.0 120.0
-150.0 10.0 5.0 15.0)} initialises a new block named ``Block A" located
-at (100.0, 120.0, 150.0) in the world coordinate frame with length
-10.0, width 5.0 and height 15.0. It is important that all of these
-lengths are specified using the same unit of measurement. We shall
-discuss in later sections how a unit of measurement is chosen.
+For instance, the specification {\tt ("Block A" 10.0 5.0 15.0)}
+initialises a new block named ``Block A" with centroid at (0.0, 0.0,
+0.0) in the world coordinate frame with length 10.0, width 5.0 and
+height 15.0. It is important that all of these lengths are specified
+using the same unit of measurement. We shall discuss in later sections
+how a unit of measurement is chosen.
 
 @<Read block geometry@>=
 @<Create a new primitive solid@>;
@@ -768,11 +769,10 @@ Primitive *p; /* used during initialisation of primitive solids */
 CSG_Node *internal_node, *leaf_node, *temp_node;
 
 @ @<Initialise primitive block with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->b.length, &p->b.width, &p->b.height);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+       p->name, &p->b.length, &p->b.width, &p->b.height);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 7) {
+if (read_count == EOF || read_count != 4) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -830,15 +830,15 @@ format:
 
 \smallskip
 
-(``name" $x$ $y$ $z$ $radius$)
+(``name" $radius$)
 
 \smallskip
 
-For instance, the specification {\tt ("Sphere A" 100.0 120.0
-150.0 10.0)} initialises a new solid sphere named ``Sphere A" located
-at (100.0, 120.0, 150.0) in the world coordinate frame with radius
-10.0. Again, we assume that the radius is specified in the chosen
-unit of measurement, yet to be discussed.
+For instance, the specification {\tt ("Sphere A" 10.0)} initialises a
+new solid sphere named ``Sphere A" located at (0.0, 0.0, 0.0) in the
+world coordinate frame with a radius of 10.0. Again, we assume that
+the radius is specified in the chosen unit of measurement, yet to be
+discussed.
 
 @<Read sphere geometry@>=
 @<Create a new primitive solid@>;
@@ -846,11 +846,10 @@ unit of measurement, yet to be discussed.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive sphere with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->s.radius);
+read_count = fscanf(f, "(\"%[^\"]\" %lf)\n",
+       p->name, &p->s.radius);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 5) {
+if (read_count == EOF || read_count != 2) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -879,13 +878,13 @@ format:
 
 \smallskip
 
-(``name" $x$ $y$ $z$ $radius$ $height$)
+(``name" $radius$ $height$)
 
 \smallskip
 
-For instance, the specification {\tt ("Cylinder A" 100.0 120.0
-150.0 10.0 20.0)} initialises a new solid cylinder named ``Cylinder A"
-located at (100.0, 120.0, 150.0) in the world coordinate frame with
+For instance, the specification {\tt ("Cylinder A" 10.0 20.0)}
+initialises a new solid cylinder named ``Cylinder A" 
+located at (0.0, 0.0, 0.0) in the world coordinate frame with
 base radius 10.0 and height 20.0.
 
 @<Read cylinder geometry@>=
@@ -894,11 +893,10 @@ base radius 10.0 and height 20.0.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive cylinder with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->c.radius, &p->c.height);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)\n",
+       p->name, &p->c.radius, &p->c.height);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 6) {
+if (read_count == EOF || read_count != 3) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -956,14 +954,14 @@ format:
 
 \smallskip
 
-(``name" $x$ $y$ $z$ $u$ $v$ $major$ $minor$)
+(``name" $u$ $v$ $major$ $minor$)
 
 \smallskip
 
-For instance, the specification {\tt ("Torus A" 100.0 120.0
-150.0 0.0 359.999999 10.0 2.0)} initialises a solid torus named
-``Torus A" located at (100.0, 120.0, 150.0) in the world coordinate
-frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
+For instance, the specification {\tt ("Torus A" 0.0 359.999999 10.0
+2.0)} initialises a solid torus named ``Torus A" located at (0.0, 0.0,
+0.0) in the world coordinate frame with major radius 10.0 and minor
+2.0. Note here that $v < 2\pi$.
 
 @<Read torus geometry@>=
 @<Create a new primitive solid@>;
@@ -971,11 +969,10 @@ frame with major radius 10.0 and minor 2.0. Note here that $v < 2\pi$.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive torus with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf %lf)\n",
-       p->name, &p->origin.x, &p->origin.y, &p->origin.z,
-       &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
+       p->name, &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 8) {
+if (read_count == EOF || read_count != 5) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -1874,7 +1871,7 @@ case 's':
         @<Read scaling operation@>;
         break;
 default:
-	fprintf(stderr, "%s[%u] Invalid command '%c' in input file",
+	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
 	input_file_name, input_file_current_line, c);
         goto error_invalid_file;
 }
@@ -1948,21 +1945,17 @@ void print_csg_tree(CSG_Node *temp, uint32_t indent) {
 for (i = 0; i < indent; ++i) printf("\t");
 p = temp->leaf.p;
 switch(p->type) {
-case BLOCK: printf("BLOCK (%s) : %lf %lf %lf %lf %lf %lf\n",
-        temp->name, p->origin.x, p->origin.y, p->origin.z,
-        p->b.length, p->b.width, p->b.height);
+case BLOCK: printf("BLOCK: \"%s\" %lf %lf %lf\n",
+        temp->name, p->b.length, p->b.width, p->b.height);
         break;
-case SPHERE: printf("SPHERE (%s) : %lf %lf %lf %lf\n",
-        temp->name, p->origin.x, p->origin.y, p->origin.z,
-        p->s.radius);
+case SPHERE: printf("SPHERE: \"%s\" %lf\n",
+        temp->name, p->s.radius);
         break;
-case CYLINDER: printf("CYLINDER (%s) : %lf %lf %lf %lf %lf\n",
-        temp->name, p->origin.x, p->origin.y, p->origin.z,
-        p->c.radius, p->c.height);
+case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf\n",
+        temp->name, p->c.radius, p->c.height);
         break;
-case TORUS: printf("TORUS (%s) :  %lf %lf %lf %lf %lf %lf %lf\n",
-        temp->name, p->origin.x, p->origin.y, p->origin.z,
-        p->t.u, p->t.v, p->t.major, p->t.minor);
+case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf\n",
+        temp->name, p->t.u, p->t.v, p->t.major, p->t.minor);
         break;
 default:
         printf("unknown\n");
@@ -2120,7 +2113,7 @@ INVALID & if either the solid or the vector is undefined.\cr
 @<Type definitions@>=
 typedef enum {OUTSIDE = 0, INSIDE, SURFACE, INVALID} Containment;
 
-@*2 Test if three-dimensional vector is inside a solid.
+@*1 Test if three-dimensional vector is inside a solid.
 For primitive solids, test for containment is pretty
 straight-forward. We either use distance validation, or parameteric
 solutions with respect to the solid. However, for intermediate solids,
@@ -2154,8 +2147,29 @@ Containment recursively_test_containment(CSG_Node *root, vect3d *v)
 	return INVALID;
 }
 
-@ We test containment using different approaches depending on the type
-of the primitive solid.
+@*2 Testing containment inside a solid primitive.
+Containment testing uses different approaches depending on the type
+of the primitive solid. Nonetheless, during these tests, all of the
+origins of the primitive solids are assumed to coincide with the
+origin of the world coordinate frame.
+
+Solid primitives are created internally so that their origin coincides
+with the origin of the world coordinate frame. Any translation or
+transformation applied henceforth is then stored as operators in the
+CSG tree. Thus, while carrying out
+|@<Test containment after transformation or translation@>|, we apply 
+the inverse of the transformations or translations directly to the
+point being tested, instead of testing the point against the
+transformed solid. This will become clearer in the following
+sections.
+
+For now, just remember that all containment tests are carried
+out assuming that no transformation or translation has been applied to
+the primitive solid. In other words, the origin of the solid will
+always coincide with the origin of world coordinate frame, and that
+the initial orientation of the solid at creation is preserved. Of
+course, these initial orientations are primitive specific, as
+discussed in the following sections.
 
 @<Test containment inside primitive solid@>=
 p = root->leaf.p;
@@ -2182,12 +2196,12 @@ coordinate frame, and that we are adding or subtracting half-lengths
 of the respective dimensions.
 
 @<Calculate containment range for the block@>=
-p->b.x0 = p->origin.x - p->b.length;
-p->b.x1 = p->origin.x + p->b.length;
-p->b.y0 = p->origin.y - p->b.height;
-p->b.y1 = p->origin.y + p->b.height;
-p->b.z0 = p->origin.z - p->b.width;
-p->b.z1 = p->origin.z + p->b.width;
+p->b.x0 = - p->b.length;
+p->b.x1 = p->b.length;
+p->b.y0 = - p->b.height;
+p->b.y1 = p->b.height;
+p->b.z0 = - p->b.width;
+p->b.z1 = p->b.width;
 
 @ Let $(x, y, z)$ represent the components of the vector to be
 tested. Also let the three intervals $[x_0, x_1]$, $[y_0,
@@ -2259,8 +2273,8 @@ in world coordinate frame, and that we are adding or subtracting
 half-lengths of the cylinder length.
 
 @<Calculate containment range for the cylinder@>=
-p->c.y0 = p->origin.y - p->c.height;
-p->c.y1 = p->origin.y + p->c.height;
+p->c.y0 = - p->c.height;
+p->c.y1 = p->c.height;
 
 @ Let $(x, y, z)$ represent the components of this vector |v|. Also
 let $\delta$ represent the magnitude of the two-dimensional 
@@ -2292,17 +2306,23 @@ the two-dimensional projection gives the required distance.
 @<Calculate distance of the two-dimensional $xz$-projection@>=
 delta = sqrt(v->x * v->x + v->z * v->z);
 
+@*3 Containment inside a solid torus.
+
 @ @<Function to test containment inside a torus@>=
 Containment is_inside_torus(Primitive *p, vect3d *v)
 {
 	return SURFACE;
 }
 
+@*2 Containment inside boolean solids.
+
 @ @<Test containment in subtrees using boolean operators@>=
+
+@*2 Containment inside transformed or translated solids.
 
 @ @<Test containment after transformation or translation@>=
 
-@*2 Find the list of potential solid containers.
+@*1 Find the list of potential solid containers.
 
 
 @** Error handling.
