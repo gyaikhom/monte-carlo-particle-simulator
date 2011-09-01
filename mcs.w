@@ -2264,12 +2264,13 @@ p->c.y1 = p->origin.y + p->c.height;
 
 @ Let $(x, y, z)$ represent the components of this vector |v|. Also
 let $\delta$ represent the magnitude of the two-dimensional 
-projection of vector |v| on the $xz$-plane. Then the point
-defined by vector |v| is:
+projection of vector |v| on the $xz$-plane, and let the interval
+$[y_0, y_1]$ give the containment range of the cylinder in the
+$y$-axis. Then the point defined by vector |v| is:
 
 $$\vcenter{\halign{\hfil # & # \hfil \cr
-outside the cylinder if & $(z < z_0 \vee z > z_1) \vee (\delta > |radius|)$,\cr
-inside the cylinder if & $(z > z_0 \wedge z < z_1) \wedge (\delta < |radius|)$, and\cr
+outside the cylinder if & $(y < y_0 \vee y > y_1) \vee (\delta > |radius|)$,\cr
+inside the cylinder if & $(y > y_0 \wedge y < y_1) \wedge (\delta < |radius|)$, and\cr
 on the surface, & otherwise.\cr
 }}$$
 
