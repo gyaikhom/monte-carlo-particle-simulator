@@ -694,7 +694,7 @@ frame, are aligned respectively in parallel to its length, height and
 width.
 
 @<Information that defines a primitive block@>=
-double length, height, width;
+double length, height, width; /* half-lengths */
 
 @ The parameters that are required to initialise a standard primitive
 is read from an input file. These parameters must be supplied using
@@ -754,7 +754,25 @@ if (read_count == EOF || read_count != 7) {
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = BLOCK;
+@<Prepare block for containment testing@>;
 ++csg_tree.num_primitive;
+
+@ To improve containment testing, we precalculate some of the values
+that are used frequently. We first half the dimensions, and then
+calculate the containment range for the block.
+
+@<Prepare block for containment testing@>=
+@<Half the length, height and width of the block@>;
+@<Calculate containment range for the block@>;
+
+@ When checking containment, we require the halves of the block
+length, height and width. Hence, although the dimensions were
+specified in full, we shall store their halves internally.
+
+@<Half the length, height and width of the block@>=
+p->b.length /= 2.0;
+p->b.height /= 2.0;
+p->b.width /= 2.0;
 
 @ @<Exit after cleanup: failed to read from file@>=
 goto failed_read_exit_after_cleanup;
@@ -2034,6 +2052,157 @@ goto error_invalid_file;
 fprintf(stderr, "Cleaning up resources...\n");
 @<Destroy the hash table of solids@>;
 
+@** Particles inside solids.
+During the simulation, the {\sl MCS} system must determine which
+materials a particle is interacting with at each step of its
+track. Since material properties are associated with solids inside the
+simulation world, we must first determine the solid which contains the
+particle at each step of the particle's trajectory. Once we know the
+solid, we can retrieve the relevant material properties associated
+with the solid, and then carry out the necessary physics processes.
+
+@ To find the solid which contains a given particle, we require two
+algorithms. Firstly, we need an algorithm that will decide if a
+particle (i.e., point inside the three-dimensional simulation world)
+is located inside a given solid. This algorithm will traverse the CSG
+tree that defines the said solid. Secondly, we need an algorithm that
+will provide us with a list of solids that could potentially contain the
+particle. In the most basic form, we could do an exhaustive search
+across all of the solids in the simulation world. However, to improve
+efficiency, we must use a space-partitioning scheme to prune the
+search-space.
+
+@ A containment test must return one of the following:
+
+$$\vcenter{\halign{\hfil # & #\hfil \cr
+OUTSIDE & if the point is outside the solid,\cr
+INSIDE & if the point is inside the solid,\cr
+SURFACE & if point is on the surface, and\cr
+INVALID & if either the solid or the vector is undefined.\cr
+}}$$
+
+@<Type definitions@>=
+typedef enum {OUTSIDE = 0, INSIDE, SURFACE, INVALID} Containment;
+
+@*2 Test if three-dimensional vector is inside a solid.
+For primitive solids, test for containment is pretty
+straight-forward. We either use distance validation, or parameteric
+solutions with respect to the solid. However, for intermediate solids,
+which are defined by a CSG tree, we test containment by traversing the
+CSG tree. In this section, we use the algorithm described in page 312
+of {\sl An Integrated Introduction to Computer Graphics and Geometric
+Modelling} by Ronald Goldman [CRC Press (2009)]. The function
+|solid_contains_vector(root, v)| returns |true| if the vector |v| is
+inside the solid defined by the CSG tree rooted at |root|; otherwise,
+|false| is returned.
+
+@<Function to test if a vector is inside a solid@>=
+Containment solid_contains_vector(CSG_Node *root, vect3d *v)
+{
+	if (root == NULL || v == NULL) return INVALID;
+	return recursively_test_containment(root, v);
+}
+
+@ @<Function to recursively test containment@>=
+Containment recursively_test_containment(CSG_Node *root, vect3d *v)
+{
+        if (root->op == SOLID) {
+                @<Test containment inside primitive solid@>;
+	} else {
+                if (root->op >= UNION && root->op <= DIFFERENCE) {
+                        @<Test containment in subtrees using boolean operators@>;
+                } else {
+                        @<Test containment after transformation or translation@>;
+                }
+        }
+	return INVALID;
+}
+
+@ We test containment using different approaches depending on the type
+of the primitive solid.
+
+@<Test containment inside primitive solid@>=
+p = root->leaf.p;
+switch(p->type) {
+case BLOCK: return is_inside_block(p, v);
+case SPHERE: return is_inside_sphere(p, v);
+case CYLINDER: return is_inside_cylinder(p, v);
+case TORUS: return is_inside_torus(p, v);
+default: return INVALID; /* invalid solid */
+}
+
+@*3 Containment inside a solid block.
+The three pairs of opposite faces of a block determines its
+containment range on each of the three axes. Hence, we can test if a
+vector is inside, outside, or on the surface of the block by testing
+its $x$, $y$ and $z$ components against the corresponding range.
+
+@<Information that defines a primitive block@>=
+double x0, x1, y0, y1, z0, z1; /* containment range */
+
+@ Note here that the dimensions |length|, |height| and |width|
+correspond respectively to the $x$, $y$ and $z$ axes in world
+coordinate frame, and that we are adding or subtracting half-lengths
+of the respective dimensions.
+
+@<Calculate containment range for the block@>=
+p->b.x0 = p->origin.x - p->b.length;
+p->b.x1 = p->origin.x + p->b.length;
+p->b.y0 = p->origin.y - p->b.height;
+p->b.y1 = p->origin.y + p->b.height;
+p->b.z0 = p->origin.z - p->b.width;
+p->b.z1 = p->origin.z + p->b.width;
+
+@ Let $(x, y, z)$ represent the components of the vector to be
+tested. Also let the three intervals $[x_0, x_1]$, $[y_0,
+y_1]$ and $[z_0, z_1]$ respectively define the containment range for
+the block along the $x$, $y$ and $z$ axes in the world coordinate
+frame. Then the vector is:
+
+$$\vcenter{\halign{\hfil # & # & # \hfil \cr
+outside the block if & $(x < x_0 \vee x > x_1) \vee (y < y_0 \vee y >
+y_1) \vee (z < z_0 \vee z > z_1)$,\cr
+inside the block if & $(x > x_0 \wedge x < x_1) \wedge (y >
+y_0 \wedge y < y_1) \wedge (z > z_0 \wedge z < z_1)$, and\cr
+on the surface, & otherwise.\cr
+}}$$
+
+@<Function to test containment inside a block@>=
+Containment is_inside_block(Primitive *p, vect3d *v)
+{
+        if (v->x < p->b.x0 || v->x > p->b.x1 || v->y < p->b.y0 || v->y
+	> p->b.y1 || v->z < p->b.z0 || v->z > p->b.z1) 
+                return OUTSIDE;
+        if (v->x > p->b.x0 && v->x < p->b.x1 && v->y > p->b.y0 && v->y
+	< p->b.y1 && v->z > p->b.z0 && v->z < p->b.z1)
+                return INSIDE;
+	return SURFACE;
+}
+
+@ @<Function to test containment inside a sphere@>=
+Containment is_inside_sphere(Primitive *p, vect3d *v)
+{
+	return SURFACE;
+}
+
+@ @<Function to test containment inside a cylinder@>=
+Containment is_inside_cylinder(Primitive *p, vect3d *v)
+{
+	return SURFACE;
+}
+
+@ @<Function to test containment inside a torus@>=
+Containment is_inside_torus(Primitive *p, vect3d *v)
+{
+	return SURFACE;
+}
+
+@ @<Test containment in subtrees using boolean operators@>=
+
+@ @<Test containment after transformation or translation@>=
+
+@*2 Find the list of potential solid containers.
+
 
 @** Error handling.
 There are three message categories, which are printed using the
@@ -2042,6 +2211,10 @@ following macros: |fatal|, |warn|, and |info|.
 @d fatal(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
 @d warn(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
 @d info(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
+
+@ Utility type definitions.
+@<Type definitions@>=
+typedef enum {false = 0, true} bool;
 
 @ @<Include system libraries@>=
 #include <math.h>
@@ -2116,6 +2289,12 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 @<Function to destroy the CSG tree@>;
 @<Function to print the CSG tree@>;
 @<Read geometry from input file@>;
+@<Function to test containment inside a block@>;
+@<Function to test containment inside a sphere@>;
+@<Function to test containment inside a cylinder@>;
+@<Function to test containment inside a torus@>;
+@<Function to recursively test containment@>;
+@<Function to test if a vector is inside a solid@>;
 
 @* History.
 The {\sl Monte Carlo Simulator} project began in June 2011, when
