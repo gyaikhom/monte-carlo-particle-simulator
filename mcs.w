@@ -2163,6 +2163,7 @@ Containment solid_contains_vector(CSG_Node *root, vect3d *v)
 @ @<Function to recursively test containment@>=
 Containment recursively_test_containment(CSG_Node *root, vect3d *v)
 {
+        Containment left, right;
         if (root->op == SOLID) {
                 @<Test containment inside primitive solid@>;
 	} else {
@@ -2451,12 +2452,56 @@ if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
         return SURFACE;
 
 @*2 Containment inside boolean solids.
+We test containment inside intermediate solids (i.e., solids defined
+as a combination of two solids) using the appropriate boolean
+tests. When a point is on the surface of either, or both, the left and
+the right solids, we must check separately if the same point will be
+inside, or on the surface of the combined solid.
 
-@ @<Test containment in subtrees using boolean operators@>=
+@<Test containment in subtrees using boolean operators@>=
+left = recursively_test_containment(root->internal.left, v);
+right = recursively_test_containment(root->internal.right, v);
+switch(root->op) {
+case UNION:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+	if (left == INSIDE || right == INSIDE)
+                return INSIDE;
+	if (left == SURFACE && right == SURFACE)
+                return SURFACE;
+	return OUTSIDE;
+case INTERSECTION:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+	if (left == OUTSIDE || right == OUTSIDE)
+                return OUTSIDE;
+	if (left == INSIDE || right == INSIDE)
+                return INSIDE;
+        return SURFACE;
+case DIFFERENCE:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+	if (left == INSIDE && right == OUTSIDE)
+                return INSIDE;
+	if (left == SURFACE && right == OUTSIDE)
+                return SURFACE;
+	return OUTSIDE;
+default: break; /* do nothing */
+}
 
 @*2 Containment inside transformed or translated solids.
 
 @ @<Test containment after transformation or translation@>=
+switch(root->op) {
+case TRANSLATE:
+        break;
+case ROTATE:
+        break;
+case SCALE:
+        break;
+default:
+        printf("unknown\n");
+}
 
 @*1 Find the list of potential solid containers.
 
