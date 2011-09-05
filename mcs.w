@@ -956,23 +956,33 @@ subtended by this plane on the $xz$-plane is $\phi$ radians.
 @<Information that defines a primitive torus@>=
 double major, minor;
 double phi, phi_start, theta, theta_start; /* subtended angle, and
-start angle */
+start angle (in degrees) */
  
 @ The parameters for the torus geometry are supplied in the following
 format:
 
 \smallskip
 
-(``name" $phi$ $theta$ $major$ $minor$)
+(``name" $phi$ $phi\_start$ $theta$ $theta\_start$ $major$ $minor$)
 
 \smallskip
 
-For instance, the specification {\tt ("Torus A" 360 360
-10.0 2.0)} initialises a ring torus named ``Torus A" located at (0.0,
-0.0, 0.0) in the world coordinate frame with major radius 10.0 and
-minor 2.0. Note here that, although $\phi, \theta < 2\pi$
-mathematically, we allow the value $2\pi$ to identify a complete torus
-computationally.
+For instance, the specification {\tt ("Torus A" 180.0 45.0 45.0 15.0
+10.0 2.0)} initialises a partial torus named ``Torus A" located at
+(0.0, 0.0, 0.0) in the world coordinate frame with major radius 10.0
+and minor 2.0. Its start and end cross sections subtend an angle of
+$180^{\circ}$, and begins it rotation at $45^{\circ}$ from the
+positive $x$-axis. Furthermore, the tube subtends and angle of
+$45^{\circ}$, and begins its rotation about the center of the tube
+starting at $15^{\circ}$ from the $xz$-plane.
+
+Note here that, although mathematically the parametric angles $\phi,
+\theta < 2\pi$ are defined as radians, their computational values
+|phi| and |theta| (and their start angles |phi_start| and
+|theta_start|) are supplied in degrees. This avoids conversion 
+between radians and degrees while carrying out containment
+testing. Furthermore, we allow variables |phi| and |theta| to take
+values of $360^{\circ}$ to identify a complete torus.
 
 @<Read torus geometry@>=
 @<Create a new primitive solid@>;
@@ -980,10 +990,11 @@ computationally.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive torus with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->name, &p->t.phi, &p->t.theta, &p->t.major, &p->t.minor);
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
+       p->name, &p->t.phi, &p->t.phi_start, &p->t.theta,
+       &p->t.theta_start, &p->t.major, &p->t.minor);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 5) {
+if (read_count == EOF || read_count != 7) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -1970,8 +1981,9 @@ case SPHERE: printf("SPHERE: \"%s\" %lf\n",
 case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf\n",
         temp->name, p->c.radius, p->c.height);
         break;
-case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf\n",
-        temp->name, p->t.phi, p->t.theta, p->t.major, p->t.minor);
+case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf\n",
+        temp->name, p->t.phi, p->t.phi_start,
+        p->t.theta, p->t.theta_start, p->t.major, p->t.minor);
         break;
 default:
         printf("unknown\n");
