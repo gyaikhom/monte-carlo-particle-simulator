@@ -2233,13 +2233,9 @@ y_0 \wedge y < y_1) \wedge (z > z_0 \wedge z < z_1)$, and\cr
 on the surface, & otherwise.\cr
 }}$$
 
-Note here that we carry out the {\sl outside test} first because it is
-computationally less expensive. Due to the boolean {\tt OR}s (denoted
-with $\vee$), the outside test is most likely to return first as soon as
-one of its component relational tests from the left has been
-validated. In contrast, the inside test requires evaluating all of its
-component relational tests before the boolean {\tt AND}s (denoted with
-$\wedge$) could be tested.
+In the following implementation, we carry out a surface test instead
+of the inside test. This avoids boolean conjuctions. Furthermore, we
+validate the surface test by doing an outside test first.
 
 @<Function to test containment inside a block@>=
 Containment is_inside_block(Primitive *p, vect3d *v)
@@ -2247,10 +2243,10 @@ Containment is_inside_block(Primitive *p, vect3d *v)
         if (v->x < p->b.x0 || v->x > p->b.x1 || v->y < p->b.y0 || v->y
 	> p->b.y1 || v->z < p->b.z0 || v->z > p->b.z1) 
                 return OUTSIDE;
-        if (v->x > p->b.x0 && v->x < p->b.x1 && v->y > p->b.y0 && v->y
-	< p->b.y1 && v->z > p->b.z0 && v->z < p->b.z1)
-                return INSIDE;
-	return SURFACE;
+        if (v->x == p->b.x0 || v->x == p->b.x1 || v->y == p->b.y0 || v->y
+	== p->b.y1 || v->z == p->b.z0 || v->z == p->b.z1)
+                return SURFACE;
+	return INSIDE;
 }
 
 @*3 Containment inside a solid sphere.
@@ -2280,8 +2276,8 @@ Containment is_inside_sphere(Primitive *p, vect3d *v)
 {
 	double delta = vect3d_magnitude(v);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
-	if (delta < p->s.radius) return INSIDE; /* less likely */
-	return SURFACE;
+	if (delta == p->s.radius) return SURFACE; /* least likely */
+	return INSIDE;
 }
 
 @*3 Containment inside a solid cylinder.
@@ -2318,14 +2314,8 @@ inside the cylinder if & $(y > y_0 \wedge y < y_1) \wedge (\delta < |radius|)$, 
 on the surface, & otherwise.\cr
 }}$$
 
-Note here that we carry out the {\sl outside test} first as it is
-computationally less expensive. Due to the boolean {\tt OR}s, it is
-most likely to return first as soon as one of the two component
-relational tests has been validated. Furthermore, calculation of
-$\delta$ is delayed until it is absolutely necessary. In contrast, the
-inside test requires evaluating all of the three component relational
-tests, which includes calculating the $\delta$, before the boolean
-{\tt AND}s could be tested.
+Note here that calculation of $\delta$ is delayed until it is
+absolutely necessary.
 
 @<Function to test containment inside a cylinder@>=
 Containment is_inside_cylinder(Primitive *p, vect3d *v)
@@ -2334,8 +2324,10 @@ Containment is_inside_cylinder(Primitive *p, vect3d *v)
 	if (v->y < p->c.y0 || v->y > p->c.y1) return OUTSIDE;
 	@<Calculate distance of the two-dimensional $xz$-projection@>;
 	if (delta > p->c.radius) return OUTSIDE;
-	if (v->y > p->c.y0 && v->y < p->c.y1 && delta < p->c.radius) return INSIDE;
-	return SURFACE;
+	if (v->y == p->c.y0 || v->y == p->c.y1 || delta ==
+	p->c.radius)
+                return SURFACE;
+	return INSIDE;
 }
 
 @ Since the origin of the cylinder coincides with the origin of the
@@ -2441,14 +2433,10 @@ tau_deg = convert_radian_to_degree(tau);
 
 @ @<Check if |v| is on the surface of the tube@>=
 if (radial == p->t.minor) return SURFACE;
-if (p->t.phi < 360.0) {
-        if (gamma == p->t.phi_start || gamma == p->t.phi_end)
-                return SURFACE;
-}
-if (p->t.theta < 360.0) {
-        if (tau == p->t.theta_start || tau == p->t.theta_end)
-                return SURFACE;
-}
+if (p->t.phi < 360.0 && (gamma == p->t.phi_start || gamma == p->t.phi_end))
+        return SURFACE;
+if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
+        return SURFACE;
 
 @*2 Containment inside boolean solids.
 
