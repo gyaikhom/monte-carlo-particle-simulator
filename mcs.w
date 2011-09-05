@@ -982,7 +982,7 @@ Note here that, although mathematically the parametric angles $\phi,
 |theta_start|) are supplied in degrees. This avoids conversion 
 between radians and degrees while carrying out containment
 testing. Furthermore, we allow variables |phi| and |theta| to take
-values of $360^{\circ}$ to identify a complete torus.
+values of $360^{\circ}$, which signifie complete rotations.
 
 @<Read torus geometry@>=
 @<Create a new primitive solid@>;
