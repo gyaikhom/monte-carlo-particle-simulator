@@ -924,44 +924,54 @@ struct primitive_torus_struct {
        @<Information that defines a primitive torus@>;
 };
 
-@ The geometry of a primitive torus can be defined parametrically as
-follows:
+@ The origin of the torus' local coordinate frame is defined by
+its {\sl center}@^center@>, which coincides with the origin of the
+world coordinate frame. We also assume that they are radially
+symmetrical to the $y$-axis of the world coordinate frame. Under these
+condition, a torus may be defined parametrically as follows:
 
 $$\vcenter{\halign{\hfil $#$ & $#$ & $#$ \hfil \cr
-    x(u, v) & = & (R + r \cos{v}) \cos{u} \cr
-    y(u, v) & = & (R + r \cos{v}) \sin{u} \cr
-    z(u, v) & = & r \sin{v} \cr}}$$
+    x(\phi, \theta) & = & (R + r \cos{\theta}) \cos{\phi} \cr
+    y(\phi, \theta) & = & (R + r \cos{\theta}) \sin{\phi} \cr
+    z(\phi, \theta) & = & r \sin{\theta} \cr}}$$
 
-\noindent where, parameters $u$ and $v$ specify angles in radians such
-that $0 \le u, v < 2\pi$. The length $R$ gives the distance from the
-center of the tube to the center of the torus, and the length $r$
-gives the radius of the tube. The parameters $R$ and $r$ are also
-referred to as the {\sl major radius}@^major radius@> and the {\sl
-minor radius}@^minor radius@>, respecticely; and their ratio is
-referred to as the {\sl aspect ratio}@^aspect ratio@>.
+\noindent where, the length $R$ gives the distance from the center of
+the tube to the center of the torus, and the length $r$ gives the
+radius of the tube. They are referred to as the {\sl
+major radius}@^major radius@> and the {\sl minor radius}@^minor radius@>,
+respecticely; and their ratio is referred to as the {\sl aspect
+ratio}@^aspect ratio@>. Parameters $\phi$ and $\theta$ are
+angles in radians, where $0 \le \phi, \theta < 2\pi$.
 
-The origin of the torus' local coordinate frame is defined by
-its {\sl center}@^center@>, and the orthogonal axes incident on
-this origin are aligned so that its $y$ axis is perpendicular to the
-radial surface emanating from the origin to the center of the tube.
+Parameter $\phi$ is the angle subtended by the center of the tube
+on the $xz$-plane due to a counter-clockwise rotation about the
+$y$-axis, where the rotation begins at the positive
+$x$-axis. Parameter $\theta$, on the other hand, is the angle
+subtended by the surface of the tube on a cross-section
+of the tube, where the cross section is defined by a plane
+perpendicular to the $xz$-plane which passes through the center of the
+torus and the center of the tube, at the point where the angle
+subtended by this plane on the $xz$-plane is $\phi$ radians. 
 
 @<Information that defines a primitive torus@>=
 double major, minor;
-double u, v;
+double phi, theta;
 
 @ The parameters for the torus geometry are supplied in the following
 format:
 
 \smallskip
 
-(``name" $u$ $v$ $major$ $minor$)
+(``name" $phi$ $theta$ $major$ $minor$)
 
 \smallskip
 
-For instance, the specification {\tt ("Torus A" 0.0 359.999999 10.0
-2.0)} initialises a solid torus named ``Torus A" located at (0.0, 0.0,
-0.0) in the world coordinate frame with major radius 10.0 and minor
-2.0. Note here that $v < 2\pi$.
+For instance, the specification {\tt ("Torus A" 360 360
+10.0 2.0)} initialises a ring torus named ``Torus A" located at (0.0,
+0.0, 0.0) in the world coordinate frame with major radius 10.0 and
+minor 2.0. Note here that, although $\phi, \theta < 2\pi$
+mathematically, we allow the value $2\pi$ to identify a complete torus
+computationally.
 
 @<Read torus geometry@>=
 @<Create a new primitive solid@>;
@@ -970,14 +980,18 @@ For instance, the specification {\tt ("Torus A" 0.0 359.999999 10.0
 
 @ @<Initialise primitive torus with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf)\n",
-       p->name, &p->t.u, &p->t.v, &p->t.major, &p->t.minor);
+       p->name, &p->t.phi, &p->t.theta, &p->t.major, &p->t.minor);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 5) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = TORUS;
+@<Prepare torus for containment testing@>;
 ++csg_tree.num_primitive;
+
+@ @<Prepare torus for containment testing@>=
+@<Calculate radial containment range for the torus@>;
 
 @*1 Constructive Solid Geometry Tree.
 All solids in the simulation world are built from instances of
@@ -1955,7 +1969,7 @@ case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf\n",
         temp->name, p->c.radius, p->c.height);
         break;
 case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf\n",
-        temp->name, p->t.u, p->t.v, p->t.major, p->t.minor);
+        temp->name, p->t.phi, p->t.theta, p->t.major, p->t.minor);
         break;
 default:
         printf("unknown\n");
@@ -2217,6 +2231,14 @@ y_0 \wedge y < y_1) \wedge (z > z_0 \wedge z < z_1)$, and\cr
 on the surface, & otherwise.\cr
 }}$$
 
+Note here that we carry out the {\sl outside test} first because it is
+computationally less expensive. Due to the boolean {\tt OR}s (denoted
+with $\vee$), the outside test is most likely to return first as soon as
+one of its component relational tests from the left has been
+validated. In contrast, the inside test requires evaluating all of its
+component relational tests before the boolean {\tt AND}s (denoted with
+$\wedge$) could be tested.
+
 @<Function to test containment inside a block@>=
 Containment is_inside_block(Primitive *p, vect3d *v)
 {
@@ -2243,14 +2265,20 @@ on the surface, & otherwise.\cr
 
 During containment testing, the origin of the sphere always coincides
 with the origin of the world coordinate frame. Hence, to determine
-$\delta$, we only need to calculate the magnitude of the vector |v|.
+$\delta$, we only need to calculate the magnitude of the vector
+|v|.
+
+Note here that we carry out the {\sl outside test} first. This is
+because, in a real-world setup, a spherical component is less likely
+to occupy a large volume of the simulation space. Thus, it is highly
+likely that a particle is outside the sphere most of the time.
 
 @<Function to test containment inside a sphere@>=
 Containment is_inside_sphere(Primitive *p, vect3d *v)
 {
 	double delta = vect3d_magnitude(v);
-	if (delta > p->s.radius) return OUTSIDE;
-	if (delta < p->s.radius) return INSIDE;
+	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
+	if (delta < p->s.radius) return INSIDE; /* less likely */
 	return SURFACE;
 }
 
@@ -2261,32 +2289,41 @@ center of the circular bases of the cylinder are parallel to the
 $y$-axis. Hence, to test containment of a point inside a cylinder, we
 first check if the $y$-component of vector |v| is within the range
 defined by the two parallel circular faces of the cylinder. Secondly,
-we check if the distance of the vector |v| from the origin on the
-$xz$-plane is within the area subscribed on the same plane by the
-circular surface of the cylinder.
+we check if the projected distance of the vector |v| from the origin
+on the $xz$-plane is within the area subscribed on the same plane by
+the circular surfaces of the cylinder.
 
 @<Information that defines a primitive cylinder@>=
 double y0, y1; /* containment range of cylinder height */
 
 @ Note here that the dimension |height| corresponds to the $y$-axis
 in world coordinate frame, and that we are adding or subtracting
-half-lengths of the cylinder length.
+half-lengths of the cylinder height.
 
 @<Calculate containment range for the cylinder@>=
 p->c.y0 = - p->c.height;
 p->c.y1 = p->c.height;
 
-@ Let $(x, y, z)$ represent the components of this vector |v|. Also
-let $\delta$ represent the magnitude of the two-dimensional 
-projection of vector |v| on the $xz$-plane, and let the interval
-$[y_0, y_1]$ give the containment range of the cylinder in the
-$y$-axis. Then the point defined by vector |v| is:
+@ Let $(x, y, z)$ represent the components of the vector |v| that we
+wish to test. Also let $\delta$ represent the magnitude of the
+two-dimensional projection of vector |v| on the $xz$-plane, and let
+the interval $[y_0, y_1]$ give the containment range of the cylinder
+in the $y$-axis. Then the point defined by vector |v| is:
 
 $$\vcenter{\halign{\hfil # & # \hfil \cr
 outside the cylinder if & $(y < y_0 \vee y > y_1) \vee (\delta > |radius|)$,\cr
 inside the cylinder if & $(y > y_0 \wedge y < y_1) \wedge (\delta < |radius|)$, and\cr
 on the surface, & otherwise.\cr
 }}$$
+
+Note here that we carry out the {\sl outside test} first as it is
+computationally less expensive. Due to the boolean {\tt OR}s, it is
+most likely to return first as soon as one of the two component
+relational tests has been validated. Furthermore, calculation of
+$\delta$ is delayed until it is absolutely necessary. In contrast, the
+inside test requires evaluating all of the three component relational
+tests, which includes calculating the $\delta$, before the boolean
+{\tt AND}s could be tested.
 
 @<Function to test containment inside a cylinder@>=
 Containment is_inside_cylinder(Primitive *p, vect3d *v)
@@ -2307,12 +2344,79 @@ the two-dimensional projection gives the required distance.
 delta = sqrt(v->x * v->x + v->z * v->z);
 
 @*3 Containment inside a solid torus.
+During containment testing, the origin of the torus coincides with the
+origin of the world coordinate frame and is radially symmetrical about
+the $y$-axis. Hence, to test containment inside the torus, we first
+check if the projected distance $\delta$ of the vector |v| on the
+$xz$-plane is outside the radial containment range defined by the
+major and minor radii of the torus. If it is, |v| is outside.
+
+@<Information that defines a primitive torus@>=
+double r0, r1; /* radial containment range on $xz$-plane */
+
+@ @<Calculate radial containment range for the torus@>=
+p->t.r0 = p->t.major - p->t.minor;
+p->t.r1 = p->t.major + p->t.minor;
+
+@ If |v| is within the radial containment range, we calculate the
+angle $\gamma$ subtended by |v| on the $xz$-plane. If the torus is
+partial, i.e., $\phi < 2\pi$, and $\gamma > \phi$, |v| is outside the
+volume defined by the torus.
+
+We then check if |v| is outside the volume of the tube. To do this, we
+calculate the point $c$ on the center of the tube which subtends
+$\gamma$ radians on the $xz$-plane. Using this point, we calculate
+|radial|, which is the radial distance of |v| from $c$. If |radial| is
+greater than the minor radius, |v| is again outside the torus.
+
+If the tube is partial, i.e., $\theta < 2\pi$, we check if the angle
+subtended by the line from $c$ to |v| is outside $\theta$. If it is,
+$v$ is outside the volume defined by the tube. Finally, if none of
+the previous conditions were satisfied, we can be certain that
+|v| is either inside the torus, or on the surface. We do a final check
+to determine which.
 
 @ @<Function to test containment inside a torus@>=
 Containment is_inside_torus(Primitive *p, vect3d *v)
 {
+	double gamma, delta, radial, cx, cz, rx, rz;
+	@<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>;
+	if (delta < p->t.r0 || delta > p->t.r1) return OUTSIDE; /* check radial
+	containment on $xz$-plane */
+	@<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>;
+	if (p->t.phi < 360.0 && gamma > p->t.phi) return OUTSIDE;
+	@<Check if |v| is outside the tube@>;
+	@<Check if |v| is inside the tube@>;
 	return SURFACE;
 }
+
+@ @<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>=
+delta = sqrt(v->x * v->x + v->z * v->z);
+
+@ @<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>=
+gamma = atan(v->z / v->x);
+
+@ @<Check if |v| is outside the tube@>=
+@<Calculate point $c$ on the center of the tube at $\gamma$@>;
+@<Calculate radial distance of |v| from $c$@>;
+if (radial > p->t.minor) return OUTSIDE;
+@<Calculate the radial angle of |v| on the cross section from $c$@>;
+if (p->t.theta < 360.0 && gamma > p->t.theta) return OUTSIDE;
+
+@ @<Calculate point $c$ on the center of the tube at $\gamma$@>=
+cx = delta * cos(gamma);
+cz = delta * sin(gamma);
+
+@ @<Calculate radial distance of |v| from $c$@>=
+rx = v->x - cx;
+rz = v->z - cz;
+radial = sqrt(rx * rx + rz* rz + v->z * v->z);
+
+@ @<Calculate the radial angle of |v| on the cross section from $c$@>=
+gamma = asin(v->z / radial); /* reusing variable |gamma| */
+
+@ @<Check if |v| is inside the tube@>=
+if (delta > p->t.r0 && delta < p->t.r1 && radial < p->t.minor) return INSIDE;
 
 @*2 Containment inside boolean solids.
 
