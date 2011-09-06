@@ -2413,16 +2413,16 @@ bool angle_outside_range(double gamma, double phi0, double phi1)
 angle $\gamma$ subtended by |v| on the $xz$-plane. Let,
 $\gamma^{\circ}$ represent the value of $\gamma$ after converting
 radians to degrees. If the torus is partial, i.e., $\phi <
-360^{\circ}$, we check if $\gamma$ is outside the range defined by
-$\phi_0$ and $\phi_1$. If $\gamma$ is not outside the range, we check
-if |v| is outside the volume of the tube. Finally, if none of the
-previous conditions were satisfied, we can be certain that |v| is
-either inside the torus, or on the surface. To decide which is valid,
-we do a final surface test.
+360^{\circ}$, we check if $\gamma^{\circ}$ is outside the range
+defined by $\phi_0$ and $\phi_1$. If $\gamma^{\circ}$ is not outside
+the range, we check if |v| is outside the volume of the tube. Finally,
+if none of the previous conditions were satisfied, we can be certain
+that |v| is either inside the torus, or on the surface. To decide
+which is valid, we do a final surface test.
 
 Notice that the function |angle_outside_rangle()| implicitly tests if
-the torus is partial (i.e., we do not need to test |p->t.phi < 360.0|
-explicitly).
+the torus is partial (i.e., we do not need to test the condition
+|p->t.phi < 360.0| explicitly).
 
 @<Function to test containment inside a torus@>=
 Containment is_inside_torus(Primitive *p, vect3d *v)
