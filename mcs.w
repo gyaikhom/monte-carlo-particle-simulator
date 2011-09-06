@@ -2733,7 +2733,7 @@ typedef enum {false = 0, true} bool;
 @* Physical constants.
 
 @d PI 3.14159265358979323846
-@d twice_PI 6.283185307
+@d TWICE_PI 6.283185307
 @d RADIAN_TO_DEGREE (180.0 / PI)
 @d DEGREE_TO_RADIAN (PI / 180.0)
 
