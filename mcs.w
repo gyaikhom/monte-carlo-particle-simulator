@@ -2513,7 +2513,7 @@ case INTERSECTION:
                 return INVALID; /* handle error */
 	if (left == OUTSIDE || right == OUTSIDE)
                 return OUTSIDE;
-	if (left == INSIDE || right == INSIDE)
+	if (left == INSIDE && right == INSIDE)
                 return INSIDE;
         return SURFACE;
 case DIFFERENCE:
