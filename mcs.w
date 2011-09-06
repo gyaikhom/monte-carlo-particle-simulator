@@ -2164,14 +2164,23 @@ inside the solid defined by the CSG tree rooted at |root|; otherwise,
 @<Function to test if a vector is inside a solid@>=
 Containment solid_contains_vector(CSG_Node *root, vect3d *v)
 {
+        double hv[4];
 	if (root == NULL || v == NULL) return INVALID;
-	return recursively_test_containment(root, v);
+        @<Make supplied vector homogeneous@>;
+	return recursively_test_containment(root, hv);
 }
 
+@ @<Make supplied vector homogeneous@>=
+hv[0] = v->x;
+hv[1] = v->y;
+hv[2] = v->x;
+hv[3] = 1.0;
+
 @ @<Function to recursively test containment@>=
-Containment recursively_test_containment(CSG_Node *root, vect3d *v)
+Containment recursively_test_containment(CSG_Node *root, double v[])
 {
         Containment left, right;
+        double r[4]; /* used during inverse trnasformation */
         if (root->op == SOLID) {
                 @<Test containment inside primitive solid@>;
 	} else {
@@ -2183,6 +2192,214 @@ Containment recursively_test_containment(CSG_Node *root, vect3d *v)
         }
 	return INVALID;
 }
+
+@*2 Containment inside boolean solids.
+We test containment inside intermediate solids (i.e., solids defined
+as a combination of two solids) using the appropriate boolean
+tests. When a point is on the surface of either, or both, the left and
+the right solids, we must check separately if the same point will be
+inside, or on the surface of the combined solid.
+
+Notice that, when we are carrying out the difference, some points
+inside the |left| solid will be on the surface of the new solid if
+they were adjacent to points on the surface of the |right| solid after
+the subtraction. Since it is difficult to determine this adjacency, we
+shall assume that points are on the surface of the new solid only if
+they were on the surface of the left solid.
+
+@<Test containment in subtrees using boolean operators@>=
+left = recursively_test_containment(root->internal.left, v);
+right = recursively_test_containment(root->internal.right, v);
+switch(root->op) {
+case UNION:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+	if (left == INSIDE || right == INSIDE)
+                return INSIDE;
+	if (left == SURFACE || right == SURFACE)
+                return SURFACE;
+	return OUTSIDE;
+case INTERSECTION:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+	if (left == OUTSIDE || right == OUTSIDE)
+                return OUTSIDE;
+	if (left == INSIDE && right == INSIDE)
+                return INSIDE;
+        return SURFACE;
+case DIFFERENCE:
+	if (left == INVALID || right == INVALID)
+                return INVALID; /* handle error */
+        if (right == OUTSIDE) {
+	        if (left == SURFACE) return SURFACE; /* definitely on
+		the surface */
+	        if (left == INSIDE) return INSIDE; /* could be on the
+		surface, but assume it is inside */
+        }
+	return OUTSIDE;
+default: return INVALID;
+}
+
+@*2 Containment inside transformed or translated solids.
+Let $T_i$ represent a solid transformation (translation, rotation, or
+scaling), and let $T^{-1}_i$ represent its inverse. Furthermore, let
+$T = \{T_0, \ldots, T_{n-1}\}$ represent an ordered sequence of $n$
+transformations. If $s$ represents a solid, and $s'$ represents the
+solid after applying $T$ to $s$, in ascending order starting with
+$T_0$, and if $r$ represents the result of applying to a homogeneous
+vector $v$ the inverse of the transformations in $T$ in descending
+order starting with $T^{-1}_{n-1}$, then: Checking if $v$ lies inside
+the volume defined by $s'$, is equivalent to checking if $r$ lies
+inside $s$.
+
+This significantly simplifies the testing of points using the CSG
+tree: 1) it is easier to calculate $r$ from $v$, and 2)
+containment testing is easier with $s$ than it is with $s'$.
+
+@<Test containment after transformation or translation@>=
+switch(root->op) {
+case TRANSLATE:
+        apply_inverse(root->internal.right->leaf.t.matrix, v, r);
+        break;
+case ROTATE:
+        apply_inverse(root->internal.right->leaf.r.matrix, v, r);
+        break;
+case SCALE:
+        apply_inverse(root->internal.right->leaf.s.matrix, v, r);
+        break;
+default: return INVALID;
+}
+return recursively_test_containment(root->internal.left, r);
+
+@ @<Function to apply the inverse of a transformation@>=
+void apply_inverse(double m[][4], double v[], double r[])
+{
+    r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
+    r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
+    r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
+    r[3] = 1.0;
+}
+
+@ The inverse translation matrix $T^{-1}$ for a translation with
+displacement vector $(x, y, z)$ is given by:
+
+\medskip
+
+$T^{-1} = \left(\matrix{1.0 & 0.0 & 0.0 & -x\cr
+0.0 & 1.0 & 0.0 & -y\cr
+0.0 & 0.0 & 1.0 & -z\cr
+0.0 & 0.0 & 0.0 & 1\cr
+}\right)$
+
+\medskip
+
+The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
+using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse translation@>=
+leaf_node->leaf.t.matrix[0][0] = 1.0;
+leaf_node->leaf.t.matrix[0][1] = 0.0;
+leaf_node->leaf.t.matrix[0][2] = 0.0;
+leaf_node->leaf.t.matrix[0][3] = -op_x; /* inverse $x$-axis translation */
+leaf_node->leaf.t.matrix[1][0] = 0.0;
+leaf_node->leaf.t.matrix[1][1] = 1.0;
+leaf_node->leaf.t.matrix[1][2] = 0.0;
+leaf_node->leaf.t.matrix[1][3] = -op_y; /* inverse $y$-axis translation */
+leaf_node->leaf.t.matrix[2][0] = 0.0;
+leaf_node->leaf.t.matrix[2][1] = 0.0;
+leaf_node->leaf.t.matrix[2][2] = 1.0;
+leaf_node->leaf.t.matrix[2][3] = -op_z; /* inverse $z$-axis translation */
+leaf_node->leaf.t.matrix[3][0] = 0.0;
+leaf_node->leaf.t.matrix[3][1] = 0.0;
+leaf_node->leaf.t.matrix[3][2] = 0.0;
+leaf_node->leaf.t.matrix[3][3] = 1.0; /* homogeneous coordinate */
+
+@  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
+radians about the axis specified by a unit vector@^unit vector@> $u
+= (x, y, z)$ in the world coordinate frame is given by:
+
+\medskip
+
+$R^{-1} = \left(\matrix{tx^2 + c & txy + sz & txz - sy & 0.0\cr
+txy - sz & ty^2 + c & tyz + sx & 0.0\cr
+txz + sy & tyz - sx & tz^2 + c & 0.0\cr
+0.0 & 0.0 & 0.0 & 1.0\cr
+}\right)$
+
+\medskip
+
+\noindent where, $c = \cos(\theta)$, $s = \sin(\theta)$, and $t = 1 -
+\cos(\theta)$.
+
+@<Variables used for handling rotation operators@>=
+double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
+
+@ The matrix $R^{-1}$ is stored in the two dimensional
+array |matrix| using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse rotation@>=
+sine = sin(op_theta);
+cosine = cos(op_theta);
+t = 1.0 - cosine;
+tx = t * op_x;
+ty = t * op_y;
+tz = t * op_z;
+txy = tx * op_y;
+txz = tx * op_z;
+tyz = ty * op_z;
+sx = sine * op_x;
+sy = sine * op_y;
+sz = sine * op_z;
+leaf_node->leaf.r.matrix[0][0] = tx * op_x + cosine;
+leaf_node->leaf.r.matrix[0][1] = txy + sz;
+leaf_node->leaf.r.matrix[0][2] = txz - sy;
+leaf_node->leaf.r.matrix[0][3] = 0.0;
+leaf_node->leaf.r.matrix[1][0] = txy - sz;
+leaf_node->leaf.r.matrix[1][1] = ty * op_y + cosine;
+leaf_node->leaf.r.matrix[1][2] = tyz + sx;
+leaf_node->leaf.r.matrix[1][3] = 0.0;
+leaf_node->leaf.r.matrix[2][0] = txz + sy;
+leaf_node->leaf.r.matrix[2][1] = tyz - sx;
+leaf_node->leaf.r.matrix[2][2] = tz * op_z + cosine;
+leaf_node->leaf.r.matrix[2][3] = 0.0;
+leaf_node->leaf.r.matrix[3][0] = 0.0;
+leaf_node->leaf.r.matrix[3][1] = 0.0;
+leaf_node->leaf.r.matrix[3][2] = 0.0;
+leaf_node->leaf.r.matrix[3][3] = 1.0; /* homogeneous coordinate */
+
+@ The inverse scaling matrix $S^{-1}$ for a scaling with
+scaling factors $(x, y, z)$ is given by:
+
+\medskip
+
+$S^{-1} = \left(\matrix{1/x & 0.0 & 0.0 & 0.0\cr
+0.0 & 1/y & 0.0 & 0.0\cr
+0.0 & 0.0 & 1/z & 0.0\cr
+0.0 & 0.0 & 0.0 & 1\cr
+}\right)$
+
+\medskip
+
+The matrix $S^{-1}$ is stored in the two dimensional array |matrix|
+using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse scaling@>=
+leaf_node->leaf.s.matrix[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
+leaf_node->leaf.s.matrix[0][1] = 0.0;
+leaf_node->leaf.s.matrix[0][2] = 0.0;
+leaf_node->leaf.s.matrix[0][3] = 0.0;
+leaf_node->leaf.s.matrix[1][0] = 0.0;
+leaf_node->leaf.s.matrix[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
+leaf_node->leaf.s.matrix[1][2] = 0.0;
+leaf_node->leaf.s.matrix[1][3] = 0.0;
+leaf_node->leaf.s.matrix[2][0] = 0.0;
+leaf_node->leaf.s.matrix[2][1] = 0.0;
+leaf_node->leaf.s.matrix[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
+leaf_node->leaf.s.matrix[2][3] = 0.0;
+leaf_node->leaf.s.matrix[3][0] = 0.0;
+leaf_node->leaf.s.matrix[3][1] = 0.0;
+leaf_node->leaf.s.matrix[3][2] = 0.0;
+leaf_node->leaf.s.matrix[3][3] = 1.0; /* homogeneous coordinate */
 
 @*2 Testing containment inside a solid primitive.
 Containment testing uses different approaches depending on the type
@@ -2259,13 +2476,13 @@ of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
 @<Function to test containment inside a block@>=
-Containment is_inside_block(Primitive *p, vect3d *v)
+Containment is_inside_block(Primitive *p, double v[])
 {
-        if (v->x < p->b.x0 || v->x > p->b.x1 || v->y < p->b.y0 || v->y
-	> p->b.y1 || v->z < p->b.z0 || v->z > p->b.z1) 
+        if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
+	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
                 return OUTSIDE;
-        if (v->x == p->b.x0 || v->x == p->b.x1 || v->y == p->b.y0 || v->y
-	== p->b.y1 || v->z == p->b.z0 || v->z == p->b.z1)
+        if (v[0] == p->b.x0 || v[0] == p->b.x1 || v[1] == p->b.y0 || v[1]
+	== p->b.y1 || v[2] == p->b.z0 || v[2] == p->b.z1)
                 return SURFACE;
 	return INSIDE;
 }
@@ -2293,9 +2510,9 @@ to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
 @<Function to test containment inside a sphere@>=
-Containment is_inside_sphere(Primitive *p, vect3d *v)
+Containment is_inside_sphere(Primitive *p, double v[])
 {
-	double delta = vect3d_magnitude(v);
+	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
 	if (delta == p->s.radius) return SURFACE; /* least likely */
 	return INSIDE;
@@ -2339,13 +2556,13 @@ Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
 @<Function to test containment inside a cylinder@>=
-Containment is_inside_cylinder(Primitive *p, vect3d *v)
+Containment is_inside_cylinder(Primitive *p, double v[])
 {
         double delta;
-	if (v->y < p->c.y0 || v->y > p->c.y1) return OUTSIDE;
+	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
 	@<Calculate distance of the two-dimensional $xz$-projection@>;
 	if (delta > p->c.radius) return OUTSIDE;
-	if (v->y == p->c.y0 || v->y == p->c.y1 || delta ==
+	if (v[1] == p->c.y0 || v[1] == p->c.y1 || delta ==
 	p->c.radius)
                 return SURFACE;
 	return INSIDE;
@@ -2356,7 +2573,7 @@ world coordinate frame during containment testing, the magnitude of
 the two-dimensional projection gives the required distance. 
 
 @<Calculate distance of the two-dimensional $xz$-projection@>=
-delta = sqrt(v->x * v->x + v->z * v->z);
+delta = sqrt(v[0] * v[0] + v[2] * v[2]);
 
 @*3 Containment inside a solid torus.
 During containment testing, the origin of the torus coincides with the
@@ -2433,7 +2650,7 @@ the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
 @<Function to test containment inside a torus@>=
-Containment is_inside_torus(Primitive *p, vect3d *v)
+Containment is_inside_torus(Primitive *p, double v[])
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial, cx, cz, rx, rz;
 	@<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>;
@@ -2456,10 +2673,10 @@ double convert_radian_to_degree(double angle)
 }
 
 @ @<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>=
-delta = sqrt(v->x * v->x + v->z * v->z);
+delta = sqrt(v[0] * v[0] + v[2] * v[2]);
 
 @ @<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>=
-gamma = atan(v->z / v->x);
+gamma = atan(v[2] / v[0]);
 gamma_deg = convert_radian_to_degree(gamma);
 
 @ We calculate the point $c$ on the center of the tube which subtends
@@ -2482,12 +2699,12 @@ cx = delta * cos(gamma);
 cz = delta * sin(gamma);
 
 @ @<Calculate radial distance of |v| from $c$@>=
-rx = v->x - cx;
-rz = v->z - cz;
-radial = sqrt(rx * rx + rz* rz + v->z * v->z);
+rx = v[0] - cx;
+rz = v[2] - cz;
+radial = sqrt(rx * rx + rz* rz + v[2] * v[2]);
 
 @ @<Calculate the radial angle of |v| on the cross section from $c$@>=
-tau = asin(v->z / radial);
+tau = asin(v[2] / radial);
 tau_deg = convert_radian_to_degree(tau);
 
 @ @<Check if |v| is on the surface of the tube@>=
@@ -2497,192 +2714,6 @@ if (p->t.phi < 360.0 && (gamma == p->t.phi_start || gamma == p->t.phi_end))
 if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
         return SURFACE;
 
-@*2 Containment inside boolean solids.
-We test containment inside intermediate solids (i.e., solids defined
-as a combination of two solids) using the appropriate boolean
-tests. When a point is on the surface of either, or both, the left and
-the right solids, we must check separately if the same point will be
-inside, or on the surface of the combined solid.
-
-Notice that, when we are carrying out the difference, any point inside
-the |left| solid could be on the surface of the new solid if it was
-adjacent to a point on the surface of the |right| solid that was
-subtracted. Since it is difficult to determine this adjacency, we
-simply assume that a point is inside in these cases.
-
-@<Test containment in subtrees using boolean operators@>=
-left = recursively_test_containment(root->internal.left, v);
-right = recursively_test_containment(root->internal.right, v);
-switch(root->op) {
-case UNION:
-	if (left == INVALID || right == INVALID)
-                return INVALID; /* handle error */
-	if (left == INSIDE || right == INSIDE)
-                return INSIDE;
-	if (left == SURFACE || right == SURFACE)
-                return SURFACE;
-	return OUTSIDE;
-case INTERSECTION:
-	if (left == INVALID || right == INVALID)
-                return INVALID; /* handle error */
-	if (left == OUTSIDE || right == OUTSIDE)
-                return OUTSIDE;
-	if (left == INSIDE && right == INSIDE)
-                return INSIDE;
-        return SURFACE;
-case DIFFERENCE:
-	if (left == INVALID || right == INVALID)
-                return INVALID; /* handle error */
-        if (right == OUTSIDE) {
-	        if (left == SURFACE) return SURFACE; /* definitely on
-		the surface */
-	        if (left == INSIDE) return INSIDE; /* could be on the
-		surface, but assume it is inside */
-        }
-	return OUTSIDE;
-default: break; /* do nothing */
-}
-
-@*2 Containment inside transformed or translated solids.
-Let $T_i$ represent a solid transformation (translation, rotation, or
-scaling), and let $T^{-1}_i$ represent its inverse. Furthermore, let
-$T = \{T_0, \ldots, T_{n-1}\}$ represent an ordered sequence of $n$
-transformations. If $s$ represents a solid, and $s'$ represents the
-solid after applying $T$ to $s$, in ascending order starting with
-$T_0$, and if $v'$ represents the result of applying to a vector $v$
-the inverse of the transformations in $T$ in descending order starting
-with $T^{-1}_{n-1}$, then: Checking if $v$ lies inside the volume
-defined by $s'$, is equivalent to checking if $v'$ lies inside
-$s$.
-
-This significantly simplifies the testing of points using the CSG
-tree, because 1) it is easier to calculate $v'$ from $v$, and 2)
-containment testing is easier with $s$ than it is with $s'$.
-
-@<Test containment after transformation or translation@>=
-switch(root->op) {
-case TRANSLATE: @<Apply to point vector the inverse of translation@>;
-        break;
-case ROTATE: @<Apply to point vector the inverse of rotation@>;
-        break;
-case SCALE: @<Apply to point vector the inverse of scaling@>;
-        break;
-default:
-        printf("unknown\n");
-}
-
-@ The inverse translation matrix $T^{-1}$ for a translation with
-displacement vector $(x, y, z)$ is given by:
-
-$T^{-1} = \left(\matrix{1.0 & 0.0 & 0.0 & -x\cr
-0.0 & 1.0 & 0.0 & -y\cr
-0.0 & 0.0 & 1.0 & -z\cr
-0.0 & 0.0 & 0.0 & 1\cr
-}\right)$
-
-The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
-using {\sl row-major}@^row-major@> form.
-
-@<Set up the matrix for inverse translation@>=
-leaf_node->leaf.t.matrix[0][0] = 1.0;
-leaf_node->leaf.t.matrix[0][1] = 0.0;
-leaf_node->leaf.t.matrix[0][2] = 0.0;
-leaf_node->leaf.t.matrix[0][3] = -op_x; /* inverse $x$-axis translation */
-leaf_node->leaf.t.matrix[1][0] = 0.0;
-leaf_node->leaf.t.matrix[1][1] = 1.0;
-leaf_node->leaf.t.matrix[1][2] = 0.0;
-leaf_node->leaf.t.matrix[1][3] = -op_y; /* inverse $y$-axis translation */
-leaf_node->leaf.t.matrix[2][0] = 0.0;
-leaf_node->leaf.t.matrix[2][1] = 0.0;
-leaf_node->leaf.t.matrix[2][2] = 1.0;
-leaf_node->leaf.t.matrix[2][3] = -op_z; /* inverse $z$-axis translation */
-leaf_node->leaf.t.matrix[3][0] = 0.0;
-leaf_node->leaf.t.matrix[3][1] = 0.0;
-leaf_node->leaf.t.matrix[3][2] = 0.0;
-leaf_node->leaf.t.matrix[3][3] = 1.0; /* homogeneous coordinate */
-
-@  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
-radians about the axis specified by a unit vector@^unit vector@> $u
-= (x, y, z)$ is given by:
-
-$R^{-1} = \left(\matrix{tx^2 + c & txy + sz & txz - sy & 0.0\cr
-txy - sz & ty^2 + c & tyz + sx & 0.0\cr
-txz + sy & tyz - sx & tz^2 + c & 0.0\cr
-0.0 & 0.0 & 0.0 & 1.0\cr
-}\right)$
-
-\noindent where, $c = \cos(\theta)$, $s = \sin(\theta)$, and $t = 1 -
-\cos(\theta)$.
-
-@<Variables used for handling rotation operators@>=
-double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
-
-@ The matrix $R^{-1}$ is stored in the two dimensional
-array |matrix| using {\sl row-major}@^row-major@> form.
-
-@<Set up the matrix for inverse rotation@>=
-sine = sin(op_theta);
-cosine = cos(op_theta);
-t = 1.0 - cosine;
-tx = t * op_x;
-ty = t * op_y;
-tz = t * op_z;
-txy = tx * op_y;
-txz = tx * op_z;
-tyz = ty * op_z;
-sx = sine * op_x;
-sy = sine * op_y;
-sz = sine * op_z;
-leaf_node->leaf.r.matrix[0][0] = tx * op_x + cosine;
-leaf_node->leaf.r.matrix[0][1] = txy + sz;
-leaf_node->leaf.r.matrix[0][2] = txz - sy;
-leaf_node->leaf.r.matrix[0][3] = 0.0;
-leaf_node->leaf.r.matrix[1][0] = txy - sz;
-leaf_node->leaf.r.matrix[1][1] = ty * op_y + cosine;
-leaf_node->leaf.r.matrix[1][2] = tyz + sx;
-leaf_node->leaf.r.matrix[1][3] = 0.0;
-leaf_node->leaf.r.matrix[2][0] = txz + sy;
-leaf_node->leaf.r.matrix[2][1] = tyz - sx;
-leaf_node->leaf.r.matrix[2][2] = tz * op_z + cosine;
-leaf_node->leaf.r.matrix[2][3] = 0.0;
-leaf_node->leaf.r.matrix[3][0] = 0.0;
-leaf_node->leaf.r.matrix[3][1] = 0.0;
-leaf_node->leaf.r.matrix[3][2] = 0.0;
-leaf_node->leaf.r.matrix[3][3] = 1.0; /* homogeneous coordinate */
-
-@ The inverse scaling matrix $S^{-1}$ for a scaling with
-scaling factors $(x, y, z)$ is given by:
-
-$S^{-1} = \left(\matrix{1/x & 0.0 & 0.0 & 0.0\cr
-0.0 & 1/y & 0.0 & 0.0\cr
-0.0 & 0.0 & 1/z & 0.0\cr
-0.0 & 0.0 & 0.0 & 1\cr
-}\right)$
-
-The matrix $S^{-1}$ is stored in the two dimensional array |matrix|
-using {\sl row-major}@^row-major@> form.
-
-@<Set up the matrix for inverse scaling@>=
-leaf_node->leaf.s.matrix[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
-leaf_node->leaf.s.matrix[0][1] = 0.0;
-leaf_node->leaf.s.matrix[0][2] = 0.0;
-leaf_node->leaf.s.matrix[0][3] = 0.0;
-leaf_node->leaf.s.matrix[1][0] = 0.0;
-leaf_node->leaf.s.matrix[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
-leaf_node->leaf.s.matrix[1][2] = 0.0;
-leaf_node->leaf.s.matrix[1][3] = 0.0;
-leaf_node->leaf.s.matrix[2][0] = 0.0;
-leaf_node->leaf.s.matrix[2][1] = 0.0;
-leaf_node->leaf.s.matrix[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
-leaf_node->leaf.s.matrix[2][3] = 0.0;
-leaf_node->leaf.s.matrix[3][0] = 0.0;
-leaf_node->leaf.s.matrix[3][1] = 0.0;
-leaf_node->leaf.s.matrix[3][2] = 0.0;
-leaf_node->leaf.s.matrix[3][3] = 1.0; /* homogeneous coordinate */
-
-@ @<Apply to point vector the inverse of translation@>=
-@ @<Apply to point vector the inverse of rotation@>=
-@ @<Apply to point vector the inverse of scaling@>=
 
 @*1 Find the list of potential solid containers.
 
@@ -2786,6 +2817,7 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 @<Function to test containment inside a sphere@>;
 @<Function to test containment inside a cylinder@>;
 @<Function to check if an angle lies outside a supplied range@>;
+@<Function to apply the inverse of a transformation@>;
 @<Function to test containment inside a torus@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
