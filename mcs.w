@@ -2496,6 +2496,12 @@ tests. When a point is on the surface of either, or both, the left and
 the right solids, we must check separately if the same point will be
 inside, or on the surface of the combined solid.
 
+Notice that, when we are carrying out the difference, any point inside
+the |left| solid could be on the surface of the new solid if it was
+adjacent to a point on the surface of the |right| solid that was
+subtracted. Since it is difficult to determine this adjacency, we
+simply assume that a point is inside in these cases.
+
 @<Test containment in subtrees using boolean operators@>=
 left = recursively_test_containment(root->internal.left, v);
 right = recursively_test_containment(root->internal.right, v);
@@ -2519,10 +2525,12 @@ case INTERSECTION:
 case DIFFERENCE:
 	if (left == INVALID || right == INVALID)
                 return INVALID; /* handle error */
-	if (left == INSIDE && right == OUTSIDE)
-                return INSIDE;
-	if (left == SURFACE && right == OUTSIDE)
-                return SURFACE;
+        if (right == OUTSIDE) {
+	        if (left == SURFACE) return SURFACE; /* definitely on
+		the surface */
+	        if (left == INSIDE) return INSIDE; /* could be on the
+		surface, but assume it is inside */
+        }
 	return OUTSIDE;
 default: break; /* do nothing */
 }
