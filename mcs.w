@@ -2400,7 +2400,7 @@ this as a full rotation; hence, $\gamma$ is always in range when
 $\phi_0 = \phi_1$.
 
 @<Function to check if an angle lies outside a supplied range@>=
-bool angle_outside_rangle(double gamma, double phi0, double phi1)
+bool angle_outside_range(double gamma, double phi0, double phi1)
 {
         if (phi0 == phi1) return false; /* full rotation */
         if (phi0 < phi1) return (gamma < phi0 || gamma > phi1);
