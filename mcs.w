@@ -2505,7 +2505,7 @@ case UNION:
                 return INVALID; /* handle error */
 	if (left == INSIDE || right == INSIDE)
                 return INSIDE;
-	if (left == SURFACE && right == SURFACE)
+	if (left == SURFACE || right == SURFACE)
                 return SURFACE;
 	return OUTSIDE;
 case INTERSECTION:
