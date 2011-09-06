@@ -2369,20 +2369,60 @@ p->t.r1 = p->t.major + p->t.minor;
 @ Calculate end angle $\phi_1$ after subtending $\phi$ degrees from
 the start angle $\phi_0$. Do the same for $\theta$.
 
+Note here that $0^\circ < \phi \le 360^\circ$ and $0^\circ \le \phi_0
+< 360^\circ$. Furthermore, we ensure that $0^\circ <
+\phi_1 \le 360^\circ$. This is important while testing if an angle
+lies {\sl outside} a given range.
+
 @<Calculate end angles for the torus@>=
 p->t.phi_end = p->t.phi_start + p->t.phi; 
 p->t.theta_end = p->t.theta_start + p->t.theta;
+if (p->t.phi_end > 360.0) p->t.phi_end -= 360.0; /* periodicity
+adjustment */
+if (p->t.theta_end > 360.0) p->t.theta_end -= 360.0;
+
+@ Because of {\sl periodicity}@^periodicity@>, it is easy to check if
+an angle $0^{\circ} \le \gamma < 360^{\circ}$ falls outside the region
+subtended from $0^{\circ} \le \phi_0 < 360^\circ$ to $0^{\circ} <
+\phi_1 \le 360^{\circ}$ by testing one of the following conditions:
+
+$$\vcenter{\halign{\hfil {\rm if}\ $#$, & {\rm $\gamma$ is outside
+if}\ $#$ \hfil\cr
+\phi_0 < \phi_1 & \gamma < \phi_0 \vee \gamma > \phi_1;\cr
+\phi_0 > \phi_1 & \gamma < \phi_0 \wedge \gamma > \phi_1.\cr
+}}$$
+
+The second condition only occurs when the value of $\phi_1$ was
+adjusted to lie in the range $(0, 360]$. When $\phi_0 =
+\phi_1$, we could either have a full rotation, or a no
+rotation. However, since $\phi > 0^\circ$, we must always interpret
+this as a full rotation; hence, $\gamma$ is always in range when
+$\phi_0 = \phi_1$.
+
+@<Function to check if an angle lies outside a supplied range@>=
+bool angle_outside_rangle(double gamma, double phi0, double phi1)
+{
+        if (phi0 == phi1) return false; /* full rotation */
+        if (phi0 < phi1) return (gamma < phi0 || gamma > phi1);
+        if (phi0 > phi1) return (gamma < phi0 && gamma > phi1); /*
+	periodicity adjusted */
+        return false;
+}
 
 @ If |v| is within the radial containment range, we calculate the
 angle $\gamma$ subtended by |v| on the $xz$-plane. Let,
 $\gamma^{\circ}$ represent the value of $\gamma$ after converting
 radians to degrees. If the torus is partial, i.e., $\phi <
-360^{\circ}$, and $\gamma^{\circ} < \phi_0 \vee \gamma^{\circ} >
-\phi_1$, |v| is outside the volume defined by the torus. If |v| is not
-outside the torus, we check if |v| is outside the volume of the
-tube. Finally, if none of the previous conditions were satisfied, we
-can be certain that |v| is either inside the torus, or on the
-surface. To decide which is valid, we do a final surface test.
+360^{\circ}$, we check if $\gamma$ is outside the range defined by
+$\phi_0$ and $\phi_1$. If $\gamma$ is not outside the range, we check
+if |v| is outside the volume of the tube. Finally, if none of the
+previous conditions were satisfied, we can be certain that |v| is
+either inside the torus, or on the surface. To decide which is valid,
+we do a final surface test.
+
+Notice that the function |angle_outside_rangle()| implicitly tests if
+the torus is partial (i.e., we do not need to test |p->t.phi < 360.0|
+explicitly).
 
 @<Function to test containment inside a torus@>=
 Containment is_inside_torus(Primitive *p, vect3d *v)
@@ -2392,8 +2432,7 @@ Containment is_inside_torus(Primitive *p, vect3d *v)
 	if (delta < p->t.r0 || delta > p->t.r1) return OUTSIDE; /* check radial
 	containment on $xz$-plane */
 	@<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>;
-	if (p->t.phi < 360.0 && (gamma_deg < p->t.phi_start ||
-	gamma_deg > p->t.phi_end))
+	if (angle_outside_range(gamma_deg, p->t.phi_start, p->t.phi_end))
                 return OUTSIDE;
 	@<Check if |v| is outside the tube@>;
 	@<Check if |v| is on the surface of the tube@>;
@@ -2428,8 +2467,7 @@ volume defined by the tube.
 @<Calculate radial distance of |v| from $c$@>;
 if (radial > p->t.minor) return OUTSIDE;
 @<Calculate the radial angle of |v| on the cross section from $c$@>;
-if (p->t.theta < 360.0 && (tau < p->t.theta_start || tau >
-        p->t.theta_end)) return OUTSIDE;
+if (angle_outside_range(tau, p->t.theta_start, p->t.theta_end)) return OUTSIDE;
 
 @ @<Calculate point $c$ on the center of the tube at $\gamma$@>=
 cx = delta * cos(gamma);
@@ -2604,6 +2642,7 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 @<Function to test containment inside a block@>;
 @<Function to test containment inside a sphere@>;
 @<Function to test containment inside a cylinder@>;
+@<Function to check if an angle lies outside a supplied range@>;
 @<Function to test containment inside a torus@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
