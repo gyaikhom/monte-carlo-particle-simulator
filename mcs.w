@@ -1483,6 +1483,7 @@ combined readily with other measurements in the same category.
 @<Structure for translation parameters@>=
 struct translation_parameters {
        vect3d displacement; /* displacement of solid's origin */
+       double matrix[4][4]; /* inverse translation matrix */
 };
 
 @ @<Read translation operation@>=
@@ -1554,6 +1555,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 	leaf_node->leaf.t.displacement.x = op_x;
 	leaf_node->leaf.t.displacement.y = op_y;
 	leaf_node->leaf.t.displacement.z = op_z;
+        @<Set up the matrix for inverse translation@>;
 }
 
 @ @<Exit after cleanup: failed to create leaf node@>=
@@ -1596,6 +1598,7 @@ struct rotation_parameters {
        double theta; /* angle of rotation in radians */
        vect3d axis; /* axis of rotation (unit vector from origin of world
        coordinate frame) */
+       double matrix[4][4]; /* inverse rotation matrix */
 };
 
 @ @<Read rotation operation@>=
@@ -1651,6 +1654,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 	leaf_node->leaf.r.axis.x = op_x;
 	leaf_node->leaf.r.axis.y = op_y;
 	leaf_node->leaf.r.axis.z = op_z;
+        @<Set up the matrix for inverse rotation@>;
 }
 
 @ Finally, create the rotation operator node, and attach the target
@@ -1679,6 +1683,7 @@ equal. This is referred to as {\sl uniform scaling}@^uniform scaling@>.
 @<Structure for scaling parameters@>=
 struct scaling_parameters {
        vect3d scale; /* scaling factor */
+       double matrix[4][4]; /* inverse scaling matrix */
 };
 
 @ @<Read scaling operation@>=
@@ -1732,6 +1737,7 @@ if ((leaf_node = create_csg_node()) == NULL) {
 	leaf_node->leaf.s.scale.x = op_x;
 	leaf_node->leaf.s.scale.y = op_y;
 	leaf_node->leaf.s.scale.z = op_z;
+	@<Set up the matrix for inverse scaling@>;
 }
 
 @ Finally, create the scaling operator node, and attach the target
@@ -1741,7 +1747,8 @@ solid and the parameter node.
 if ((internal_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
-        internal_node->op = SCALE; /* this is an operator internal node */
+        internal_node->op = SCALE; /* this is an operator internal
+	node */
         @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
 	++csg_tree.num_scale;
@@ -1814,6 +1821,7 @@ int read_geometry(const char *fname)
 {
 	FILE *f;
 	char c;
+        @<Variables used for handling rotation operators@>;
 	@<Open input geometry file@>;
 	@<Initialise the hash table of solids@>;
 	while ((c = fgetc(f)) != EOF) {
@@ -2536,18 +2544,145 @@ default: break; /* do nothing */
 }
 
 @*2 Containment inside transformed or translated solids.
+Let $T_i$ represent a solid transformation (translation, rotation, or
+scaling), and let $T^{-1}_i$ represent its inverse. Furthermore, let
+$T = \{T_0, \ldots, T_{n-1}\}$ represent an ordered sequence of $n$
+transformations. If $s$ represents a solid, and $s'$ represents the
+solid after applying $T$ to $s$, in ascending order starting with
+$T_0$, and if $v'$ represents the result of applying to a vector $v$
+the inverse of the transformations in $T$ in descending order starting
+with $T^{-1}_{n-1}$, then: Checking if $v$ lies inside the volume
+defined by $s'$, is equivalent to checking if $v'$ lies inside
+$s$.
 
-@ @<Test containment after transformation or translation@>=
+This significantly simplifies the testing of points using the CSG
+tree, because 1) it is easier to calculate $v'$ from $v$, and 2)
+containment testing is easier with $s$ than it is with $s'$.
+
+@<Test containment after transformation or translation@>=
 switch(root->op) {
-case TRANSLATE:
+case TRANSLATE: @<Apply to point vector the inverse of translation@>;
         break;
-case ROTATE:
+case ROTATE: @<Apply to point vector the inverse of rotation@>;
         break;
-case SCALE:
+case SCALE: @<Apply to point vector the inverse of scaling@>;
         break;
 default:
         printf("unknown\n");
 }
+
+@ The inverse translation matrix $T^{-1}$ for a translation with
+displacement vector $(x, y, z)$ is given by:
+
+$T^{-1} = \left(\matrix{1.0 & 0.0 & 0.0 & -x\cr
+0.0 & 1.0 & 0.0 & -y\cr
+0.0 & 0.0 & 1.0 & -z\cr
+0.0 & 0.0 & 0.0 & 1\cr
+}\right)$
+
+The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
+using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse translation@>=
+leaf_node->leaf.t.matrix[0][0] = 1.0;
+leaf_node->leaf.t.matrix[0][1] = 0.0;
+leaf_node->leaf.t.matrix[0][2] = 0.0;
+leaf_node->leaf.t.matrix[0][3] = -op_x; /* inverse $x$-axis translation */
+leaf_node->leaf.t.matrix[1][0] = 0.0;
+leaf_node->leaf.t.matrix[1][1] = 1.0;
+leaf_node->leaf.t.matrix[1][2] = 0.0;
+leaf_node->leaf.t.matrix[1][3] = -op_y; /* inverse $y$-axis translation */
+leaf_node->leaf.t.matrix[2][0] = 0.0;
+leaf_node->leaf.t.matrix[2][1] = 0.0;
+leaf_node->leaf.t.matrix[2][2] = 1.0;
+leaf_node->leaf.t.matrix[2][3] = -op_z; /* inverse $z$-axis translation */
+leaf_node->leaf.t.matrix[3][0] = 0.0;
+leaf_node->leaf.t.matrix[3][1] = 0.0;
+leaf_node->leaf.t.matrix[3][2] = 0.0;
+leaf_node->leaf.t.matrix[3][3] = 1.0; /* homogeneous coordinate */
+
+@  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
+radians about the axis specified by a unit vector@^unit vector@> $u
+= (x, y, z)$ is given by:
+
+$R^{-1} = \left(\matrix{tx^2 + c & txy + sz & txz - sy & 0.0\cr
+txy - sz & ty^2 + c & tyz + sx & 0.0\cr
+txz + sy & tyz - sx & tz^2 + c & 0.0\cr
+0.0 & 0.0 & 0.0 & 1.0\cr
+}\right)$
+
+\noindent where, $c = \cos(\theta)$, $s = \sin(\theta)$, and $t = 1 -
+\cos(\theta)$.
+
+@<Variables used for handling rotation operators@>=
+double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
+
+@ The matrix $R^{-1}$ is stored in the two dimensional
+array |matrix| using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse rotation@>=
+sine = sin(op_theta);
+cosine = cos(op_theta);
+t = 1.0 - cosine;
+tx = t * op_x;
+ty = t * op_y;
+tz = t * op_z;
+txy = tx * op_y;
+txz = tx * op_z;
+tyz = ty * op_z;
+sx = sine * op_x;
+sy = sine * op_y;
+sz = sine * op_z;
+leaf_node->leaf.r.matrix[0][0] = tx * op_x + cosine;
+leaf_node->leaf.r.matrix[0][1] = txy + sz;
+leaf_node->leaf.r.matrix[0][2] = txz - sy;
+leaf_node->leaf.r.matrix[0][3] = 0.0;
+leaf_node->leaf.r.matrix[1][0] = txy - sz;
+leaf_node->leaf.r.matrix[1][1] = ty * op_y + cosine;
+leaf_node->leaf.r.matrix[1][2] = tyz + sx;
+leaf_node->leaf.r.matrix[1][3] = 0.0;
+leaf_node->leaf.r.matrix[2][0] = txz + sy;
+leaf_node->leaf.r.matrix[2][1] = tyz - sx;
+leaf_node->leaf.r.matrix[2][2] = tz * op_z + cosine;
+leaf_node->leaf.r.matrix[2][3] = 0.0;
+leaf_node->leaf.r.matrix[3][0] = 0.0;
+leaf_node->leaf.r.matrix[3][1] = 0.0;
+leaf_node->leaf.r.matrix[3][2] = 0.0;
+leaf_node->leaf.r.matrix[3][3] = 1.0; /* homogeneous coordinate */
+
+@ The inverse scaling matrix $S^{-1}$ for a scaling with
+scaling factors $(x, y, z)$ is given by:
+
+$S^{-1} = \left(\matrix{1/x & 0.0 & 0.0 & 0.0\cr
+0.0 & 1/y & 0.0 & 0.0\cr
+0.0 & 0.0 & 1/z & 0.0\cr
+0.0 & 0.0 & 0.0 & 1\cr
+}\right)$
+
+The matrix $S^{-1}$ is stored in the two dimensional array |matrix|
+using {\sl row-major}@^row-major@> form.
+
+@<Set up the matrix for inverse scaling@>=
+leaf_node->leaf.s.matrix[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
+leaf_node->leaf.s.matrix[0][1] = 0.0;
+leaf_node->leaf.s.matrix[0][2] = 0.0;
+leaf_node->leaf.s.matrix[0][3] = 0.0;
+leaf_node->leaf.s.matrix[1][0] = 0.0;
+leaf_node->leaf.s.matrix[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
+leaf_node->leaf.s.matrix[1][2] = 0.0;
+leaf_node->leaf.s.matrix[1][3] = 0.0;
+leaf_node->leaf.s.matrix[2][0] = 0.0;
+leaf_node->leaf.s.matrix[2][1] = 0.0;
+leaf_node->leaf.s.matrix[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
+leaf_node->leaf.s.matrix[2][3] = 0.0;
+leaf_node->leaf.s.matrix[3][0] = 0.0;
+leaf_node->leaf.s.matrix[3][1] = 0.0;
+leaf_node->leaf.s.matrix[3][2] = 0.0;
+leaf_node->leaf.s.matrix[3][3] = 1.0; /* homogeneous coordinate */
+
+@ @<Apply to point vector the inverse of translation@>=
+@ @<Apply to point vector the inverse of rotation@>=
+@ @<Apply to point vector the inverse of scaling@>=
 
 @*1 Find the list of potential solid containers.
 
