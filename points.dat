@@ -1,0 +1,80 @@
+# This file is used for the validation of containment testing.
+# Each line represents a test-case, and only one test case is
+# allowed per line. The parameters for the test are supplied
+# as follows:
+#
+# <character>("<name>" <x> <y> <z>)
+#
+# Where, <character> is one of 'i', 's', or 'o', such that
+#     i - inside test,
+#     s - surface test, and
+#     o - outside test.
+#
+# The values <x>, <y>, and <z> are doubles which respectively
+# give the x, y, and z components of a vector in the world
+# coordinate frame. This vector specifies the location of the
+# point that we wish to test, against the solid named <name>.
+#
+# E.g, the first line represents an "inside test", where we
+# are checking if the origin (0.0, 0.0, 0.0) is inside the
+# solid named "B0".
+
+# Block
+i("B0" 0.0 0.0 0.0)
+i("B0" 5.0 5.0 5.0)
+o("B0" 100.0 0.0 0.0)
+s("B0" 10.0 0.0 0.0)
+s("B0" -10.0 0.0 0.0)
+s("B0" 0.0 -10.0 0.0)
+s("B0" 0.0 10.0 0.0)
+s("B0" 0.0 0.0 -10.0)
+s("B0" 0.0 0.0 10.0)
+
+# Sphere
+i("S0" 0.0 0.0 0.0)
+i("S0" 5.0 5.0 5.0)
+i("S0" 5.25 8.50903525 0.0)
+i("S0" 5.25 8.50903525 0.0)
+i("S0" 5.25321989 8.50 0.0)
+i("S0" 5.25321989 8.50 0.0)
+o("S0" 100.0 0.0 0.0)
+o("S0" 5.25321989 8.50903525 0.0)
+o("S0" 5.25321989 8.50903525 0.0)
+s("B0" 10.0 0.0 0.0)
+s("B0" -10.0 0.0 0.0)
+s("B0" 0.0 -10.0 0.0)
+s("B0" 0.0 10.0 0.0)
+s("B0" 0.0 0.0 -10.0)
+s("B0" 0.0 0.0 10.0)
+
+# Cylinder
+i("C0" 0.0 0.0 0.0)
+i("C0" 5.0 5.0 5.0)
+i("C0" 5.25 0.0 8.50903525)
+i("C0" 5.25321989 0.0 8.50)
+o("C0" 100.0 0.0 0.0)
+o("C0" 0.0 100.0 0.0)
+o("C0" 0.0 -100.0 0.0)
+o("C0" 5.25321989 0.0 8.50903525)
+o("C0" 5.25321989 0.0 8.50903525)
+s("C0" 10.0 0.0 0.0)
+s("C0" -10.0 0.0 0.0)
+s("C0" 0.0 -10.0 0.0)
+s("C0" 0.0 10.0 0.0)
+s("C0" 0.0 0.0 -10.0)
+s("C0" 0.0 0.0 10.0)
+
+# Torus
+i("T0" 10.0 0.0 0.0)
+i("T0" 5.25321989 0.0 8.50903525)
+i("T0" 5.25321989 1.9999 8.50903525)
+o("T0" 0.0 0.0 0.0)
+o("T0" -7.999999 0.0 0.0)
+o("T0" -12.000001 0.0 0.0)
+s("T0" 8.0 0.0 0.0)
+s("T0" 12.0 0.0 0.0)
+s("T0" 5.25321989 2.0 8.50903525)
+s("T0" 10.0 2.0 0.0)
+s("T0" -8.0 0.0 0.0)
+s("T0" -12.0 0.0 0.0)
+s("T0" -10.0 -2.0 0.0)

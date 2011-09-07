@@ -93,31 +93,18 @@ undergoing a {\sl depth-first tree traversal}@^depth-first traversal@>.
 @** The main program.
 
 @p
+@h
+@<Include preamble for applications@>@/
+
+@ @<Include preamble for applications@>=
 @<Include system libraries@>@/
 @<Global data structures@>@/
 @<Global variables@>@/
 @<Global functions@>@/
-@<Start application@>@/
-
-@ @<Start application@>=
-int main(int argc, char *argv[])
-{
-	@<Parse command line arguments@>;
-	@<Process input files@>;
-	@<Create physics tables@>;
-	/* Create and process events */
-	print_csg_tree(csg_tree.root, 0);
-	@<Clean up the system@>;
-	return 0;
-}
 
 @ @<Parse command line arguments@>=
 
 @ @<Process input files@>=
-if (read_geometry("test.geom")) {
-        fprintf(stderr, "Application will now exit...\n");
-        exit(1);
-}
 
 @ @<Create physics tables@>=
 
@@ -132,58 +119,152 @@ destroy_csg_tree(csg_tree.root);
 @** Vectors.
 
 @<Definition of a three-dimensional vector@>=
-struct vect3d_struct {
-       double x, y, z;
-};
-typedef struct vect3d_struct vect3d;
+typedef double vect3d[4];
 
-@ @<Calculate vector magnitude@>=
-double vect3d_magnitude(vect3d *v)
+@ Function |vect3d_zero(v)| sets all components of the vector |v| to
+zero, except for the homogeneous coordinate. Vector |v| is modified.
+@<Global functions@>=
+void vect3d_zero(vect3d v)
 {
-	return sqrt(v->x * v->x +
-		    v->y * v->y +
-		    v->z * v->z);
+	v[0] = v[1] = v[2] = 0.0;
+	v[3] = 1.0; /* homogeneous coordinate */
 }
 
-@ @<Calculate vector difference@>=
-vect3d vect3d_difference(vect3d *u, vect3d *v)
+@ Function |vect3d_homogenise(v)| ensures that the vector |v| is in
+homogeneous coordinates, with the $w$ component set to 1.0. Vector |v|
+is modified.
+@<Global functions@>=
+void vect3d_homogenise(vect3d v)
 {
-	vect3d r;
-	r.x = u->x - v->x;
-	r.y = u->y - v->y;
-	r.z = u->z - v->z;
-	return r;
+	if (v[3] == 1.0) return; /* already homogenised */
+	if (v[3] != 0.0) {
+	        v[0] /= v[3];
+	        v[1] /= v[3];
+	        v[2] /= v[3];
+        }
+	v[3] = 1.0;
 }
 
-@ Function |vect3d_distance(u, v)| calculates the distance between the
-three-dimensional points defined by the vectors |u| and |v|.
+@ Function |vect3d_copy(u,v)| copies all of the components of vector
+|v| to vector |u|. Vector |v| is left unmodified.
+@<Global functions@>=
+void vect3d_copy(vect3d u, vect3d v)
+{
+	u[0] = v[0];
+        u[1] = v[1];
+        u[2] = v[2];
+	u[3] = v[3];
+}
 
-@<Calculate vector distance@>=
-double vect3d_distance(vect3d *u, vect3d *v)
+@ Function |vect3d_magnitude(v)| calculates the magnitude of the
+vector |v|. Vector |v| is left unmodified.
+@<Global functions@>=
+double vect3d_magnitude(vect3d v)
+{
+	return sqrt(v[0] * v[0] +
+		    v[1] * v[1] +
+		    v[2] * v[2]);
+}
+
+@ Function |vect3d_print(v,f)| prints the components of vector
+|v| to the I/O stream |f|. Vector |v| is left unmodified.
+@<Global functions@>=
+void vect3d_print(vect3d v, FILE *f)
+{
+	fprintf(f, "(%lf, %lf, %lf)", v[0], v[1], v[2]);
+}
+
+@ Function |vect3d_distance(v)| normalise the vector |v| and stores
+the result in |r|. Vector |v| is left unmodified.
+@<Global functions@>=
+void vect3d_normalize(vect3d v, vect3d r)
+{
+	double m = vect3d_magnitude(v);
+	if (m > 0.0) {
+		r[0] = v[0] / m;
+		r[1] = v[1] / m;
+		r[2] = v[2] / m;
+	} else {
+		r[0] = 0.0;
+		r[1] = 0.0;
+		r[2] = 0.0;
+	}
+}
+
+@ Function |vect3d_difference(u,v,r)| calculates the difference
+of vector |v| from vector |u|, and stores the result in |r|.
+Vectors |u| and |v| are left unmodified.@^vector difference@>
+@<Global functions@>=
+void vect3d_difference(vect3d u, vect3d v, vect3d r)
+{
+	r[0] = u[0] - v[0];
+	r[1] = u[1] - v[1];
+	r[2] = u[2] - v[2];
+}
+
+@ Function |vect3d_dot(u,v)| returns the {\sl dot} (or, {\sl
+scalar}) product of the two vectors |u| and |v|. Vectors |u| and |v|
+are left unmodified.@^dot product@>@^scalar product@>
+@<Global functions@>=
+double vect3d_dot(vect3d u, vect3d v)
+{
+	double t = 0.0;
+	t = u[0] * v[0];
+	t += u[1] * v[1];
+	t += u[2] * v[2];
+	return t;
+}
+
+@ Function |vect3d_cross(u,v,r)| calculates the {\sl cross} product
+from vector |u| to vector |v|, and stores the result in |r|. Vectors
+|u| and |v| are left unmodified.@^cross product@>
+@<Global functions@>=
+void vect3d_cross(vect3d u, vect3d v, vect3d r)
+{
+	r[0] = (u[1] * v[2] - u[2] * v[1]);
+	r[1] = (u[2] * v[0] - u[0] * v[2]);
+	r[2] = (u[0] * v[1] - u[1] * v[0]);
+}
+
+@ Function |vect3d_angle_radian(u,v)| returns the angle $\theta$ (in
+radian) between the two vectors |u| and |v|, where rotation started
+at vector |u|. The value of $\theta$ is in the range $[0, 2\pi]$.
+Vectors |u| and |v| are left unmodified.
+@<Global functions@>=
+double vect3d_angle_radian(vect3d u, vect3d v)
+{
+        vect3d a, b, c;
+        vect3d_normalize(u, a);
+	vect3d_normalize(v, b);
+        double angle = acos(vect3d_dot(a, b));
+        vect3d_cross(u, v, c);
+	if (c[3] < 0.0) return (TWICE_PI - angle);
+	return angle;
+}
+
+@ Function |vect3d_angle_degree(u,v)| returns the angle $\theta$ (in
+degrees) between the two vectors |u| and |v|, where rotation started
+at vector |u|. The value of $\theta$ is in the range $[0^\circ, 
+360^\circ]$.  Vectors |u| and |v| are left unmodified.
+@<Global functions@>=
+double vect3d_angle_degree(vect3d u, vect3d v)
+{
+	return RADIAN_TO_DEGREE * vect3d_angle_radian(u, v);
+}
+
+@ Function |vect3d_distance(u, v)| returns the distance between the
+three-dimensional points represented by the vectors |u| and
+|v|. Vectors |u| and |v| are left unmodified.
+@<Global functions@>=
+double vect3d_distance(vect3d u, vect3d v)
 {
 	double x, y, z;
-	x = u->x - v->x;
-	y = u->y - v->y;
-	z = u->z - v->z;
+	x = u[0] - v[0];
+	y = u[1] - v[1];
+	z = u[2] - v[2];
 	return sqrt(x * x + y * y + z * z);
 }
 
-@ @<Normalise a vector@>=
-vect3d vect3d_normalize(vect3d *v)
-{
-	vect3d t;
-	double m = vect3d_magnitude(v);
-	if (m > 0.0) {
-		t.x = v->x / m;
-		t.y = v->y / m;
-		t.z = v->z / m;
-	} else {
-		t.x = 0.0;
-		t.y = 0.0;
-		t.z = 0.0;
-	}
-	return t;
-}
 
 @** Particle.
 A {\sl particle}@^particle@> is the lowest-level data structure that
@@ -390,9 +471,9 @@ typedef struct particle_gun_struct Particle_gun;
 void reset_particle_gun()
 {
         particle_gun.num_particles = 0;
-	particle_gun.position = zero_vector;
-	particle_gun.momentum = zero_vector;
-	particle_gun.polarisation = zero_vector;
+	vect3d_zero(particle_gun.position);
+	vect3d_zero(particle_gun.momentum);
+	vect3d_zero(particle_gun.polarisation);
 	particle_gun.energy = 0.0;
 	particle_gun.charge = 0.0;
 }
@@ -417,19 +498,19 @@ void set_pg_num_particles(uint32_t n)
 @ @<Set position of particle gun@>=
 void set_pg_position(vect3d position)
 {
-	particle_gun.position = position;
+	vect3d_copy(particle_gun.position, position);
 }
 
 @ @<Set momentum of particle gun@>=
 void set_pg_momentum(vect3d momentum)
 {
-	particle_gun.momentum = momentum;
+	vect3d_copy(particle_gun.momentum, momentum);
 }
 
 @ @<Set polarisation of particle gun@>=
 void set_pg_polarisation(vect3d polarisation)
 {
-	particle_gun.polarisation = polarisation;
+	vect3d_copy(particle_gun.polarisation, polarisation);
 }
 
 @ @<Set energy of particle gun@>=
@@ -1552,9 +1633,9 @@ if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
-	leaf_node->leaf.t.displacement.x = op_x;
-	leaf_node->leaf.t.displacement.y = op_y;
-	leaf_node->leaf.t.displacement.z = op_z;
+	leaf_node->leaf.t.displacement[0] = op_x;
+	leaf_node->leaf.t.displacement[1] = op_y;
+	leaf_node->leaf.t.displacement[2] = op_z;
         @<Set up the matrix for inverse translation@>;
 }
 
@@ -1651,9 +1732,9 @@ if ((leaf_node = create_csg_node()) == NULL) {
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
 	leaf_node->leaf.r.theta = op_theta; /* angle of rotation */
-	leaf_node->leaf.r.axis.x = op_x;
-	leaf_node->leaf.r.axis.y = op_y;
-	leaf_node->leaf.r.axis.z = op_z;
+	leaf_node->leaf.r.axis[0] = op_x;
+	leaf_node->leaf.r.axis[1] = op_y;
+	leaf_node->leaf.r.axis[2] = op_z;
         @<Set up the matrix for inverse rotation@>;
 }
 
@@ -1734,9 +1815,9 @@ if ((leaf_node = create_csg_node()) == NULL) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
-	leaf_node->leaf.s.scale.x = op_x;
-	leaf_node->leaf.s.scale.y = op_y;
-	leaf_node->leaf.s.scale.z = op_z;
+	leaf_node->leaf.s.scale[0] = op_x;
+	leaf_node->leaf.s.scale[1] = op_y;
+	leaf_node->leaf.s.scale[2] = op_z;
 	@<Set up the matrix for inverse scaling@>;
 }
 
@@ -1999,28 +2080,30 @@ default:
 
 @ Print the parameters for transformation or translation.
 
-@d vect3d_comp(V) (V).x, (V).y, (V).z
 @<Print operator parameters@>=
 for (i = 0; i < indent; ++i) printf("\t");
 switch(temp->parent->op) {
 case TRANSLATE:
-        temp_vector = temp->leaf.t.displacement;
         printf("displacement: (%lf, %lf, %lf)\n",
-        vect3d_comp(temp_vector));
+        temp->leaf.t.displacement[0],
+	temp->leaf.t.displacement[1],
+	temp->leaf.t.displacement[2]);
 	print_4x4_matrix(temp->leaf.t.matrix, indent + 1);
 	printf("\n");
         break;
 case ROTATE:
-        temp_vector = temp->leaf.r.axis;
         printf("angle: %lf, axis: (%lf, %lf, %lf)\n",
         temp->leaf.r.theta,
-        vect3d_comp(temp_vector));
+        temp->leaf.r.axis[0],
+	temp->leaf.r.axis[1],
+	temp->leaf.r.axis[2]);
 	print_4x4_matrix(temp->leaf.r.matrix, indent + 1);
         break;
 case SCALE:
-        temp_vector = temp->leaf.s.scale;
         printf("scaling factor: (%lf, %lf, %lf)\n",
-        vect3d_comp(temp_vector));
+        temp->leaf.s.scale[0],
+	temp->leaf.s.scale[1],
+	temp->leaf.s.scale[2]);
 	print_4x4_matrix(temp->leaf.s.matrix, indent + 1);
         break;
 default:
@@ -2167,25 +2250,18 @@ inside the solid defined by the CSG tree rooted at |root|; otherwise,
 |false| is returned.
 
 @<Function to test if a vector is inside a solid@>=
-Containment solid_contains_vector(CSG_Node *root, vect3d *v)
+Containment solid_contains_vector(CSG_Node *root, vect3d v)
 {
-        double hv[4]; /* vector in homogeneous coordinate */
 	if (root == NULL || v == NULL) return INVALID;
-        @<Make supplied vector homogeneous@>;
-	return recursively_test_containment(root, hv);
+	vect3d_homogenise(v);
+	return recursively_test_containment(root, v);
 }
 
-@ @<Make supplied vector homogeneous@>=
-hv[0] = v->x;
-hv[1] = v->y;
-hv[2] = v->x;
-hv[3] = 1.0;
-
 @ @<Function to recursively test containment@>=
-Containment recursively_test_containment(CSG_Node *root, double v[])
+Containment recursively_test_containment(CSG_Node *root, vect3d v)
 {
         Containment left, right;
-        double r[4]; /* used during inverse trnasformation */
+        vect3d r; /* used during inverse transformation */
         if (root->op == SOLID) {
                 @<Test containment inside primitive solid@>;
 	} else {
@@ -2277,7 +2353,7 @@ default: return INVALID;
 return recursively_test_containment(root->internal.left, r);
 
 @ @<Function to apply the inverse of a transformation@>=
-void apply_inverse(double m[][4], double v[], double r[])
+void apply_inverse(double m[][4], vect3d v, vect3d r)
 {
     r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
     r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
@@ -2493,7 +2569,7 @@ of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
 @<Function to test containment inside a block@>=
-Containment is_inside_block(Primitive *p, double v[])
+Containment is_inside_block(Primitive *p, vect3d v)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
 	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
@@ -2527,7 +2603,7 @@ to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
 @<Function to test containment inside a sphere@>=
-Containment is_inside_sphere(Primitive *p, double v[])
+Containment is_inside_sphere(Primitive *p, vect3d v)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
@@ -2573,7 +2649,7 @@ Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
 @<Function to test containment inside a cylinder@>=
-Containment is_inside_cylinder(Primitive *p, double v[])
+Containment is_inside_cylinder(Primitive *p, vect3d v)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -2667,9 +2743,10 @@ the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
 @<Function to test containment inside a torus@>=
-Containment is_inside_torus(Primitive *p, double v[])
+Containment is_inside_torus(Primitive *p, vect3d v)
 {
-	double gamma, gamma_deg, tau, tau_deg, delta, radial, cx, cz, rx, rz;
+	double gamma, gamma_deg, tau, tau_deg, delta, radial;
+	vect3d tube_center, from_tube_center_to_v, temp;
 	@<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>;
 	if (delta < p->t.r0 || delta > p->t.r1) return OUTSIDE; /* check radial
 	containment on $xz$-plane */
@@ -2693,35 +2770,37 @@ double convert_radian_to_degree(double angle)
 delta = sqrt(v[0] * v[0] + v[2] * v[2]);
 
 @ @<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>=
-gamma = atan(v[2] / v[0]);
+vect3d_copy(temp, v);
+temp[1] = 0.0; /* angle must be on the $xz$-plane */
+gamma = vect3d_angle_radian(positive_xaxis_unit_vector, temp);
 gamma_deg = convert_radian_to_degree(gamma);
 
-@ We calculate the point $c$ on the center of the tube which subtends
+@ The vector |tube_center| gives the center of the tube which subtends
 $\gamma$ radians on the $xz$-plane. Using this point, we calculate
-|radial|, which is the radial distance of |v| from $c$. If |radial| is
-greater than the minor radius, |v| is again outside the torus. If the
-tube is partial, we must check if the angle $\tau$ subtended by the
-line from $c$ to |v| is outside $\theta$. If it is, $v$ is outside the
-volume defined by the tube.
+|radial|, which is the radial distance of |v| from |tube_center|. If
+|radial| is greater than the minor radius, |v| is outside the
+torus. If the tube is partial, we must check if the angle $\tau$
+subtended by the vector |from_tube_center_to_v|, from the |tube_center|
+to |v|, is outside $\theta$. If it is, |v| is outside the volume.
 
 @<Check if |v| is outside the tube@>=
-@<Calculate point $c$ on the center of the tube at $\gamma$@>;
-@<Calculate radial distance of |v| from $c$@>;
+@<Calculate vector |tube_center| on the center of the tube at $\gamma$@>;
+@<Calculate radial distance of |v| from |tube_center|@>;
 if (radial > p->t.minor) return OUTSIDE;
-@<Calculate the radial angle of |v| on the cross section from $c$@>;
+@<Calculate the radial angle of |v| on the cross-section at |tube_center|@>;
 if (angle_outside_range(tau, p->t.theta_start, p->t.theta_end)) return OUTSIDE;
 
-@ @<Calculate point $c$ on the center of the tube at $\gamma$@>=
-cx = delta * cos(gamma);
-cz = delta * sin(gamma);
+@ @<Calculate vector |tube_center| on the center of the tube at $\gamma$@>=
+tube_center[0] = p->t.major * cos(gamma);
+tube_center[1] = 0.0; /* the circular tube center always lies on the $xz$-plane */
+tube_center[2] = p->t.major * sin(gamma);
 
-@ @<Calculate radial distance of |v| from $c$@>=
-rx = v[0] - cx;
-rz = v[2] - cz;
-radial = sqrt(rx * rx + rz* rz + v[2] * v[2]);
+@ @<Calculate radial distance of |v| from |tube_center|@>=
+vect3d_difference(v, tube_center, from_tube_center_to_v);
+radial = vect3d_magnitude(from_tube_center_to_v);
 
-@ @<Calculate the radial angle of |v| on the cross section from $c$@>=
-tau = asin(v[2] / radial);
+@ @<Calculate the radial angle of |v| on the cross-section at |tube_center|@>=
+tau = vect3d_angle_radian(tube_center, from_tube_center_to_v);
 tau_deg = convert_radian_to_degree(tau);
 
 @ @<Check if |v| is on the surface of the tube@>=
@@ -2734,6 +2813,86 @@ if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
 
 @*1 Find the list of potential solid containers.
 
+@** Testing.
+
+@ @(test_input.c@>=
+@h
+@<Include preamble for applications@>;
+int main(int argc, char *argv[])
+{
+        if (read_geometry("input.dat"))
+                exit(1); /* fail */
+	@<Clean up the system@>;
+	return 0;
+}
+
+@ @(test_containment.c@>=
+@h
+@<Include preamble for applications@>;
+int main(int argc, char *argv[])
+{
+        FILE *f;
+        vect3d point;
+	int n, line_no;
+	Containment flag;
+	char c;
+	bool t;
+        if (read_geometry("input.dat")) exit(1);
+	print_csg_tree(csg_tree.root, 0);
+	if ((f = fopen("points.dat", "r")) == NULL)
+               exit(1);
+        line_no = 1;
+	while ((c = fgetc(f)) != EOF) {
+	       @<Discard comments, white spaces and empty lines@>;
+               @<Process containment test-case@>;
+	       ++line_no;
+        }
+        fclose(f);
+	@<Clean up the system@>;
+	return 0;
+}
+
+@ @<Process containment test-case@>=
+@<Read parameters for the test-case@>;
+@<Validate the test-case@>;
+
+@ @<Read parameters for the test-case@>=
+n = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+        op_solid, &point[0], &point[1], &point[2]);
+if (n == EOF || n != 4) {
+        printf("Invalid %s test at line %d\n",@/
+        c == 'i' ? "inside" :
+            (c == 'o' ? "outside" : "surface"), line_no);
+        exit(1);
+}
+
+@ @<Validate the test-case@>=
+temp_node = find_solid(op_solid);
+if (temp_node == NULL) {
+        printf("[%d] Solid '%s' not found\n", line_no, op_solid);
+} else {
+        vect3d_homogenise(point);
+        flag = solid_contains_vector(temp_node, point);
+        t = false;
+        switch(flag) {
+        case INSIDE:
+                if (c == 'i') t = true;
+                break;
+        case SURFACE:
+                if (c == 's') t = true;
+                break;
+        case OUTSIDE:
+                if (c == 'o') t = true;
+                break;
+        case INVALID:
+                printf("error: ");
+                break;
+        }
+	printf("[%4d] %s test: %s\n", line_no,@/
+            c == 'i' ? "inside" :
+                (c == 'o' ? "outside" : "surface"),
+            t ? "OK" : "Fail");
+}
 
 @** Error handling.
 There are three message categories, which are printed using the
@@ -2771,7 +2930,9 @@ uint32_t num_vertices = 5;
 uint32_t num_particles = 5;
 Particle_gun particle_gun;
 Particle_stack particle_stack;
-vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
+vect3d temp_vector;
+vect3d zero_vector = { 0.0, 0.0, 0.0, 1.0 };
+vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 
 @ @<Global data structures@>=
 @<Type definitions@>;
@@ -2796,10 +2957,6 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 
 
 @ @<Global functions@>=
-@<Calculate vector magnitude@>;
-@<Calculate vector difference@>
-@<Calculate vector distance@>;
-@<Normalise a vector@>;
 @<Function to convert radian to degree@>;
 @<Create particle@>;
 @<Create vertex@>;
