@@ -2007,21 +2007,26 @@ case TRANSLATE:
         temp_vector = temp->leaf.t.displacement;
         printf("displacement: (%lf, %lf, %lf)\n",
         vect3d_comp(temp_vector));
+	print_4x4_matrix(temp->leaf.t.matrix, indent + 1);
+	printf("\n");
         break;
 case ROTATE:
         temp_vector = temp->leaf.r.axis;
         printf("angle: %lf, axis: (%lf, %lf, %lf)\n",
         temp->leaf.r.theta,
         vect3d_comp(temp_vector));
+	print_4x4_matrix(temp->leaf.r.matrix, indent + 1);
         break;
 case SCALE:
         temp_vector = temp->leaf.s.scale;
         printf("scaling factor: (%lf, %lf, %lf)\n",
         vect3d_comp(temp_vector));
+	print_4x4_matrix(temp->leaf.s.matrix, indent + 1);
         break;
 default:
-        printf("unknown\n");
+        printf("unknown");
 }
+printf("\n");
 
 @ @<Print intermediate node information@>=
 for (i = 0; i < indent; ++i) printf("\t");
@@ -2164,7 +2169,7 @@ inside the solid defined by the CSG tree rooted at |root|; otherwise,
 @<Function to test if a vector is inside a solid@>=
 Containment solid_contains_vector(CSG_Node *root, vect3d *v)
 {
-        double hv[4];
+        double hv[4]; /* vector in homogeneous coordinate */
 	if (root == NULL || v == NULL) return INVALID;
         @<Make supplied vector homogeneous@>;
 	return recursively_test_containment(root, hv);
@@ -2278,6 +2283,18 @@ void apply_inverse(double m[][4], double v[], double r[])
     r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
     r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
     r[3] = 1.0;
+}
+
+@ @<Function to print a 4x4 matrix@>=
+void print_4x4_matrix(double m[][4], uint32_t indent)
+{
+        int i, j, k;
+	for (i = 0; i < 4; ++i) {
+                for (k = 0; k < indent; ++k) printf("\t");
+                printf("| ");
+	        for (j = 0; j < 4; ++j) printf("%8.3lf ", m[i][j]);
+                printf("|\n");
+        }
 }
 
 @ The inverse translation matrix $T^{-1}$ for a translation with
@@ -2811,6 +2828,7 @@ vect3d temp_vector, zero_vector = { 0.0, 0.0, 0.0 };
 @<Find the solid associated with a specified |name|@>;
 @<Function to count number of primitive solids in a CSG tree@>;
 @<Function to destroy the CSG tree@>;
+@<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
 @<Read geometry from input file@>;
 @<Function to test containment inside a block@>;
