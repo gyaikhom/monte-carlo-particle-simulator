@@ -2352,6 +2352,8 @@ case SCALE:
         break;
 default: return INVALID;
 }
+vect3d_print(v, stderr);
+vect3d_print(r, stderr);
 return recursively_test_containment(root->internal.left, r);
 
 @ @<Function to apply the inverse of a transformation@>=

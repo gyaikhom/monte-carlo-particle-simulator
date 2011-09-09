@@ -1,6 +1,6 @@
-# Test input file for MCS
-# Written by: G. Yaikhom
-# Dated: 7 September 2011
+% Test input file for MCS
+% Written by: G. Yaikhom
+% Dated: 7 September 2011
 
 B("B0" 20.0 20.0 20.0)
 S("S0" 10.0)
@@ -34,6 +34,6 @@ u("u2" "u0" "u1")
 u("u6" "u2" "u5")
 
 S("S5" 10.0)
-t("t6" "S5" 0.0 0.0 50.0)
-r("r0" "t6" 45.0 0.0 1.0 0.0)
+t("t6" "S5" 50.0 0.0 0.0)
+r("r0" "t6" -45.0 0.0 1.0 0.0)
 u("u7" "u6" "r0")
