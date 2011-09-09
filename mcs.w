@@ -1858,7 +1858,7 @@ $$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
 B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
 u, i, d & Carry out a union, intersection, or difference.\cr
 t, r, s & Translate, rotate, or scale the solid.\cr
-\hash\ & Begin comment line. Stop at the first newline character.\cr 
+\%\ & Begin comment line. Stop at the first newline character.\cr 
 }}$$
 
 \smallskip
@@ -1939,8 +1939,10 @@ indentation of commands.
 @<Discard indentations@>;
 @<Discard empty lines@>;
 
-@ @<Discard comment lines@>=
-if (c == '#') {
+@ Comments begin with the `{\tt \%}' character, and end after the
+end-of-line character.
+@<Discard comment lines@>=
+if (c == '%') {
         while ((c = fgetc(f)) != EOF && c != '\n'); /* gobble comments */
 	if (c == EOF) break; /* done reading input file */
 }
@@ -2431,7 +2433,8 @@ double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
 array |matrix| using {\sl row-major}@^row-major@> form.
 
 @<Set up the matrix for inverse rotation@>=
-sine = sin(op_theta);
+op_theta *= DEGREE_TO_RADIAN;
+sine = -sin(op_theta);
 cosine = cos(op_theta);
 t = 1.0 - cosine;
 tx = t * op_x;
