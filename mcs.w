@@ -1120,7 +1120,7 @@ for short.
 struct csg_tree_struct {
        @<House-keeping data@>;
        CSG_Node *root; /* pointer to the CSG root */
-       CSG_Node *table[MAX_CSG_NODES]; /* hash table of solids */
+       CSG_Node *table[MAX_CSG_NODES]; /* hash table of nodes */
 };
 typedef struct csg_tree_struct CSG_Tree;
 
@@ -1213,6 +1213,7 @@ CSG_Tree csg_tree; /* defines solids in the simulation world */
 @ Before using the hash table, it must be initialised.
 
 @<Initialise the hash table of solids@>=
+@<Reset list of solids@>;
 @<Reset the hash table of solids@>;
 
 @ Reset the hash table, which unregisters all of the solids. Since the
@@ -1835,6 +1836,59 @@ if ((internal_node = create_csg_node()) == NULL) {
 	++csg_tree.num_scale;
 }
 
+@*2 Registering a solid.
+A CSG tree defines a solid by specifying how primitive solids are
+combined using transformation, translation, and boolean
+operators. The solid thus defined is represented by the root of the
+CSG tree, and any test against the solid must begin at this
+root. Hence, if we define $n$ solids in the simulation world,
+each of these solids must be represented by $n$ CSG trees. We maintain
+a list of CSG solids using a table of pointers to CSG root nodes.
+
+@d MAX_CSG_SOLIDS 32
+@<Global variables@>=
+CSG_Node *solids[MAX_CSG_SOLIDS];
+uint32_t nsolids;
+
+@ @<Reset list of solids@>=
+nsolids = 0;
+for (i = 0; i < MAX_CSG_SOLIDS; ++i) solids[i] = NULL;
+
+@ @<Read registration operation@>=
+@<Read target solid for registration@>;
+@<Find the target solid for the operation@>;
+@<Register the target solid@>; 
+
+@ To separate solids from intermediate solid components, we must
+explicitly register each solid (represented by a node in the single
+CSG tree) using the following format:
+
+\smallskip
+
+(``target'')
+
+\smallskip
+
+\noindent where, ``target'' is the name of the solid to register.
+
+@<Read target solid for registration@>=
+read_count = fscanf(f, "(\"%[^\"]\")\n", op_solid);
+++input_file_current_line;
+if (read_count == EOF || read_count != 1)
+        @<Exit after cleanup: failed to read from file@>;
+
+@ @<Register the target solid@>=
+solids[nsolids++] = target_solid;
+printf("%d %s\n", nsolids, op_solid);
+
+@ @<Function to print all of the solids@>=
+void print_all_solids()
+{
+	int i;
+	for (i = 0; i < nsolids; i++)
+	        print_csg_tree(solids[i], 0);
+}
+
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
 the world is specified in the input file. The grammar for this input
@@ -1988,6 +2042,9 @@ case 'r':
 case 's':
         @<Read scaling operation@>;
         break;
+case '+':
+        @<Read registration operation@>;
+	break;
 default:
 	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
 	input_file_name, input_file_current_line, c);
@@ -2045,6 +2102,7 @@ void destroy_csg_tree(CSG_Node *temp) {
 
 @<Function to print the CSG tree@>=
 void print_csg_tree(CSG_Node *temp, uint32_t indent) {
+        int i;
         if (temp == NULL) return;
         if (temp->op == SOLID) {
                 @<Print primitive solid information@>;
@@ -2352,8 +2410,6 @@ case SCALE:
         break;
 default: return INVALID;
 }
-vect3d_print(v, stderr);
-vect3d_print(r, stderr);
 return recursively_test_containment(root->internal.left, r);
 
 @ @<Function to apply the inverse of a transformation@>=
@@ -2844,6 +2900,7 @@ int main(int argc, char *argv[])
 	bool t;
         if (read_geometry("input.dat")) exit(1);
 	print_csg_tree(csg_tree.root, 0);
+	print_all_solids();
 	if ((f = fopen("points.dat", "r")) == NULL)
                exit(1);
         line_no = 1;
@@ -2992,6 +3049,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to destroy the CSG tree@>;
 @<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
+@<Function to print all of the solids@>;
 @<Read geometry from input file@>;
 @<Function to test containment inside a block@>;
 @<Function to test containment inside a sphere@>;
