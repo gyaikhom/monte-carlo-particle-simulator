@@ -1213,7 +1213,7 @@ CSG_Tree csg_tree; /* defines solids in the simulation world */
 @ Before using the hash table, it must be initialised.
 
 @<Initialise the hash table of solids@>=
-@<Reset list of solids@>;
+reset_list_of_solids();
 @<Reset the hash table of solids@>;
 
 @ Reset the hash table, which unregisters all of the solids. Since the
@@ -1845,15 +1845,6 @@ root. Hence, if we define $n$ solids in the simulation world,
 each of these solids must be represented by $n$ CSG trees. We maintain
 a list of CSG solids using a table of pointers to CSG root nodes.
 
-@d MAX_CSG_SOLIDS 32
-@<Global variables@>=
-CSG_Node *solids[MAX_CSG_SOLIDS];
-uint32_t nsolids;
-
-@ @<Reset list of solids@>=
-nsolids = 0;
-for (i = 0; i < MAX_CSG_SOLIDS; ++i) solids[i] = NULL;
-
 @ @<Read registration operation@>=
 @<Read target solid for registration@>;
 @<Find the target solid for the operation@>;
@@ -1878,16 +1869,7 @@ if (read_count == EOF || read_count != 1)
         @<Exit after cleanup: failed to read from file@>;
 
 @ @<Register the target solid@>=
-solids[nsolids++] = target_solid;
-printf("%d %s\n", nsolids, op_solid);
-
-@ @<Function to print all of the solids@>=
-void print_all_solids()
-{
-	int i;
-	for (i = 0; i < nsolids; i++)
-	        print_csg_tree(solids[i], 0);
-}
+process_and_register_solid(target_solid);
 
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
@@ -2264,6 +2246,43 @@ goto error_invalid_file;
 @ @<Cleanup resources allocated to invalid geometry@>=
 fprintf(stderr, "Cleaning up resources...\n");
 @<Destroy the hash table of solids@>;
+
+
+@** Pre-processing the simulation world.
+To improve efficiency, the original CSG tree as defined by the input
+file must be pre-processed before starting the simulation. This
+processing takes place as new solids are registered with the
+system.
+
+@d MAX_CSG_SOLIDS 32
+@<Global variables@>=
+struct processed_csg_solids_struct {
+        uint32_t nsolids;
+        CSG_Node *solids[MAX_CSG_SOLIDS];
+} csg_solids;
+
+@ @<Function to reset list of solids@>=
+void reset_list_of_solids()
+{
+	int i;
+	csg_solids.nsolids = 0;
+	for (i = 0; i < MAX_CSG_SOLIDS; ++i)
+	        csg_solids.solids[i] = NULL;
+}
+
+@ @<Function to print all of the solids@>=
+void print_all_solids()
+{
+	int i;
+	for (i = 0; i < csg_solids.nsolids; i++)
+	        print_csg_tree(csg_solids.solids[i], 0);
+}
+
+@ @<Function to pre-process a CSG solid@>=
+void process_and_register_solid(CSG_Node *root)
+{
+	return;
+}
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -3049,6 +3068,8 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to destroy the CSG tree@>;
 @<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
+@<Function to pre-process a CSG solid@>;
+@<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
 @<Read geometry from input file@>;
 @<Function to test containment inside a block@>;
