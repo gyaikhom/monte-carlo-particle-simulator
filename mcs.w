@@ -850,7 +850,7 @@ Primitive *p; /* used during initialisation of primitive solids */
 CSG_Node *internal_node, *leaf_node, *temp_node;
 
 @ @<Initialise primitive block with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
        p->name, &p->b.length, &p->b.width, &p->b.height);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 4) {
@@ -927,7 +927,7 @@ discussed.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive sphere with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" %lf)",
        p->name, &p->s.radius);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 2) {
@@ -974,7 +974,7 @@ base radius 10.0 and height 20.0.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive cylinder with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)",
        p->name, &p->c.radius, &p->c.height);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 3) {
@@ -1071,7 +1071,7 @@ values of $360^{\circ}$, which signifie complete rotations.
 @<Register the primitive solid@>;
 
 @ @<Initialise primitive torus with relevant data@>=
-read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)",
        p->name, &p->t.phi, &p->t.phi_start, &p->t.theta,
        &p->t.theta_start, &p->t.major, &p->t.minor);
 ++input_file_current_line;
@@ -1200,7 +1200,6 @@ char name[MAX_LEN_SOLID_NAME]; /* from input geometry file */
 @<Information common to all CSG nodes@>=
 CSG_Node *parent; /* pointer to parent node */
 
-
 @*2 Solid registry.
 The {\sl solid registry}@^solid registry@> is a hash table where we
 store all of the existing solids, both primitive and
@@ -1265,8 +1264,8 @@ if (temp_node->op >= TRANSLATE)
 @ We store and retrieve solids using the following functions:
 
 $$\vcenter{\halign{\hfil # & # \hfil\cr
-|register_solid(n,s)| & Register the solid represented by CSG node |n| using the name |s|, and\cr
-|find_solid(s)| & Find the solid that is associated with the name |s|.\cr
+|register_csg_node(n,s)| & Register the solid represented by CSG node |n| using the name |s|, and\cr
+|find_csg_node(s)| & Find the solid that is associated with the name |s|.\cr
 }}$$
 
 Each of these functions uses a pseudo-random hash value $h$, which
@@ -1283,14 +1282,17 @@ hash function used in the {\sl Stanford Graph Base}
 @d HASH_MULT 314159 /* random multiplier */
 @d HASH_PRIME 516595003 /* the 27182818th prime; which is less than $2^{29}$ */
 
-@<Calculate the hash value |h| for the string pointed to by |name|@>=
-register long h;
-char *t = name;
-for (h = 0; *t; t++) {
-        h += (h ^ (h >> 1)) + HASH_MULT * (unsigned char) *t;
-	while (h >= HASH_PRIME) h -= HASH_PRIME;
+@<Function to calculate the hash value |h| of a string@>=
+long hash(const char *name, long ubound)
+{
+        register long h;
+        const char *t = name;
+        for (h = 0; *t; t++) {
+                h += (h ^ (h >> 1)) + HASH_MULT * (unsigned char) *t;
+	        while (h >= HASH_PRIME) h -= HASH_PRIME;
+        }
+        return (h % ubound);
 }
-h %= MAX_CSG_NODES;
 
 @ The function |register_solid| registers a primitive or
 intermediate solid using their unique name. If the supplied name is
@@ -1299,8 +1301,7 @@ otherwise, it returns a pointer to the solid to indicate success.
 
 @<Register a solid using a specified |name|@>=
 CSG_Node *register_solid(CSG_Node *solid, char *name) {
-	 @<Calculate the hash value |h| for the string pointed to by
-	 |name|@>;
+	 long h = hash(name, MAX_CSG_NODES);
 	 if (csg_tree.table[h] == NULL) {
                  strcpy(solid->name, name);
 	         csg_tree.table[h] = solid;
@@ -1316,10 +1317,8 @@ registered last is considered the root of the CSG tree.
 csg_tree.root = solid;
 
 @ @<Find the solid associated with a specified |name|@>=
-CSG_Node *find_solid(char *name) {
-	 @<Calculate the hash value |h| for the string pointed to by
-	 |name|@>;
-	 return csg_tree.table[h];
+CSG_Node *find_csg_node(char *name) {
+	 return csg_tree.table[hash(name, MAX_CSG_NODES)];
 }
 
 @ @<Create a CSG node@>=
@@ -1327,6 +1326,7 @@ CSG_Node *create_csg_node() {
         CSG_Node *temp;
 	if ((temp = (CSG_Node *) malloc(sizeof(CSG_Node))) == NULL)
 	        fprintf(stderr, "Failed to allocate memory\n");
+	@<Initialise affine matrix to identity@>;
         return temp;
 }
 
@@ -1369,7 +1369,7 @@ A")} finds the union of two solids named ``Cylinder A" and ``Torus A"
 and stores the result using the name ``U1".
 
 @ @<Read union operation@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 3)
@@ -1378,7 +1378,7 @@ if (read_count == EOF || read_count != 3)
 @<Create union operator node@>;
 
 @ @<Check that the target does not already exists@>=
-if ((target_solid = find_solid(op_target)) != NULL) {
+if ((target_solid = find_csg_node(op_target)) != NULL) {
         solid_name = op_target;
         @<Exit after cleanup: solid already exists@>;
 }
@@ -1397,7 +1397,7 @@ left and right subtrees point to these existing solids.
 @<Create new union operator node@>;
 
 @ @<Find solid that corresponds to the left-hand operand@>=
-if ((left_solid = find_solid(op_left)) == NULL) {
+if ((left_solid = find_csg_node(op_left)) == NULL) {
         solid_name = op_left;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1406,7 +1406,7 @@ if ((left_solid = find_solid(op_left)) == NULL) {
 goto no_solid_exists_exit_after_cleanup;
 
 @ @<Find solid that corresponds to the right-hand operand@>=
-if ((right_solid = find_solid(op_right)) == NULL) {
+if ((right_solid = find_csg_node(op_right)) == NULL) {
         solid_name = op_right;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1459,7 +1459,7 @@ A")} finds the intersection of two solids named ``Cylinder A" and ``Torus A"
 and stores the result using the name ``I1".
 
 @ @<Read intersection operation@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 3)
@@ -1517,7 +1517,7 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 ``Cylinder A", and stores the result using the name ``D1".
 
 @ @<Read difference operation@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 3)
@@ -1565,7 +1565,6 @@ combined readily with other measurements in the same category.
 @<Structure for translation parameters@>=
 struct translation_parameters {
        vect3d displacement; /* displacement of solid's origin */
-       double matrix[4][4]; /* inverse translation matrix */
 };
 
 @ @<Read translation operation@>=
@@ -1594,7 +1593,7 @@ units along the $z$ axis, and register this intermediate solid as
 ``T1''.
 
 @<Read translation parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 5)
@@ -1607,7 +1606,7 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_solid)) == NULL) {
+if ((target_solid = find_csg_node(op_solid)) == NULL) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1680,7 +1679,6 @@ struct rotation_parameters {
        double theta; /* angle of rotation in radians */
        vect3d axis; /* axis of rotation (unit vector from origin of world
        coordinate frame) */
-       double matrix[4][4]; /* inverse rotation matrix */
 };
 
 @ @<Read rotation operation@>=
@@ -1708,7 +1706,7 @@ radians relative to the $x$-axis in world coordinate frame and
 register this intermediate solid as ``R1''.
 
 @<Read rotation parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)",
 	   op_target, op_solid, &op_theta, &op_x, &op_y, &op_z);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 6)
@@ -1720,7 +1718,7 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_solid)) == NULL) {
+if ((target_solid = find_csg_node(op_solid)) == NULL) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1765,7 +1763,6 @@ equal. This is referred to as {\sl uniform scaling}@^uniform scaling@>.
 @<Structure for scaling parameters@>=
 struct scaling_parameters {
        vect3d scale; /* scaling factor */
-       double matrix[4][4]; /* inverse scaling matrix */
 };
 
 @ @<Read scaling operation@>=
@@ -1792,7 +1789,7 @@ of 2.0 and 3.0 respectively along the $y$ and $z$ axes in world
 coordinate frame and register this intermediate solid as ``S1''. 
 
 @<Read scaling parameters@>=
-read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)\n",
+read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 5)
@@ -1804,7 +1801,7 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_solid(op_solid)) == NULL) {
+if ((target_solid = find_csg_node(op_solid)) == NULL) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1863,13 +1860,13 @@ CSG tree) using the following format:
 \noindent where, ``target'' is the name of the solid to register.
 
 @<Read target solid for registration@>=
-read_count = fscanf(f, "(\"%[^\"]\")\n", op_solid);
+read_count = fscanf(f, "(\"%[^\"]\")", op_solid);
 ++input_file_current_line;
 if (read_count == EOF || read_count != 1)
         @<Exit after cleanup: failed to read from file@>;
 
 @ @<Register the target solid@>=
-process_and_register_solid(target_solid);
+process_and_register_solid(op_solid, target_solid);
 
 @*1 The geometry input file.
 The geometry of the solids and their placement and orientation within
@@ -1945,7 +1942,6 @@ int read_geometry(const char *fname)
 		@<Discard comments, white spaces and empty lines@>;
 	        @<Process input command@>;
 	}
-	@<Validate CSG tree@>;
 	fclose(f);
 	return 0;
 	
@@ -1979,7 +1975,8 @@ indentation of commands.
 end-of-line character.
 @<Discard comment lines@>=
 if (c == '%') {
-        while ((c = fgetc(f)) != EOF && c != '\n'); /* gobble comments */
+        while ((c = fgetc(f)) != EOF)
+                if (c == '\n') break; /* gobble comments */
 	if (c == EOF) break; /* done reading input file */
 }
 
@@ -2032,24 +2029,6 @@ default:
 	input_file_name, input_file_current_line, c);
         goto error_invalid_file;
 }
-
-@ The {\tt MCS} system builds the CSG tree {\sl
-bottom-up}@^bottom-up@>. It starts at the most fundamental level, the
-leaves of the CSG tree, where primitive solids are first
-created. Then, these primitive solids are combined using appropriate
-operators to compose intermediate solids. It continues combining
-primitive and intermediate solids recursively until the root of the
-expected CSG tree is reached. For a simulation world to be valid, all
-of the primitive solids defined in the CSG tree must be reachable from
-this root.
-
-@<Validate CSG tree@>=
-if (csg_tree.num_primitive != count_primitive_solids(csg_tree.root)) {
-        @<Exit after cleanup: invalid CSG tree@>;
-}
-
-@ @<Exit after cleanup: invalid CSG tree@>=
-goto invalid_csg_tree_exit_after_cleanup;
 
 @ We recursively travel the left and right subtrees.
 
@@ -2119,6 +2098,7 @@ case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf\n",
 default:
         printf("unknown\n");
 }
+print_4x4_matrix(temp->affine, indent + 1);
 
 @ Print the parameters for transformation or translation.
 
@@ -2126,27 +2106,27 @@ default:
 for (i = 0; i < indent; ++i) printf("\t");
 switch(temp->parent->op) {
 case TRANSLATE:
-        printf("displacement: (%lf, %lf, %lf)\n",
+        printf("displacement: (%lf, %lf, %lf)",
         temp->leaf.t.displacement[0],
 	temp->leaf.t.displacement[1],
 	temp->leaf.t.displacement[2]);
-	print_4x4_matrix(temp->leaf.t.matrix, indent + 1);
+	print_4x4_matrix(temp->affine, indent + 1);
 	printf("\n");
         break;
 case ROTATE:
-        printf("angle: %lf, axis: (%lf, %lf, %lf)\n",
+        printf("angle: %lf, axis: (%lf, %lf, %lf)",
         temp->leaf.r.theta,
         temp->leaf.r.axis[0],
 	temp->leaf.r.axis[1],
 	temp->leaf.r.axis[2]);
-	print_4x4_matrix(temp->leaf.r.matrix, indent + 1);
+	print_4x4_matrix(temp->affine, indent + 1);
         break;
 case SCALE:
-        printf("scaling factor: (%lf, %lf, %lf)\n",
+        printf("scaling factor: (%lf, %lf, %lf)",
         temp->leaf.s.scale[0],
 	temp->leaf.s.scale[1],
 	temp->leaf.s.scale[2]);
-	print_4x4_matrix(temp->leaf.s.matrix, indent + 1);
+	print_4x4_matrix(temp->affine, indent + 1);
         break;
 default:
         printf("unknown");
@@ -2177,6 +2157,7 @@ case SCALE:
 default:
         printf("unknown\n");
 }
+print_4x4_matrix(temp->affine, indent + 1);
 
 @ When we cannot recover from an error (e.g., incorrect input file),
 we must exit the system after cleaning up the resources that were
@@ -2191,7 +2172,6 @@ points and the corresponding error messages.
 @<Alert failure to create parameter node@>;
 @<Alert solid already exists@>;
 @<Alert solid does not exists@>;
-@<Alert invalid CSG tree@>;
 error_invalid_file:@/
 @<Cleanup resources allocated to invalid geometry@>;
 fclose(f);
@@ -2235,14 +2215,6 @@ fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
 	input_file_current_line, solid_name);
 goto error_invalid_file;
 
-@ @<Alert invalid CSG tree@>=
-invalid_csg_tree_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
-	"The CSG tree is invalid because some primitive "
-	"solids are detached\n", input_file_name,
-	input_file_current_line);
-goto error_invalid_file;
-
 @ @<Cleanup resources allocated to invalid geometry@>=
 fprintf(stderr, "Cleaning up resources...\n");
 @<Destroy the hash table of solids@>;
@@ -2256,9 +2228,14 @@ system.
 
 @d MAX_CSG_SOLIDS 32
 @<Global variables@>=
+struct solid_table_entry {
+       char name[MAX_LEN_SOLID_NAME];
+       CSG_Node *solid;
+};
+
 struct processed_csg_solids_struct {
         uint32_t nsolids;
-        CSG_Node *solids[MAX_CSG_SOLIDS];
+	struct solid_table_entry table[MAX_CSG_SOLIDS];
 } csg_solids;
 
 @ @<Function to reset list of solids@>=
@@ -2267,22 +2244,145 @@ void reset_list_of_solids()
 	int i;
 	csg_solids.nsolids = 0;
 	for (i = 0; i < MAX_CSG_SOLIDS; ++i)
-	        csg_solids.solids[i] = NULL;
+	        csg_solids.table[i].solid = NULL;
 }
 
 @ @<Function to print all of the solids@>=
 void print_all_solids()
 {
-	int i;
-	for (i = 0; i < csg_solids.nsolids; i++)
-	        print_csg_tree(csg_solids.solids[i], 0);
+	int i, j;
+	for (i = 0; i < MAX_CSG_SOLIDS; i++) {
+	        if (csg_solids.table[i].solid == NULL) continue;
+		printf("Solid %s:\n", csg_solids.table[i].name);
+		printf("\n");
+	        print_csg_tree(csg_solids.table[i].solid, 0);
+		printf("\n");
+		for (j = 0; j < 80; j++) printf("-");
+		printf("\n");
+	}
 }
 
 @ @<Function to pre-process a CSG solid@>=
-void process_and_register_solid(CSG_Node *root)
+void process_and_register_solid(const char *name, CSG_Node *root)
 {
-	return;
+	long h;
+	CSG_Node *temp = root;
+	temp = merge_affine_transformations(root);
+	if (temp == NULL) temp = root;
+	h = hash(name, MAX_CSG_SOLIDS);
+	strcpy(csg_solids.table[h].name, name);
+	csg_solids.table[h].solid = temp;
 }
+
+@ @<Function to find a CSG solid@>=
+CSG_Node *find_solid(const char *name)
+{
+	return csg_solids.table[hash(name, MAX_CSG_SOLIDS)].solid;
+}
+
+@ @<Global data structures@>=
+typedef double Matrix[4][4]; /* a $4 \times 4$ matrix */
+
+@ Every node has an affine transformation matrix, which is initialised
+to the identity matrix. When an affine transformation $T$ is applied
+to a node, the affine matrix for the node is updated. We use the
+|still_identity| flag to check if the affine matrix was modified. This
+avoids unnecessary matrix multiplications.
+
+@<Information common to all CSG nodes@>=
+bool still_identity; /* has the matrix been modified */
+Matrix affine; /* inverse affine transformations matrix */
+
+@
+@d IDENTITY_MATRIX {
+   {1.0, 0.0, 0.0, 0.0},
+   {0.0, 1.0, 0.0, 0.0},
+   {0.0, 0.0, 1.0, 0.0},
+   {0.0, 0.0, 0.0, 1.0}
+}
+@<Global variables@>=
+Matrix identity_matrix = IDENTITY_MATRIX;
+
+@
+@d matrix_copy(X, Y) memcpy((X), (Y), 16*sizeof(double))
+@<Initialise affine matrix to identity@>=
+temp->still_identity = true;
+matrix_copy(temp->affine, identity_matrix);
+
+@ After pre-processing, all of the affine transformations are merged,
+so that the affine matrix in a node gives the required composite
+transformation. After this merger, we remove the affine transformation
+nodes from the CSG tree, and is retain as auxilliary information
+inside the effective node to which the transformations have been
+applied.
+
+@<Information common to all CSG nodes@>=
+CSG_Node *affine_list; /* the list of affine transformations */
+
+@
+
+@<Function to merge affine transformations@>=
+CSG_Node *merge_affine_transformations(CSG_Node *root)
+{
+	CSG_Node *temp, *affine_list;
+	Matrix result, composite = IDENTITY_MATRIX;
+	if (root == NULL) return NULL;
+	if (root->op == SOLID) return NULL;
+	if (root->op == TRANSLATE ||
+	    root->op == ROTATE ||
+	    root->op == SCALE) {
+	        @<Merge affine transformations@>;
+	        @<Detach affine transformations@>;
+	}
+
+	temp = merge_affine_transformations(root->internal.left);
+	if (temp != NULL) {
+	        root->internal.left = temp;
+		temp->parent = root;
+	}
+
+	temp = merge_affine_transformations(root->internal.right);
+	if (temp != NULL) {
+	        root->internal.right = temp;
+		temp->parent = root;
+	}
+	return NULL;
+}
+
+@ @<Function to multiply two 4x4 matrices@>=
+void matrix_multiply(Matrix a, Matrix b, Matrix c)
+{
+	int i, j, k;
+	for (i = 0; i < 4; i++)
+        for (j = 0; j < 4; j++) {
+                c[i][j] = 0;
+	        for (k = 0; k < 4; k++)
+	                c[i][j] += a[i][k] * b[k][j];
+        }
+}
+
+@ @<Merge affine transformations@>=
+affine_list = NULL;
+do {
+        temp = root;
+	@<Update composite affine transformation matrix@>;
+	@<Prepare affine list for later detachment@>;
+} while (root->op == TRANSLATE || root->op == ROTATE || root->op == SCALE);
+
+@ @<Update composite affine transformation matrix@>=
+matrix_multiply(temp->internal.right->affine, composite, result);
+matrix_copy(composite, result);
+
+@ @<Prepare affine list for later detachment@>=
+root = temp->internal.left;
+temp->internal.left = affine_list;
+affine_list = temp;
+
+@ @<Detach affine transformations@>=
+matrix_copy(root->affine, composite);
+root->still_identity = false;
+root->affine_list = affine_list;
+return root;
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -2368,6 +2468,10 @@ shall assume that points are on the surface of the new solid only if
 they were on the surface of the left solid.
 
 @<Test containment in subtrees using boolean operators@>=
+if (!root->still_identity) {
+        apply_affine(root->affine, v, r);
+	vect3d_copy(v, r);
+}
 left = recursively_test_containment(root->internal.left, v);
 right = recursively_test_containment(root->internal.right, v);
 switch(root->op) {
@@ -2419,20 +2523,20 @@ containment testing is easier with $s$ than it is with $s'$.
 @<Test containment after transformation or translation@>=
 switch(root->op) {
 case TRANSLATE:
-        apply_inverse(root->internal.right->leaf.t.matrix, v, r);
+        apply_affine(root->internal.right->affine, v, r);
         break;
 case ROTATE:
-        apply_inverse(root->internal.right->leaf.r.matrix, v, r);
+        apply_affine(root->internal.right->affine, v, r);
         break;
 case SCALE:
-        apply_inverse(root->internal.right->leaf.s.matrix, v, r);
+        apply_affine(root->internal.right->affine, v, r);
         break;
 default: return INVALID;
 }
 return recursively_test_containment(root->internal.left, r);
 
-@ @<Function to apply the inverse of a transformation@>=
-void apply_inverse(double m[][4], vect3d v, vect3d r)
+@ @<Function to apply composite affine matrix@>=
+void apply_affine(Matrix m, vect3d v, vect3d r)
 {
     r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
     r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
@@ -2441,7 +2545,7 @@ void apply_inverse(double m[][4], vect3d v, vect3d r)
 }
 
 @ @<Function to print a 4x4 matrix@>=
-void print_4x4_matrix(double m[][4], uint32_t indent)
+void print_4x4_matrix(Matrix m, uint32_t indent)
 {
         int i, j, k;
 	for (i = 0; i < 4; ++i) {
@@ -2469,22 +2573,22 @@ The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
 using {\sl row-major}@^row-major@> form.
 
 @<Set up the matrix for inverse translation@>=
-leaf_node->leaf.t.matrix[0][0] = 1.0;
-leaf_node->leaf.t.matrix[0][1] = 0.0;
-leaf_node->leaf.t.matrix[0][2] = 0.0;
-leaf_node->leaf.t.matrix[0][3] = -op_x; /* inverse $x$-axis translation */
-leaf_node->leaf.t.matrix[1][0] = 0.0;
-leaf_node->leaf.t.matrix[1][1] = 1.0;
-leaf_node->leaf.t.matrix[1][2] = 0.0;
-leaf_node->leaf.t.matrix[1][3] = -op_y; /* inverse $y$-axis translation */
-leaf_node->leaf.t.matrix[2][0] = 0.0;
-leaf_node->leaf.t.matrix[2][1] = 0.0;
-leaf_node->leaf.t.matrix[2][2] = 1.0;
-leaf_node->leaf.t.matrix[2][3] = -op_z; /* inverse $z$-axis translation */
-leaf_node->leaf.t.matrix[3][0] = 0.0;
-leaf_node->leaf.t.matrix[3][1] = 0.0;
-leaf_node->leaf.t.matrix[3][2] = 0.0;
-leaf_node->leaf.t.matrix[3][3] = 1.0; /* homogeneous coordinate */
+leaf_node->affine[0][0] = 1.0;
+leaf_node->affine[0][1] = 0.0;
+leaf_node->affine[0][2] = 0.0;
+leaf_node->affine[0][3] = -op_x; /* inverse $x$-axis translation */
+leaf_node->affine[1][0] = 0.0;
+leaf_node->affine[1][1] = 1.0;
+leaf_node->affine[1][2] = 0.0;
+leaf_node->affine[1][3] = -op_y; /* inverse $y$-axis translation */
+leaf_node->affine[2][0] = 0.0;
+leaf_node->affine[2][1] = 0.0;
+leaf_node->affine[2][2] = 1.0;
+leaf_node->affine[2][3] = -op_z; /* inverse $z$-axis translation */
+leaf_node->affine[3][0] = 0.0;
+leaf_node->affine[3][1] = 0.0;
+leaf_node->affine[3][2] = 0.0;
+leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
 
 @  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
 radians about the axis specified by a unit vector@^unit vector@> $u
@@ -2523,22 +2627,22 @@ tyz = ty * op_z;
 sx = sine * op_x;
 sy = sine * op_y;
 sz = sine * op_z;
-leaf_node->leaf.r.matrix[0][0] = tx * op_x + cosine;
-leaf_node->leaf.r.matrix[0][1] = txy + sz;
-leaf_node->leaf.r.matrix[0][2] = txz - sy;
-leaf_node->leaf.r.matrix[0][3] = 0.0;
-leaf_node->leaf.r.matrix[1][0] = txy - sz;
-leaf_node->leaf.r.matrix[1][1] = ty * op_y + cosine;
-leaf_node->leaf.r.matrix[1][2] = tyz + sx;
-leaf_node->leaf.r.matrix[1][3] = 0.0;
-leaf_node->leaf.r.matrix[2][0] = txz + sy;
-leaf_node->leaf.r.matrix[2][1] = tyz - sx;
-leaf_node->leaf.r.matrix[2][2] = tz * op_z + cosine;
-leaf_node->leaf.r.matrix[2][3] = 0.0;
-leaf_node->leaf.r.matrix[3][0] = 0.0;
-leaf_node->leaf.r.matrix[3][1] = 0.0;
-leaf_node->leaf.r.matrix[3][2] = 0.0;
-leaf_node->leaf.r.matrix[3][3] = 1.0; /* homogeneous coordinate */
+leaf_node->affine[0][0] = tx * op_x + cosine;
+leaf_node->affine[0][1] = txy + sz;
+leaf_node->affine[0][2] = txz - sy;
+leaf_node->affine[0][3] = 0.0;
+leaf_node->affine[1][0] = txy - sz;
+leaf_node->affine[1][1] = ty * op_y + cosine;
+leaf_node->affine[1][2] = tyz + sx;
+leaf_node->affine[1][3] = 0.0;
+leaf_node->affine[2][0] = txz + sy;
+leaf_node->affine[2][1] = tyz - sx;
+leaf_node->affine[2][2] = tz * op_z + cosine;
+leaf_node->affine[2][3] = 0.0;
+leaf_node->affine[3][0] = 0.0;
+leaf_node->affine[3][1] = 0.0;
+leaf_node->affine[3][2] = 0.0;
+leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
 
 @ The inverse scaling matrix $S^{-1}$ for a scaling with
 scaling factors $(x, y, z)$ is given by:
@@ -2557,22 +2661,22 @@ The matrix $S^{-1}$ is stored in the two dimensional array |matrix|
 using {\sl row-major}@^row-major@> form.
 
 @<Set up the matrix for inverse scaling@>=
-leaf_node->leaf.s.matrix[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
-leaf_node->leaf.s.matrix[0][1] = 0.0;
-leaf_node->leaf.s.matrix[0][2] = 0.0;
-leaf_node->leaf.s.matrix[0][3] = 0.0;
-leaf_node->leaf.s.matrix[1][0] = 0.0;
-leaf_node->leaf.s.matrix[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
-leaf_node->leaf.s.matrix[1][2] = 0.0;
-leaf_node->leaf.s.matrix[1][3] = 0.0;
-leaf_node->leaf.s.matrix[2][0] = 0.0;
-leaf_node->leaf.s.matrix[2][1] = 0.0;
-leaf_node->leaf.s.matrix[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
-leaf_node->leaf.s.matrix[2][3] = 0.0;
-leaf_node->leaf.s.matrix[3][0] = 0.0;
-leaf_node->leaf.s.matrix[3][1] = 0.0;
-leaf_node->leaf.s.matrix[3][2] = 0.0;
-leaf_node->leaf.s.matrix[3][3] = 1.0; /* homogeneous coordinate */
+leaf_node->affine[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
+leaf_node->affine[0][1] = 0.0;
+leaf_node->affine[0][2] = 0.0;
+leaf_node->affine[0][3] = 0.0;
+leaf_node->affine[1][0] = 0.0;
+leaf_node->affine[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
+leaf_node->affine[1][2] = 0.0;
+leaf_node->affine[1][3] = 0.0;
+leaf_node->affine[2][0] = 0.0;
+leaf_node->affine[2][1] = 0.0;
+leaf_node->affine[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
+leaf_node->affine[2][3] = 0.0;
+leaf_node->affine[3][0] = 0.0;
+leaf_node->affine[3][1] = 0.0;
+leaf_node->affine[3][2] = 0.0;
+leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
 
 @*2 Testing containment inside a solid primitive.
 Containment testing uses different approaches depending on the type
@@ -2599,6 +2703,10 @@ course, these initial orientations are primitive specific, as
 discussed in the following sections.
 
 @<Test containment inside primitive solid@>=
+if (!root->still_identity) {
+        apply_affine(root->affine, v, r);
+	vect3d_copy(v, r);
+}
 p = root->leaf.p;
 switch(p->type) {
 case BLOCK: return is_inside_block(p, v);
@@ -2913,44 +3021,51 @@ int main(int argc, char *argv[])
 {
         FILE *f;
         vect3d point;
-	int n, line_no;
+	int n;
 	Containment flag;
 	char c;
 	bool t;
         if (read_geometry("input.dat")) exit(1);
-	print_csg_tree(csg_tree.root, 0);
 	print_all_solids();
 	if ((f = fopen("points.dat", "r")) == NULL)
                exit(1);
-        line_no = 1;
+	input_file_current_line = 1;
 	while ((c = fgetc(f)) != EOF) {
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
-	       ++line_no;
         }
+
+error:
         fclose(f);
 	@<Clean up the system@>;
 	return 0;
 }
 
 @ @<Process containment test-case@>=
-@<Read parameters for the test-case@>;
-@<Validate the test-case@>;
+if (c == 'i' || c == 'o' || c == 's') {
+        @<Read parameters for the test-case@>;
+        @<Validate the test-case@>;
+} else {
+        fprintf(stderr, "Invalid test command '%c' at line %u\n",
+	c, input_file_current_line);
+        goto error;
+}
 
 @ @<Read parameters for the test-case@>=
-n = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)\n",
+n = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
         op_solid, &point[0], &point[1], &point[2]);
 if (n == EOF || n != 4) {
         printf("Invalid %s test at line %d\n",@/
         c == 'i' ? "inside" :
-            (c == 'o' ? "outside" : "surface"), line_no);
+            (c == 'o' ? "outside" : "surface"), input_file_current_line);
         exit(1);
 }
 
 @ @<Validate the test-case@>=
 temp_node = find_solid(op_solid);
 if (temp_node == NULL) {
-        printf("[%d] Solid '%s' not found\n", line_no, op_solid);
+        printf("[%d] Solid '%s' not found\n",
+	input_file_current_line, op_solid);
 } else {
         vect3d_homogenise(point);
         flag = solid_contains_vector(temp_node, point);
@@ -2969,7 +3084,7 @@ if (temp_node == NULL) {
                 printf("error: ");
                 break;
         }
-	printf("[%4d] %s test: %s\n", line_no,@/
+	printf("[%4d] %s test: %s\n", input_file_current_line,@/
             c == 'i' ? "inside" :
                 (c == 'o' ? "outside" : "surface"),
             t ? "OK" : "Fail");
@@ -3059,6 +3174,8 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Pop particle out of the particle stack@>;
 @<Tracking a particle@>;
 @<Set particle gun parameters@>;
+@<Function to calculate the hash value |h| of a string@>;
+@<Function to find a CSG solid@>;
 @<Register a solid using a specified |name|@>;
 @<Create a primitive solid@>;
 @<Destroy a primitive solid@>;
@@ -3068,6 +3185,8 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to destroy the CSG tree@>;
 @<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
+@<Function to multiply two 4x4 matrices@>;
+@<Function to merge affine transformations@>;
 @<Function to pre-process a CSG solid@>;
 @<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
@@ -3076,7 +3195,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to test containment inside a sphere@>;
 @<Function to test containment inside a cylinder@>;
 @<Function to check if an angle lies outside a supplied range@>;
-@<Function to apply the inverse of a transformation@>;
+@<Function to apply composite affine matrix@>;
 @<Function to test containment inside a torus@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
