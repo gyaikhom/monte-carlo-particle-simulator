@@ -123,6 +123,8 @@ typedef double vect3d[4];
 
 @ Function |vect3d_zero(v)| sets all components of the vector |v| to
 zero, except for the homogeneous coordinate. Vector |v| is modified.
+
+@d ZERO_VECTOR { 0.0, 0.0, 0.0, 1.0 }
 @<Global functions@>=
 void vect3d_zero(vect3d v)
 {
@@ -233,10 +235,11 @@ Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
 double vect3d_angle_radian(vect3d u, vect3d v)
 {
-        vect3d a, b, c;
+        vect3d a, b, c = ZERO_VECTOR;
+	double angle;
         vect3d_normalize(u, a);
 	vect3d_normalize(v, b);
-        double angle = acos(vect3d_dot(a, b));
+        angle = acos(vect3d_dot(a, b));
         vect3d_cross(u, v, c);
 	if (c[3] < 0.0) return (TWICE_PI - angle);
 	return angle;
@@ -2263,20 +2266,49 @@ void print_all_solids()
 }
 
 @ @<Function to pre-process a CSG solid@>=
+void pp(CSG_Node *n)
+{
+	if (NULL == n) return;
+	printf("[%x] ", (uint32_t) n);
+	if (PARAMETER == n->op) {
+	    printf("Parameter: %d %x\n", n->op, (uint32_t)n->parent);
+	    return;
+        }
+	if (SOLID == n->op) {
+	    printf("Solid: %d %s %x\n", n->op, n->name, (uint32_t)n->parent);
+	    return;
+        }
+	else if (TRANSLATE == n->op ||
+	    ROTATE == n->op ||
+	    SCALE == n->op) {
+	    printf("Affine: %d %s %x %x %x\n", n->op, n->name, (uint32_t)n->parent, (uint32_t)n->internal.left, (uint32_t)n->internal.right);
+	} else {
+	    printf("Boolean: %d %s %x %x %x\n",
+	    n->op, n->name, (uint32_t)n->parent,
+	    (uint32_t)n->internal.left, (uint32_t)n->internal.right);
+	}
+	pp(n->internal.left);
+	pp(n->internal.right);
+}
+
+@ @<Function to pre-process a CSG solid@>=
 void process_and_register_solid(const char *name, CSG_Node *root)
 {
 	long h;
-	CSG_Node *temp = root;
+	CSG_Node *temp;
+	if (NULL == root || NULL == name) return;
 	temp = merge_affine_transformations(root);
-	if (temp == NULL) {
-	      temp = root;
-	} else {
-	      temp->parent = NULL;
-	}
+	if (NULL == temp) temp = root;
+	else printf("kaka");
+	pp(temp);
+		printf("\n");
+		for (j = 0; j < 80; j++) printf("-");
+		printf("\n");
+
 	h = hash(name, MAX_CSG_SOLIDS);
 	strcpy(csg_solids.table[h].name, name);
 	csg_solids.table[h].solid = temp;
-	move_affine_transformation_matrix(temp);
+ 	move_affine_transformation_matrix(temp);
 }
 
 @ @<Function to find a CSG solid@>=
@@ -2325,44 +2357,29 @@ CSG_Node *affine_list; /* the list of affine transformations */
 @ @<Function to merge affine transformations@>=
 CSG_Node *merge_affine_transformations(CSG_Node *root)
 {
-	CSG_Node *temp, *affine_list;
+	CSG_Node *temp, *parent, *affine_list;
 	Matrix result, composite = IDENTITY_MATRIX;
-	if (root == NULL) return NULL;
-	if (root->op == SOLID) return NULL;
-	if (root->op == TRANSLATE ||
-	    root->op == ROTATE ||
-	    root->op == SCALE) {
-	        @<Merge affine transformations@>;
-	        @<Detach affine transformations@>;
+	if (SOLID == root->op || PARAMETER == root->op) return NULL;
+	if (TRANSLATE == root->op ||
+	    ROTATE == root->op ||
+	    SCALE == root->op) {
+	    @<Merge sequence of affine transformations@>;
+	    @<Detach affine transformations@>;
 	}
-
-	temp = merge_affine_transformations(root->internal.left);
-	if (temp != NULL) {
-	        root->internal.left = temp;
-		temp->parent = root;
-	}
-
-	temp = merge_affine_transformations(root->internal.right);
-	if (temp != NULL) {
-	        root->internal.right = temp;
-		temp->parent = root;
+	if (SOLID != root->op) {
+	    @<Merge affine transformations on subtrees@>;
 	}
 	return root;
 }
 
-@ @<Function to move affine transformation matrix to the primitives@>=
-void move_affine_transformation_matrix(CSG_Node *node)
-{
-	Matrix affine;
-	if (node == NULL) return;
-	if (SOLID == node->op && NULL != node->parent) {
-	        matrix_multiply(node->parent->affine, node->affine, affine);
-		matrix_copy(node->affine, affine);
-		return;
-	}
-	move_affine_transformation_matrix(node->internal.left);
-	move_affine_transformation_matrix(node->internal.right);
-}
+@ @<Merge sequence of affine transformations@>=
+parent = root->parent;
+affine_list = NULL;
+do {
+        temp = root;
+	@<Update composite affine transformation matrix@>;
+	@<Prepare affine list for later detachment@>;
+} while (TRANSLATE == root->op || ROTATE == root->op || SCALE == root->op);
 
 @ @<Function to multiply two 4x4 matrices@>=
 void matrix_multiply(Matrix a, Matrix b, Matrix c)
@@ -2376,14 +2393,6 @@ void matrix_multiply(Matrix a, Matrix b, Matrix c)
         }
 }
 
-@ @<Merge affine transformations@>=
-affine_list = NULL;
-do {
-        temp = root;
-	@<Update composite affine transformation matrix@>;
-	@<Prepare affine list for later detachment@>;
-} while (root->op == TRANSLATE || root->op == ROTATE || root->op == SCALE);
-
 @ @<Update composite affine transformation matrix@>=
 matrix_multiply(temp->internal.right->affine, composite, result);
 matrix_copy(composite, result);
@@ -2396,6 +2405,29 @@ affine_list = temp;
 @ @<Detach affine transformations@>=
 matrix_copy(root->affine, composite);
 root->affine_list = affine_list;
+root->parent = parent;
+
+@ @<Merge affine transformations on subtrees@>=
+temp = merge_affine_transformations(root->internal.left);
+if (NULL != temp) root->internal.left = temp;
+temp = merge_affine_transformations(root->internal.right);
+if (NULL != temp) root->internal.right = temp;
+
+@ @<Function to move affine transformation matrix to the primitives@>=
+void move_affine_transformation_matrix(CSG_Node *node)
+{
+	Matrix affine;
+	if (NULL == node) return;
+	if (SOLID == node->op) {
+	    if (NULL != node->parent) {
+	        matrix_multiply(node->parent->affine, node->affine, affine);
+	        matrix_copy(node->affine, affine);
+            }
+	    return;
+	}
+	move_affine_transformation_matrix(node->internal.left);
+	move_affine_transformation_matrix(node->internal.right);
+}
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -2715,10 +2747,10 @@ discussed in the following sections.
 apply_affine(root->affine, v, r);
 p = root->leaf.p;
 switch(p->type) {
-case BLOCK: return is_inside_block(p, r);
-case SPHERE: return is_inside_sphere(p, r);
-case CYLINDER: return is_inside_cylinder(p, r);
-case TORUS: return is_inside_torus(p, r);
+case BLOCK: return is_inside_block(r, p);
+case SPHERE: return is_inside_sphere(r, p);
+case CYLINDER: return is_inside_cylinder(r, p);
+case TORUS: return is_inside_torus(r, p);
 default: return INVALID; /* invalid solid */
 }
 
@@ -2763,7 +2795,7 @@ of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
 @<Function to test containment inside a block@>=
-Containment is_inside_block(Primitive *p, vect3d v)
+Containment is_inside_block(vect3d v, Primitive *p)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
 	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
@@ -2797,7 +2829,7 @@ to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
 @<Function to test containment inside a sphere@>=
-Containment is_inside_sphere(Primitive *p, vect3d v)
+Containment is_inside_sphere(vect3d v, Primitive *p)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
@@ -2843,7 +2875,7 @@ Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
 @<Function to test containment inside a cylinder@>=
-Containment is_inside_cylinder(Primitive *p, vect3d v)
+Containment is_inside_cylinder(vect3d v, Primitive *p)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -2937,7 +2969,7 @@ the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
 @<Function to test containment inside a torus@>=
-Containment is_inside_torus(Primitive *p, vect3d v)
+Containment is_inside_torus(vect3d v, Primitive *p)
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial;
 	vect3d tube_center, from_tube_center_to_v, temp;
@@ -3026,7 +3058,7 @@ int main(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
         FILE *f;
-        vect3d point;
+        vect3d point = ZERO_VECTOR;
 	int n;
 	Containment flag;
 	char c;
@@ -3096,6 +3128,181 @@ if (temp_node == NULL) {
             t ? "OK" : "Fail");
 }
 
+@** Evaluation of CSG boolean expression.
+
+This program checks if a three-dimensional point lies inside a
+solid, where the solid is represented by a postfix boolean
+expression. The CSG tree must first be normalised to sum-of-product
+form before deriving the boolean expression. This normalisation
+@^CSG normalisation@> can be done using the algorithm described by
+Jack Goldfeather, Steven Molnar, Greg Turk, and Henry Fuchs in {\sl
+Near Real-Time CSG Rendering Using Tree Normalization and Geometric
+Pruning} (IEEE Computer Graphics and Applications, May 1989,
+pp. 20--28).
+
+@d MAX_NUM_PRIMITIVES 1024
+@d MAX_NUM_CSG_NODES 2047 /* $2^{\lceil \lg n\rceil + 1} - 1$ */
+@<Type definition boolean expression@>=
+typedef struct solids_struct {
+	int np, nc;
+	int c[MAX_NUM_CSG_NODES];
+        Primitive *p[MAX_NUM_PRIMITIVES];
+} Solid;
+
+@ We use a boolean stack to evaluate the CSG boolean expression.
+
+@d MAX_BOOLEAN_STACK_SIZE 1024
+@<Type definition boolean expression@>=
+typedef struct boolean_stack_struct {
+	int tos, size;
+	bool v[MAX_STACK_SIZE];
+} boolean_stack;
+
+@ @<External functions@>=
+bool boolean_stack_init(boolean_stack *s)
+{
+	if (NULL == s) return false;
+	s->tos = 0;
+	s->size = MAX_BOOLEAN_STACK_SIZE;
+	return true;
+}
+
+@ @<External functions@>=
+bool boolean_stack_push(boolean_stack *s, bool v)
+{
+	if (s->tos == s->size) return false;
+	s->v[s->tos++] = v;
+	return true;
+}
+
+@ @<External functions@>=
+bool boolean_stack_pop(boolean_stack *s, bool *v)
+{
+	if (0 == s->tos) return false;
+	*v = s->v[--s->tos];
+	return true;
+}
+
+@ @<External functions@>=
+bool is_inside_primitive(vect3d v, Primitive *p)
+{
+	Containment c;
+	switch(p->type) {
+	case BLOCK: c = is_inside_block(v, p); break;
+	case SPHERE: c = is_inside_sphere(v, p); break;
+	case CYLINDER: c = is_inside_cylinder(v, p); break;
+	case TORUS: c = is_inside_torus(v, p); break;
+	default: c = INVALID; /* invalid solid */
+	}
+	if (INSIDE == c || SURFACE == c) return true;
+	return false;
+}
+
+@
+@d BOOLEAN_DIFFERENCE -1
+@d BOOLEAN_INTERSECTION -2
+@d BOOLEAN_UNION -3
+@<External functions@>=
+bool is_inside(vect3d v, Solid *s, bool *result)
+{
+	boolean_stack stack;
+	bool l, r; /* left and right operands */
+	bool cache[MAX_NUM_PRIMITIVES]; /* boolean cache */
+	int i;
+	@<Initialise stack and boolean cache@>;
+	@<Evaluate the postfix boolean expression using the stack@>;
+	boolean_stack_pop(&stack, result); /* must be the only item in
+	stack */
+	@<Check if the CSG expression was valid@>;
+	return true;
+
+	@<Handle irrecoverable error: |is_inside(v, s, result)|@>;
+	return false;
+}
+
+@ The same primitive could appear more than once inside the CSG
+expression. Since, checking whether a point lies inside a primitive is
+expensive, we do such evaluations only once and cache the value
+for use by subsequent appearances of the primitive. Since, all of the
+primitives will appear atleast once, we evaluate them beforehand so
+that the cache values are either |true| or |false| for each primitive.
+
+@<Initialise stack and boolean cache@>=
+boolean_stack_init(&stack);
+for (i = 0; i < s->np; ++i) cache[i] = is_inside_primitive(v, s->p[i]);
+
+@ The CSG expression |c| is an array of integers, where all of the
+positive values gives an index inside the primitives array, and any
+negative value must be either -1, -2, or -3, denoting respectively a
+boolean difference, intersection, or union. Any other value in the
+expression is invalid. For instance, the integer sequence $c = \{0, 3,
+-2, 1, -1, 2, 3, -2, -3\}$ is a postfix representation for the boolean
+expression $((A \cap D) - B) \cup (C \cap D)$, where the primitives
+array $p = \{A, B, C, D\}$.
+
+@<Evaluate the postfix boolean expression using the stack@>=
+for (i = 0; i < s->nc; ++i) {
+        if (s->c[i] > BOOLEAN_DIFFERENCE) {
+	        @<Push to stack the boolean containment of $v$ inside primitive@>;
+	} else {
+	        if (s->c[i] < BOOLEAN_UNION) {
+		        fprintf(stderr,
+			      "Invalid value '%d' in expression\n",
+                              s->c[i]);
+			return false;
+		}
+	        @<Evaluate boolean operator and push result into stack@>;
+	}
+}
+
+@ @<Push to stack the boolean containment of $v$ inside primitive@>=
+if (!boolean_stack_push(&stack, cache[s->c[i]]))
+        goto stack_full;
+
+@ The first stack pop gives the right operand |r|, and the second
+gives the left operand |l|. Since, boolean difference is
+noncommutative, we must preserve the order during its evaluation
+(i.e., the negation).
+
+@<Evaluate boolean operator and push result into stack@>=
+if (!boolean_stack_pop(&stack, &r)) goto stack_empty;
+if (!boolean_stack_pop(&stack, &l)) goto stack_empty;
+switch(s->c[i]) {
+case BOOLEAN_DIFFERENCE:
+        if (!boolean_stack_push(&stack, l && !r)) goto stack_full;
+	break;
+case BOOLEAN_INTERSECTION:
+        if (!boolean_stack_push(&stack, l && r)) goto stack_full;
+        break;
+case BOOLEAN_UNION:
+	if (!boolean_stack_push(&stack, l || r)) goto stack_full;
+        break;
+default:;
+}
+
+@ A CSG boolean expression is valid if the stack is empty after the
+result has been popped out. Hence, the following pop for |l| must fail
+for valid CSG expressions since it is executed after porring the result.
+
+@<Check if the CSG expression was valid@>=
+if (boolean_stack_pop(&stack, &l)) {
+        fprintf(stderr, "Invalid CSG tree expression\n");
+	return false;
+}
+
+@ @<Handle irrecoverable error: |is_inside(v, s, result)|@>=
+stack_empty:
+	fprintf(stderr, "Boolean stack is empty... ");
+	goto exit_error;
+
+stack_full:
+	fprintf(stderr, "Boolean stack is full... ");
+	goto exit_error;
+
+exit_error:
+	fprintf(stderr, "while evaluating '%d' at index %d\n",
+	s->c[i], i);
+
 @** Error handling.
 There are three message categories, which are printed using the
 following macros: |fatal|, |warn|, and |info|.
@@ -3133,7 +3340,6 @@ uint32_t num_particles = 5;
 Particle_gun particle_gun;
 Particle_stack particle_stack;
 vect3d temp_vector;
-vect3d zero_vector = { 0.0, 0.0, 0.0, 1.0 };
 vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 
 @ @<Global data structures@>=
@@ -3156,7 +3362,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Structure for scaling parameters@>;
 @<Structure of the data stored in a leaf node@>;
 @<Structure of a CSG tree node@>;
-
+@<Type definition boolean expression@>;
 
 @ @<Global functions@>=
 @<Function to convert radian to degree@>;
@@ -3206,6 +3412,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to test containment inside a torus@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
+@<External functions@>;
 
 @* History.
 The {\sl Monte Carlo Simulator} project began in June 2011, when
