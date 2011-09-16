@@ -2268,10 +2268,15 @@ void process_and_register_solid(const char *name, CSG_Node *root)
 	long h;
 	CSG_Node *temp = root;
 	temp = merge_affine_transformations(root);
-	if (temp == NULL) temp = root;
+	if (temp == NULL) {
+	      temp = root;
+	} else {
+	      temp->parent = NULL;
+	}
 	h = hash(name, MAX_CSG_SOLIDS);
 	strcpy(csg_solids.table[h].name, name);
 	csg_solids.table[h].solid = temp;
+	move_affine_transformation_matrix(temp);
 }
 
 @ @<Function to find a CSG solid@>=
@@ -2285,12 +2290,11 @@ typedef double Matrix[4][4]; /* a $4 \times 4$ matrix */
 
 @ Every node has an affine transformation matrix, which is initialised
 to the identity matrix. When an affine transformation $T$ is applied
-to a node, the affine matrix for the node is updated. We use the
-|still_identity| flag to check if the affine matrix was modified. This
-avoids unnecessary matrix multiplications.
+to a node, the affine matrix for the node is updated. This affine
+matrix gives the accumulated inverse transformations from the root to
+that node.
 
 @<Information common to all CSG nodes@>=
-bool still_identity; /* has the matrix been modified */
 Matrix affine; /* inverse affine transformations matrix */
 
 @
@@ -2306,7 +2310,6 @@ Matrix identity_matrix = IDENTITY_MATRIX;
 @
 @d matrix_copy(X, Y) memcpy((X), (Y), 16*sizeof(double))
 @<Initialise affine matrix to identity@>=
-temp->still_identity = true;
 matrix_copy(temp->affine, identity_matrix);
 
 @ After pre-processing, all of the affine transformations are merged,
@@ -2319,9 +2322,7 @@ applied.
 @<Information common to all CSG nodes@>=
 CSG_Node *affine_list; /* the list of affine transformations */
 
-@
-
-@<Function to merge affine transformations@>=
+@ @<Function to merge affine transformations@>=
 CSG_Node *merge_affine_transformations(CSG_Node *root)
 {
 	CSG_Node *temp, *affine_list;
@@ -2346,7 +2347,21 @@ CSG_Node *merge_affine_transformations(CSG_Node *root)
 	        root->internal.right = temp;
 		temp->parent = root;
 	}
-	return NULL;
+	return root;
+}
+
+@ @<Function to move affine transformation matrix to the primitives@>=
+void move_affine_transformation_matrix(CSG_Node *node)
+{
+	Matrix affine;
+	if (node == NULL) return;
+	if (SOLID == node->op && NULL != node->parent) {
+	        matrix_multiply(node->parent->affine, node->affine, affine);
+		matrix_copy(node->affine, affine);
+		return;
+	}
+	move_affine_transformation_matrix(node->internal.left);
+	move_affine_transformation_matrix(node->internal.right);
 }
 
 @ @<Function to multiply two 4x4 matrices@>=
@@ -2380,9 +2395,7 @@ affine_list = temp;
 
 @ @<Detach affine transformations@>=
 matrix_copy(root->affine, composite);
-root->still_identity = false;
 root->affine_list = affine_list;
-return root;
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -2468,10 +2481,6 @@ shall assume that points are on the surface of the new solid only if
 they were on the surface of the left solid.
 
 @<Test containment in subtrees using boolean operators@>=
-if (!root->still_identity) {
-        apply_affine(root->affine, v, r);
-	vect3d_copy(v, r);
-}
 left = recursively_test_containment(root->internal.left, v);
 right = recursively_test_containment(root->internal.right, v);
 switch(root->op) {
@@ -2703,16 +2712,13 @@ course, these initial orientations are primitive specific, as
 discussed in the following sections.
 
 @<Test containment inside primitive solid@>=
-if (!root->still_identity) {
-        apply_affine(root->affine, v, r);
-	vect3d_copy(v, r);
-}
+apply_affine(root->affine, v, r);
 p = root->leaf.p;
 switch(p->type) {
-case BLOCK: return is_inside_block(p, v);
-case SPHERE: return is_inside_sphere(p, v);
-case CYLINDER: return is_inside_cylinder(p, v);
-case TORUS: return is_inside_torus(p, v);
+case BLOCK: return is_inside_block(p, r);
+case SPHERE: return is_inside_sphere(p, r);
+case CYLINDER: return is_inside_cylinder(p, r);
+case TORUS: return is_inside_torus(p, r);
 default: return INVALID; /* invalid solid */
 }
 
@@ -3187,6 +3193,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to print the CSG tree@>;
 @<Function to multiply two 4x4 matrices@>;
 @<Function to merge affine transformations@>;
+@<Function to move affine transformation matrix to the primitives@>;
 @<Function to pre-process a CSG solid@>;
 @<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
