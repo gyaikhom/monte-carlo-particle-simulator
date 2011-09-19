@@ -2085,23 +2085,26 @@ void print_csg_tree(CSG_Node *temp, uint32_t indent) {
 for (i = 0; i < indent; ++i) printf("\t");
 p = temp->leaf.p;
 switch(p->type) {
-case BLOCK: printf("BLOCK: \"%s\" %lf %lf %lf\n",
+case BLOCK: printf("BLOCK: \"%s\" %lf %lf %lf",
         temp->name, p->b.length, p->b.width, p->b.height);
         break;
-case SPHERE: printf("SPHERE: \"%s\" %lf\n",
+case SPHERE: printf("SPHERE: \"%s\" %lf",
         temp->name, p->s.radius);
         break;
-case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf\n",
+case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf",
         temp->name, p->c.radius, p->c.height);
         break;
-case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf\n",
+case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf",
         temp->name, p->t.phi, p->t.phi_start,
         p->t.theta, p->t.theta_start, p->t.major, p->t.minor);
         break;
 default:
-        printf("unknown\n");
+        printf("unknown");
 }
+@<Print bounding box information@>;
 print_4x4_matrix(temp->affine, indent + 1);
+printf("\n");
+print_4x4_matrix(temp->inverse, indent + 1);
 
 @ Print the parameters for transformation or translation.
 
@@ -2140,27 +2143,30 @@ printf("\n");
 for (i = 0; i < indent; ++i) printf("\t");
 switch(temp->op) {
 case UNION:
-        printf("union: %s\n", temp->name);
+        printf("union: %s", temp->name);
         break;
 case INTERSECTION:
-        printf("intersection: %s\n", temp->name);
+        printf("intersection: %s", temp->name);
         break;
 case DIFFERENCE:
-        printf("difference: %s\n", temp->name);
+        printf("difference: %s", temp->name);
         break;
 case TRANSLATE:
-        printf("translate: %s\n", temp->name);
+        printf("translate: %s", temp->name);
         break;
 case ROTATE:
-        printf("rotate: %s\n", temp->name);
+        printf("rotate: %s", temp->name);
         break;
 case SCALE:
-        printf("scale: %s\n", temp->name);
+        printf("scale: %s", temp->name);
         break;
 default:
-        printf("unknown\n");
+        printf("unknown");
 }
+@<Print bounding box information@>;
 print_4x4_matrix(temp->affine, indent + 1);
+printf("\n");
+print_4x4_matrix(temp->inverse, indent + 1);
 
 @ When we cannot recover from an error (e.g., incorrect input file),
 we must exit the system after cleaning up the resources that were
@@ -2299,16 +2305,11 @@ void process_and_register_solid(const char *name, CSG_Node *root)
 	if (NULL == root || NULL == name) return;
 	temp = merge_affine_transformations(root);
 	if (NULL == temp) temp = root;
-	else printf("kaka");
-	pp(temp);
-		printf("\n");
-		for (j = 0; j < 80; j++) printf("-");
-		printf("\n");
-
 	h = hash(name, MAX_CSG_SOLIDS);
 	strcpy(csg_solids.table[h].name, name);
 	csg_solids.table[h].solid = temp;
  	move_affine_transformation_matrix(temp);
+	calculate_bounding_box(temp);
 }
 
 @ @<Function to find a CSG solid@>=
@@ -2328,6 +2329,7 @@ that node.
 
 @<Information common to all CSG nodes@>=
 Matrix affine; /* inverse affine transformations matrix */
+Matrix inverse; /* inverse of |affine| matrix */
 
 @
 @d IDENTITY_MATRIX {
@@ -2343,6 +2345,7 @@ Matrix identity_matrix = IDENTITY_MATRIX;
 @d matrix_copy(X, Y) memcpy((X), (Y), 16*sizeof(double))
 @<Initialise affine matrix to identity@>=
 matrix_copy(temp->affine, identity_matrix);
+matrix_copy(temp->inverse, identity_matrix);
 
 @ After pre-processing, all of the affine transformations are merged,
 so that the affine matrix in a node gives the required composite
@@ -2358,7 +2361,7 @@ CSG_Node *affine_list; /* the list of affine transformations */
 CSG_Node *merge_affine_transformations(CSG_Node *root)
 {
 	CSG_Node *temp, *parent, *affine_list;
-	Matrix result, composite = IDENTITY_MATRIX;
+	Matrix result, m = IDENTITY_MATRIX;
 	if (SOLID == root->op || PARAMETER == root->op) return NULL;
 	if (TRANSLATE == root->op ||
 	    ROTATE == root->op ||
@@ -2394,8 +2397,8 @@ void matrix_multiply(Matrix a, Matrix b, Matrix c)
 }
 
 @ @<Update composite affine transformation matrix@>=
-matrix_multiply(temp->internal.right->affine, composite, result);
-matrix_copy(composite, result);
+matrix_multiply(temp->internal.right->affine, m, result);
+matrix_copy(m, result);
 
 @ @<Prepare affine list for later detachment@>=
 root = temp->internal.left;
@@ -2403,7 +2406,9 @@ temp->internal.left = affine_list;
 affine_list = temp;
 
 @ @<Detach affine transformations@>=
-matrix_copy(root->affine, composite);
+matrix_copy(root->affine, m);
+matrix_inverse_4x4(root->affine, m);
+matrix_copy(root->inverse, m);
 root->affine_list = affine_list;
 root->parent = parent;
 
@@ -2416,18 +2421,460 @@ if (NULL != temp) root->internal.right = temp;
 @ @<Function to move affine transformation matrix to the primitives@>=
 void move_affine_transformation_matrix(CSG_Node *node)
 {
-	Matrix affine;
+	Matrix temp;
 	if (NULL == node) return;
 	if (SOLID == node->op) {
 	    if (NULL != node->parent) {
-	        matrix_multiply(node->parent->affine, node->affine, affine);
-	        matrix_copy(node->affine, affine);
+	        matrix_multiply(node->parent->affine, node->affine, temp);
+	        matrix_copy(node->affine, temp);
+		matrix_inverse_4x4(node->affine, temp);
+		matrix_copy(node->inverse, temp);
             }
 	    return;
 	}
 	move_affine_transformation_matrix(node->internal.left);
 	move_affine_transformation_matrix(node->internal.right);
 }
+
+@ @<Function to calculate the determinant of a 3x3 matrix@>=
+double matrix_determinant_3x3(Matrix m)
+{
+        return m[0][0] * m[1][1] * m[2][2] +
+               m[0][1] * m[1][2] * m[2][0] +
+	       m[0][2] * m[1][0] * m[2][1] -
+	       m[0][0] * m[1][2] * m[2][1] -
+	       m[0][1] * m[1][0] * m[2][2] -
+	       m[0][2] * m[1][1] * m[2][0];
+}
+
+@ @<Function to calculate the inverse of a 3x3 matrix@>=
+void matrix_inverse_3x3(Matrix m, Matrix i) {
+     double det = matrix_determinant_3x3(m);
+     i[0][0] = (m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det;
+     i[0][1] = (m[0][2] * m[2][1] - m[0][1] * m[2][2]) / det;
+     i[0][2] = (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det;
+     i[1][0] = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) / det;
+     i[1][1] = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det;
+     i[1][2] = (m[0][2] * m[1][0] - m[0][0] * m[1][2]) / det;
+     i[2][0] = (m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det;
+     i[2][1] = (m[0][1] * m[2][0] - m[0][0] * m[2][1]) / det;
+     i[2][2] = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det;
+}
+
+@ @<Function to calculate the inverse of a 4x4 matrix@>=
+void matrix_inverse_4x4(Matrix m, Matrix inverse) {
+   int i, j;
+   double det = matrix_determinant_4x4(m);
+   printf("--------- %lf\n", det);
+   inverse[0][0] = m[1][2] * m[2][3] * m[3][1] -
+             m[1][3] * m[2][2] * m[3][1] +
+	     m[1][3] * m[2][1] * m[3][2] -
+	     m[1][1] * m[2][3] * m[3][2] -
+	     m[1][2] * m[2][1] * m[3][3] +
+	     m[1][1] * m[2][2] * m[3][3];
+
+   inverse[0][1] = m[0][3] * m[2][2] * m[3][1] -
+             m[0][2] * m[2][3] * m[3][1] -
+	     m[0][3] * m[2][1] * m[3][2] +
+	     m[0][1] * m[2][3] * m[3][2] +
+	     m[0][2] * m[2][1] * m[3][3] -
+	     m[0][1] * m[2][2] * m[3][3];
+
+   inverse[0][2] = m[0][2] * m[1][3] * m[3][1] -
+             m[0][3] * m[1][2] * m[3][1] +
+	     m[0][3] * m[1][1] * m[3][2] -
+	     m[0][1] * m[1][3] * m[3][2] -
+	     m[0][2] * m[1][1] * m[3][3] +
+	     m[0][1] * m[1][2] * m[3][3];
+
+   inverse[0][3] = m[0][3] * m[1][2] * m[2][1] -
+             m[0][2] * m[1][3] * m[2][1] -
+	     m[0][3] * m[1][1] * m[2][2] +
+	     m[0][1] * m[1][3] * m[2][2] +
+	     m[0][2] * m[1][1] * m[2][3] -
+	     m[0][1] * m[1][2] * m[2][3];
+
+   inverse[1][0] = m[1][3] * m[2][2] * m[3][0] -
+             m[1][2] * m[2][3] * m[3][0] -
+	     m[1][3] * m[2][0] * m[3][2] +
+	     m[1][0] * m[2][3] * m[3][2] +
+	     m[1][2] * m[2][0] * m[3][3] -
+	     m[1][0] * m[2][2] * m[3][3];
+
+   inverse[1][1] = m[0][2] * m[2][3] * m[3][0] -
+   	     m[0][3] * m[2][2] * m[3][0] +
+	     m[0][3] * m[2][0] * m[3][2] -
+	     m[0][0] * m[2][3] * m[3][2] -
+	     m[0][2] * m[2][0] * m[3][3] +
+	     m[0][0] * m[2][2] * m[3][3];
+
+   inverse[1][2] = m[0][3] * m[1][2] * m[3][0] -
+             m[0][2] * m[1][3] * m[3][0] -
+	     m[0][3] * m[1][0] * m[3][2] +
+	     m[0][0] * m[1][3] * m[3][2] +
+	     m[0][2] * m[1][0] * m[3][3] -
+	     m[0][0] * m[1][2] * m[3][3];
+
+   inverse[1][3] = m[0][2] * m[1][3] * m[2][0] -
+             m[0][3] * m[1][2] * m[2][0] +
+	     m[0][3] * m[1][0] * m[2][2] -
+	     m[0][0] * m[1][3] * m[2][2] -
+	     m[0][2] * m[1][0] * m[2][3] +
+	     m[0][0] * m[1][2] * m[2][3];
+
+   inverse[2][0] = m[1][1] * m[2][3] * m[3][0] -
+             m[1][3] * m[2][1] * m[3][0] +
+	     m[1][3] * m[2][0] * m[3][1] -
+	     m[1][0] * m[2][3] * m[3][1] -
+	     m[1][1] * m[2][0] * m[3][3] +
+	     m[1][0] * m[2][1] * m[3][3];
+
+   inverse[2][1] = m[0][3] * m[2][1] * m[3][0] -
+             m[0][1] * m[2][3] * m[3][0] -
+	     m[0][3] * m[2][0] * m[3][1] +
+	     m[0][0] * m[2][3] * m[3][1] +
+	     m[0][1] * m[2][0] * m[3][3] -
+	     m[0][0] * m[2][1] * m[3][3];
+
+   inverse[2][2] = m[0][1] * m[1][3] * m[3][0] -
+             m[0][3] * m[1][1] * m[3][0] +
+	     m[0][3] * m[1][0] * m[3][1] -
+	     m[0][0] * m[1][3] * m[3][1] -
+	     m[0][1] * m[1][0] * m[3][3] +
+	     m[0][0] * m[1][1] * m[3][3];
+
+   inverse[2][3] = m[0][3] * m[1][1] * m[2][0] -
+             m[0][1] * m[1][3] * m[2][0] -
+	     m[0][3] * m[1][0] * m[2][1] +
+	     m[0][0] * m[1][3] * m[2][1] +
+	     m[0][1] * m[1][0] * m[2][3] -
+	     m[0][0] * m[1][1] * m[2][3];
+
+   inverse[3][0] = m[1][2] * m[2][1] * m[3][0] -
+             m[1][1] * m[2][2] * m[3][0] -
+	     m[1][2] * m[2][0] * m[3][1] +
+	     m[1][0] * m[2][2] * m[3][1] +
+	     m[1][1] * m[2][0] * m[3][2] -
+	     m[1][0] * m[2][1] * m[3][2];
+
+   inverse[3][1] = m[0][1] * m[2][2] * m[3][0] -
+             m[0][2] * m[2][1] * m[3][0] +
+	     m[0][2] * m[2][0] * m[3][1] -
+	     m[0][0] * m[2][2] * m[3][1] -
+	     m[0][1] * m[2][0] * m[3][2] +
+	     m[0][0] * m[2][1] * m[3][2];
+
+   inverse[3][2] = m[0][2] * m[1][1] * m[3][0] -
+             m[0][1] * m[1][2] * m[3][0] -
+	     m[0][2] * m[1][0] * m[3][1] +
+	     m[0][0] * m[1][2] * m[3][1] +
+	     m[0][1] * m[1][0] * m[3][2] -
+	     m[0][0] * m[1][1] * m[3][2];
+
+   inverse[3][3] = m[0][1] * m[1][2] * m[2][0] -
+             m[0][2] * m[1][1] * m[2][0] +
+	     m[0][2] * m[1][0] * m[2][1] -
+	     m[0][0] * m[1][2] * m[2][1] -
+	     m[0][1] * m[1][0] * m[2][2] +
+	     m[0][0] * m[1][1] * m[2][2];
+   for (i = 0; i < 4; ++i)
+      for (j = 0; j < 4; ++j) inverse[i][j] /= det;
+}
+
+@ @<Function to calculate the determinant of a 4x4 matrix@>=
+double matrix_determinant_4x4(Matrix m)
+{
+   return
+   m[0][3] * m[1][2] * m[2][1] * m[3][0] -
+   m[0][2] * m[1][3] * m[2][1] * m[3][0] -
+   m[0][3] * m[1][1] * m[2][2] * m[3][0] +
+   m[0][1] * m[1][3] * m[2][2] * m[3][0] +
+   m[0][2] * m[1][1] * m[2][3] * m[3][0] -
+   m[0][1] * m[1][2] * m[2][3] * m[3][0] -
+   m[0][3] * m[1][2] * m[2][0] * m[3][1] +
+   m[0][2] * m[1][3] * m[2][0] * m[3][1] +
+   m[0][3] * m[1][0] * m[2][2] * m[3][1] -
+   m[0][0] * m[1][3] * m[2][2] * m[3][1] -
+   m[0][2] * m[1][0] * m[2][3] * m[3][1] +
+   m[0][0] * m[1][2] * m[2][3] * m[3][1] +
+   m[0][3] * m[1][1] * m[2][0] * m[3][2] -
+   m[0][1] * m[1][3] * m[2][0] * m[3][2] -
+   m[0][3] * m[1][0] * m[2][1] * m[3][2] +
+   m[0][0] * m[1][3] * m[2][1] * m[3][2] +
+   m[0][1] * m[1][0] * m[2][3] * m[3][2] -
+   m[0][0] * m[1][1] * m[2][3] * m[3][2] -
+   m[0][2] * m[1][1] * m[2][0] * m[3][3] +
+   m[0][1] * m[1][2] * m[2][0] * m[3][3] +
+   m[0][2] * m[1][0] * m[2][1] * m[3][3] -
+   m[0][0] * m[1][2] * m[2][1] * m[3][3] -
+   m[0][1] * m[1][0] * m[2][2] * m[3][3] +
+   m[0][0] * m[1][1] * m[2][2] * m[3][3];
+}
+
+@*2 Bounding Boxes.
+Each primitive is enclosed inside a parallelipiped referred to as the
+{\sl bounding box}@^bounding box@> of the primitive. It is defined by
+a pair of three dimensional coordinates $(\lambda, \tau)$, where
+$\lambda$ and $\tau$ are respectively the lower and upper bounds of
+all the points that are inside the solid (i.e., the bounding box fully
+encloses the solid).
+
+@<Type definition for bounding boxes@>=
+typedef struct bounding_box_struct {
+	vect3d l, u; /* lower and upper bounds */
+} BoundingBox;
+
+@ Every node in the CSG tree of a solid must be enclosed by a bounding box.
+@<Information common to all CSG nodes@>=
+BoundingBox bb;
+
+@ @<Print bounding box information@>=
+printf(" [%lf, %lf, %lf : %lf, %lf, %lf]\n",
+        temp->bb.l[0], temp->bb.l[1], temp->bb.l[2],
+        temp->bb.u[0], temp->bb.u[1], temp->bb.u[2]);
+
+@ The function |calculate_bounding_box(n)| calculates the bounding box
+of the solid represented by the supplied root of a CSG tree. To
+calculate the bounding box at a given node, the function uses the
+bounding boxes of the left and right subtrees. Only at the leaves,
+where we reach a primitive solid, we calculate the bounding box using
+only the definition of the primitive solid. This function returns
+|true| if the bounding box was calculated successfully; otherwise,
+|false| is returned.
+
+@<Function to calculate bounding box of a CSG node@>=
+bool calculate_bounding_box(CSG_Node *n)
+{
+	CSG_Node *l, *r; /* left and right subtrees */
+	vect3d temp, c[8]; /* for affine transformation */
+	int i, j;
+	if (SOLID == n->op) {
+	    if (primitive_bb(n->leaf.p, &n->bb)) {
+	        @<Calculate affine transformed bounding box@>;
+	        return true;
+            } else return false;
+        }
+	if (!calculate_bounding_box(n->internal.left)) return false;
+	if (!calculate_bounding_box(n->internal.right)) return false;
+	@<Find bounding box for the node using left and right subtrees@>;
+	return true;
+}
+
+@ The function |primitive_bb(p, bb)| calculates the bounding box of a
+primitive |p| and stores the result in the supplied bounding box
+variable |bb|. This function returns |true| if the bounding box was
+calculated successfully; otherwise, |false| is returned.
+
+@<Function to calculate bounding box of a primitive solid@>=
+bool primitive_bb(Primitive *p, BoundingBox *bb)
+{
+    switch(p->type) {
+    case BLOCK: @<Calculate bounding box of primitive block@>; break;
+    case SPHERE: @<Calculate bounding box of primitive sphere@>; break;
+    case CYLINDER: @<Calculate bounding box of primitive cylinder@>; break;
+    case TORUS: @<Calculate bounding box of primitive torus@>; break;
+    default: return false; /* invalid primitive */
+    }
+    return true;
+}
+
+@ Note here that the |length|, |height| and |width| are half-lengths
+of the blocks' dimension along the $x$, $y$ and $z$ axes. Furthermore,
+the block is centered at the origin of the world coordinate frame, so
+that it's centroid coincides with the origin.
+
+@<Calculate bounding box of primitive block@>=
+bb->l[0] = -p->b.length; /* x-axis */
+bb->u[0] = p->b.length;
+bb->l[1] = -p->b.height; /* y-axis */
+bb->u[1] = p->b.height;
+bb->l[2] = -p->b.width; /* z-axis */
+bb->u[2] = p->b.width;
+
+@ The sphere is centered at the origin of the world coordinate frame.
+@<Calculate bounding box of primitive sphere@>=
+bb->l[0] = -p->s.radius; /* x-axis */
+bb->u[0] = p->s.radius;
+bb->l[1] = bb->l[0]; /* y-axis */
+bb->u[1] = bb->u[0];
+bb->l[2] = bb->l[0]; /* z-axis */
+bb->u[2] = bb->u[0];
+
+@ The centroid of the cylinder is centered at the origin of the world
+coordinate frame, and the normals at the center of the two circular
+faces of the cylinder are parallel to the $y$-axis.
+@<Calculate bounding box of primitive cylinder@>=
+bb->l[0] = -p->c.radius; /* x-axis */
+bb->u[0] = p->c.radius;
+bb->l[1] = -p->c.height; /* y-axis */
+bb->u[1] = p->c.height;
+bb->l[2] = bb->l[0]; /* z-axis */
+bb->u[2] = bb->u[0];
+
+@ The torus is centered at the origin so that its center coincides
+with the origin of the world coordinate frame. Furthermore, the radial
+surface of the torus lies on the $xz$-plane.
+@<Calculate bounding box of primitive torus@>=
+bb->l[0] = -(p->t.major + p->t.minor); /* x-axis */
+bb->u[0] = p->t.major + p->t.minor;
+bb->l[1] = -p->t.minor; /* y-axis */
+bb->u[1] = p->t.minor;
+bb->l[2] = bb->l[0]; /* z-axis */
+bb->u[2] = bb->u[0];
+
+@ The bounding box of a primitive solid must be defined using the
+actual location and orientation of the primitive in the world
+coordinate frame. This means that, after the bounding box for the
+primitive has been calculated under the assumption that the center of
+the primitive coincides with the origin of the world coordinate frame,
+we must apply the affine transformation for that primitive to the
+calculated bounding box, to obtain the actual bounds.
+
+@<Calculate affine transformed bounding box@>=
+@<Calculate the eight corners of the bounding box@>;
+@<Apply inverse of the affine transformation to the corners@>;
+@<Calculate axis aligned bounding box of the transformed bounding box@>;
+
+@ @<Calculate the eight corners of the bounding box@>=
+c[0][0] = n->bb.l[0];
+c[0][1] = n->bb.l[1];
+c[0][2] = n->bb.l[2];
+c[1][0] = n->bb.l[0];
+c[1][1] = n->bb.l[1];
+c[1][2] = n->bb.u[2];
+c[2][0] = n->bb.l[0];
+c[2][1] = n->bb.u[1];
+c[2][2] = n->bb.l[2];
+c[3][0] = n->bb.l[0];
+c[3][1] = n->bb.u[1];
+c[3][2] = n->bb.u[2];
+c[4][0] = n->bb.u[0];
+c[4][1] = n->bb.l[1];
+c[4][2] = n->bb.l[2];
+c[5][0] = n->bb.u[0];
+c[5][1] = n->bb.l[1];
+c[5][2] = n->bb.u[2];
+c[6][0] = n->bb.u[0];
+c[6][1] = n->bb.u[1];
+c[6][2] = n->bb.l[2];
+c[7][0] = n->bb.u[0];
+c[7][1] = n->bb.u[1];
+c[7][2] = n->bb.u[2];
+
+@ @<Function to apply affine transformation matrix@>=
+void apply_affine(Matrix m, vect3d v, vect3d r)
+{
+    r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
+    r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
+    r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
+    r[3] = 1.0;
+}
+
+@ @<Apply inverse of the affine transformation to the corners@>=
+for (i = 0; i < 8; ++i) {
+        c[i][3] = 1.0; /* homogenise the corner vector */
+        apply_affine(n->inverse, &c[i][0], temp);
+        vect3d_copy(&c[i][0], temp);
+}
+
+@ After applying an affine transformation, a bounding box may no
+longer be axis-aligned. Since we require axis-aligned bounding boxes,
+we must re-calculate an axis-aligned bounding box of the transformed 
+bounding box by using its corners. 
+@<Calculate axis aligned bounding box of the transformed bounding box@>=
+for (j = 0; j < 3; ++j) {
+        n->bb.l[j] = c[0][j];
+        n->bb.u[j] = c[0][j];
+        for (i = 1; i < 8; ++i) {
+                if (c[i][j] < n->bb.l[j]) n->bb.l[j] = c[i][j]; /*
+		find minimum */
+                if (c[i][j] > n->bb.u[j]) n->bb.u[j] = c[i][j]; /*
+		find maximum */
+	}
+}
+for (i = 0; i < 8; ++i) n->bb.l[3] = n->bb.u[3] = 1.0; /* homogenise bound vectors*/
+
+@ @<Find bounding box for the node using left and right subtrees@>=
+l = n->internal.left;
+r = n->internal.right;
+switch(n->op) {
+case UNION: @<Calculate bounding box of union@>; break;
+case INTERSECTION: @<Calculate bounding box of intersection@>; break;
+case DIFFERENCE: @<Calculate bounding box of difference@>; break;
+default: return false;
+}
+
+@ In each of the axes, the lowest of the values stored in the left and
+right subtree nodes becomes the lower bound for the node. Similarly,
+the highest value becomes the upper bound. The resulting bounding box
+must enclose both solids on the left and right subtrees.
+
+@<Calculate bounding box of union@>=
+n->bb.l[0] = (l->bb.l[0] < r->bb.l[0]) ? l->bb.l[0] : r->bb.l[0];
+n->bb.l[1] = (l->bb.l[1] < r->bb.l[1]) ? l->bb.l[1] : r->bb.l[1];
+n->bb.l[2] = (l->bb.l[2] < r->bb.l[2]) ? l->bb.l[2] : r->bb.l[2];
+n->bb.u[0] = (l->bb.u[0] > r->bb.u[0]) ? l->bb.u[0] : r->bb.u[0];
+n->bb.u[1] = (l->bb.u[1] > r->bb.u[1]) ? l->bb.u[1] : r->bb.u[1];
+n->bb.u[2] = (l->bb.u[2] > r->bb.u[2]) ? l->bb.u[2] : r->bb.u[2];
+
+@ The function |intersection_bb(n, l, r, a)| calculates the bounding
+box |n| of the intersection node along the supplied axis |a| using the
+bounding boxes of the left and right nodes, |l| and |r|
+respectively. The parameter |a| must only take values 0, 1, and 2,
+representing respectively the $x$, $y$ and $z$ axes.
+
+@d X_AXIS 0
+@d Y_AXIS 1
+@d Z_AXIS 2
+@<Function to calculate bounding box of intersection@>=
+bool intersection_bb(BoundingBox *n, BoundingBox *l, BoundingBox *r, int a)
+{
+    if (l->l[a] < r->l[a] && l->u[a] > r->u[a]) { /* left fully encloses right */
+        n->l[a] = l->l[a];
+        n->u[a] = l->u[a];
+    } else if (r->l[a] < l->l[a] && r->u[a] > l->u[a]) { /* right fully encloses left */
+        n->l[a] = r->l[a];
+        n->u[a] = r->u[a];
+    } else {
+        if (l->l[a] < r->l[a]) { /* intersection with left behind
+	    right */
+            n->l[a] = r->l[a];
+            n->u[a] = l->u[a];
+	} else { /* intersection with right behind
+	    left */
+            n->l[a] = l->l[a];
+            n->u[a] = r->u[a];
+	}
+    }
+    return true;
+}
+
+@ When the left and right subtrees do not intersect, a bounding box
+must not be defined for the node. This is represented simply by making
+the upper bound smaller than the lower bound---we only need to do this
+for only one axis; here, we choose the $x$-axis.
+
+@<Calculate bounding box of intersection@>=
+if (l->bb.u[0] < r->bb.l[0] ||
+    l->bb.u[1] < r->bb.l[1] ||
+    l->bb.u[2] < r->bb.l[2] ||
+    r->bb.u[0] < l->bb.l[0] ||
+    r->bb.u[1] < l->bb.l[1] ||
+    r->bb.u[2] < l->bb.l[2]) { /* no intersection */
+        n->bb.l[0] = 1;
+        n->bb.u[0] = -1;
+} else {
+    intersection_bb(&n->bb, &l->bb, &r->bb, X_AXIS);
+    intersection_bb(&n->bb, &l->bb, &r->bb, Y_AXIS);
+    intersection_bb(&n->bb, &l->bb, &r->bb, Z_AXIS);
+}
+
+@ For a solid defined by a boolean difference, the bounding box of the
+node should be the bounding box of the left subtree before we subtract
+the right subtree.
+
+@<Calculate bounding box of difference@>=
+n->bb = l->bb;
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -2575,15 +3022,6 @@ case SCALE:
 default: return INVALID;
 }
 return recursively_test_containment(root->internal.left, r);
-
-@ @<Function to apply composite affine matrix@>=
-void apply_affine(Matrix m, vect3d v, vect3d r)
-{
-    r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
-    r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
-    r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
-    r[3] = 1.0;
-}
 
 @ @<Function to print a 4x4 matrix@>=
 void print_4x4_matrix(Matrix m, uint32_t indent)
@@ -3356,6 +3794,7 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Structure of a primitive torus@>;
 @<Container for a primitive@>;
 @<Structure of a constructive solid geometry tree@>;
+@<Type definition for bounding boxes@>;
 @<Structure of a CSG internal node@>;
 @<Structure for translation parameters@>;
 @<Structure for rotation parameters@>;
@@ -3398,8 +3837,16 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
 @<Function to multiply two 4x4 matrices@>;
+@<Function to calculate the determinant of a 3x3 matrix@>;
+@<Function to calculate the inverse of a 3x3 matrix@>;
+@<Function to calculate the determinant of a 4x4 matrix@>;
+@<Function to calculate the inverse of a 4x4 matrix@>;
 @<Function to merge affine transformations@>;
 @<Function to move affine transformation matrix to the primitives@>;
+@<Function to apply affine transformation matrix@>;
+@<Function to calculate bounding box of a primitive solid@>;
+@<Function to calculate bounding box of intersection@>;
+@<Function to calculate bounding box of a CSG node@>;
 @<Function to pre-process a CSG solid@>;
 @<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
@@ -3408,7 +3855,6 @@ vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to test containment inside a sphere@>;
 @<Function to test containment inside a cylinder@>;
 @<Function to check if an angle lies outside a supplied range@>;
-@<Function to apply composite affine matrix@>;
 @<Function to test containment inside a torus@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
