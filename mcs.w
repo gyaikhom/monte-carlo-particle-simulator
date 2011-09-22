@@ -138,8 +138,8 @@ is modified.
 @<Global functions@>=
 void vect3d_homogenise(vect3d v)
 {
-	if (v[3] == 1.0) return; /* already homogenised */
-	if (v[3] != 0.0) {
+	if (1.0 == v[3]) return; /* already homogenised */
+	if (0.0 != v[3]) {
 	        v[0] /= v[3];
 	        v[1] /= v[3];
 	        v[2] /= v[3];
@@ -334,7 +334,7 @@ daughters.
 void destroy_particle(Particle *p)
 {
 	Particle *t;
-	if (p == NULL) return;
+	if (NULL == p) return;
 	while (p->daughters) {
 	        t = p->daughters->next;
 		destroy_particle(p->daughters);
@@ -349,7 +349,7 @@ void destroy_particle(Particle *p)
 void print_particle(Particle *p)
 {
 	Particle *t;
-	if (p == NULL) return;
+	if (NULL == p) return;
 	@<Print particle information@>;
 	@<Print daughter particles@>;
 }
@@ -366,7 +366,7 @@ while (t) {
 @ @<Generate primary particles@>=
 for (k = 0; k < num_particles; k++) {
         current_particle = create_particle(current_vertex);
-	if (current_particle == NULL) {
+	if (NULL == current_particle) {
 	        fatal("failed to create particle");
 		@<Simulation has failed! Exit application@>;
 	}
@@ -416,7 +416,7 @@ the particles associated with it.
 void destroy_vertex(Vertex *v)
 {
 	Particle *t;
-	if (v == NULL) return;
+	if (NULL == v) return;
 	while (v->particles) {
 	        t = v->particles->next;
 		destroy_particle(v->particles);
@@ -430,7 +430,7 @@ void destroy_vertex(Vertex *v)
 @<Print vertex tree@>=
 void print_vertex(Vertex *v)
 {
-	if (v == NULL) return;
+	if (NULL == v) return;
 	@<Print vertex information@>;
 	@<Print particles@>;
 }
@@ -448,7 +448,7 @@ while (current_particle) {
 @ @<Generate vertices@>=
 for (j = 0; j < num_vertices; j++) {
         current_vertex = create_vertex(current_event);
-	if (current_vertex == NULL) {
+	if (NULL == current_vertex) {
 	        fatal("failed to create vertex");
 		@<Simulation has failed! Exit application@>;
 	}
@@ -560,7 +560,7 @@ Event *create_event(uint32_t id)
 void destroy_event(Event *e)
 {
 	Vertex *v;
-	if (e == NULL) return;
+	if (NULL == e) return;
 	while (e->vertices) {
 	      v = e->vertices->next;
 	      destroy_vertex(e->vertices);
@@ -575,7 +575,7 @@ particles, and secondary daughter particles.
 @<Print event tree@>=
 void print_event(Event *e)
 {
-	if (e == NULL) return;
+	if (NULL == e) return;
 	@<Print event information@>;
 	@<Print vertices@>;
 }
@@ -596,7 +596,7 @@ invoke generate the vertices and the required primary particles.
 
 @<Simulate $i$th event@>=
 current_event = create_event(i);
-if (current_event == NULL) {
+if (NULL == current_event) {
         fatal("failed to create event");
 	@<Simulation has failed! Exit application@>;
 }
@@ -630,14 +630,14 @@ particle_stack.tos = 0;
 @ @<Push particle into particle stack@>=
 void push_particle(Particle *p)
 {
-	if (particle_stack.tos == MAX_STACK_SIZE) return;
+	if (MAX_STACK_SIZE == particle_stack.tos) return;
 	particle_stack.particles[particle_stack.tos++] = p;
 }
 
 @ @<Pop particle out of the particle stack@>=
 Particle *pop_particle()
 {
-	if (particle_stack.tos == 0) return NULL;
+	if (0 == particle_stack.tos) return NULL;
 	return particle_stack.particles[--particle_stack.tos];
 }
 
@@ -828,7 +828,8 @@ how a unit of measurement is chosen.
 @<Register the primitive solid@>;
 
 @ @<Create a new primitive solid@>=
-if ((p = create_primitive_solid()) == NULL) {
+p = create_primitive_solid();
+if (NULL == p) {
         @<Exit after cleanup: failed to create primitive solid@>;
 }
 
@@ -856,7 +857,7 @@ CSG_Node *internal_node, *leaf_node, *temp_node;
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
        p->name, &p->b.length, &p->b.width, &p->b.height);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 4) {
+if (EOF == read_count || 4 != read_count) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -885,7 +886,8 @@ p->b.width /= 2.0;
 goto failed_read_exit_after_cleanup;
 
 @ @<Register the primitive solid@>=
-if ((leaf_node = create_csg_node()) == NULL) {
+leaf_node = create_csg_node();
+if (NULL == leaf_node) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = SOLID; /* this is a primitive solid leaf node */
@@ -933,7 +935,7 @@ discussed.
 read_count = fscanf(f, "(\"%[^\"]\" %lf)",
        p->name, &p->s.radius);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 2) {
+if (EOF == read_count || 2 != read_count) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -980,7 +982,7 @@ base radius 10.0 and height 20.0.
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)",
        p->name, &p->c.radius, &p->c.height);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 3) {
+if (EOF == read_count || 3 != read_count) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -1078,7 +1080,7 @@ read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)",
        p->name, &p->t.phi, &p->t.phi_start, &p->t.theta,
        &p->t.theta_start, &p->t.major, &p->t.minor);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 7) {
+if (EOF == read_count || 7 != read_count) {
         destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -1246,8 +1248,8 @@ we must also destroy the right nodes if they are parameter nodes.
 @<Destroy the hash table of solids@>=
 for (i = 0; i < MAX_CSG_NODES; ++i) {
         temp_node = csg_tree.table[i];
-        if (temp_node == NULL) continue;
-        if (temp_node->op == SOLID)
+        if (NULL == temp_node) continue;
+        if (SOLID == temp_node->op)
                destroy_primitive_solid(temp_node->leaf.p);
         else {
                 @<Destroy parameter node if any@>;
@@ -1261,7 +1263,7 @@ translation or transformation operator node. If present, they are the
 right child of the parent operator node.
 
 @<Destroy parameter node if any@>=
-if (temp_node->op >= TRANSLATE)
+if (TRANSLATE <= temp_node->op)
         free(temp_node->internal.right);
 
 @ We store and retrieve solids using the following functions:
@@ -1305,7 +1307,7 @@ otherwise, it returns a pointer to the solid to indicate success.
 @<Register a solid using a specified |name|@>=
 CSG_Node *register_solid(CSG_Node *solid, char *name) {
 	 long h = hash(name, MAX_CSG_NODES);
-	 if (csg_tree.table[h] == NULL) {
+	 if (NULL == csg_tree.table[h]) {
                  strcpy(solid->name, name);
 	         csg_tree.table[h] = solid;
 		 @<Set current solid as the root of the CSG tree@>;
@@ -1327,7 +1329,8 @@ CSG_Node *find_csg_node(char *name) {
 @ @<Create a CSG node@>=
 CSG_Node *create_csg_node() {
         CSG_Node *temp;
-	if ((temp = (CSG_Node *) malloc(sizeof(CSG_Node))) == NULL)
+	temp = (CSG_Node *) malloc(sizeof(CSG_Node));
+	if (NULL == temp)
 	        fprintf(stderr, "Failed to allocate memory\n");
 	@<Initialise affine matrix to identity@>;
         return temp;
@@ -1375,13 +1378,13 @@ and stores the result using the name ``U1".
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 3)
+if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create union operator node@>;
 
 @ @<Check that the target does not already exists@>=
-if ((target_solid = find_csg_node(op_target)) != NULL) {
+if (NULL != (target_solid = find_csg_node(op_target))) {
         solid_name = op_target;
         @<Exit after cleanup: solid already exists@>;
 }
@@ -1400,7 +1403,8 @@ left and right subtrees point to these existing solids.
 @<Create new union operator node@>;
 
 @ @<Find solid that corresponds to the left-hand operand@>=
-if ((left_solid = find_csg_node(op_left)) == NULL) {
+left_solid = find_csg_node(op_left);
+if (NULL == left_solid) {
         solid_name = op_left;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1409,7 +1413,8 @@ if ((left_solid = find_csg_node(op_left)) == NULL) {
 goto no_solid_exists_exit_after_cleanup;
 
 @ @<Find solid that corresponds to the right-hand operand@>=
-if ((right_solid = find_csg_node(op_right)) == NULL) {
+right_solid = find_csg_node(op_right);
+if (NULL == right_solid) {
         solid_name = op_right;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1420,7 +1425,8 @@ solid must be registered with the system, so that they may be used by
 later commands. 
 
 @<Create new union operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = UNION; /* this is an internal node */
@@ -1465,7 +1471,7 @@ and stores the result using the name ``I1".
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 3)
+if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create intersection operator node@>;
@@ -1486,7 +1492,8 @@ this new solid must be registered with the system, so that they may be
 used by later commands. 
 
 @<Create new intersection operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = INTERSECTION; /* this is an internal node */
@@ -1523,7 +1530,7 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 3)
+if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
 @<Create difference operator node@>;
@@ -1544,7 +1551,8 @@ this new solid must be registered with the system, so that they may be
 used by later commands. 
 
 @<Create new difference operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = DIFFERENCE; /* this is an internal node */
@@ -1599,7 +1607,7 @@ units along the $z$ axis, and register this intermediate solid as
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 5)
+if (EOF == read_count || 5 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 
@@ -1609,7 +1617,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_csg_node(op_solid)) == NULL) {
+target_solid = find_csg_node(op_solid);
+if (NULL == target_solid) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1632,7 +1641,8 @@ choose to apply the translations directly, at least for primitive
 solids.
 
 @<Create translation parameter node@>=
-if ((leaf_node = create_csg_node()) == NULL) {
+leaf_node = create_csg_node();
+if (NULL == leaf_node) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
@@ -1649,7 +1659,8 @@ goto create_parameter_failed_exit_after_cleanup;
 solid and the parameter node.
 
 @<Create and register translation operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
@@ -1712,7 +1723,7 @@ register this intermediate solid as ``R1''.
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)",
 	   op_target, op_solid, &op_theta, &op_x, &op_y, &op_z);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 6)
+if (EOF == read_count || 6 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a rotation to be applicable, the supplied target
@@ -1721,7 +1732,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_csg_node(op_solid)) == NULL) {
+target_solid = find_csg_node(op_solid);
+if (NULL == target_solid) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1729,7 +1741,8 @@ if ((target_solid = find_csg_node(op_solid)) == NULL) {
 @ We now have a valid rotation, so create the parameter leaf node.
 
 @<Create rotation parameter node@>=
-if ((leaf_node = create_csg_node()) == NULL) {
+leaf_node = create_csg_node();
+if (NULL == leaf_node) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
@@ -1744,7 +1757,8 @@ if ((leaf_node = create_csg_node()) == NULL) {
 solid and the parameter node.
 
 @<Create and register rotation operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = ROTATE; /* this is an operator internal node */
@@ -1795,7 +1809,7 @@ coordinate frame and register this intermediate solid as ``S1''.
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 5)
+if (EOF == read_count || 5 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 @ In order for a scaling to be applicable, the supplied target
@@ -1804,7 +1818,8 @@ definition as a primitive solid, or as an intermediate solid
 defined by a CSG subtree.
 
 @<Find the target solid for the operation@>=
-if ((target_solid = find_csg_node(op_solid)) == NULL) {
+target_solid = find_csg_node(op_solid);
+if (NULL == target_solid) {
         solid_name = op_solid;
         @<Exit after cleanup: solid does not exists@>;
 }
@@ -1812,7 +1827,8 @@ if ((target_solid = find_csg_node(op_solid)) == NULL) {
 @ We now have a valid scaling, so create the parameter leaf node.
 
 @<Create scaling parameter node@>=
-if ((leaf_node = create_csg_node()) == NULL) {
+leaf_node = create_csg_node();
+if (NULL == leaf_node) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
         leaf_node->op = PARAMETER; /* this is a parameter leaf node */
@@ -1826,7 +1842,8 @@ if ((leaf_node = create_csg_node()) == NULL) {
 solid and the parameter node.
 
 @<Create and register scaling operator node@>=
-if ((internal_node = create_csg_node()) == NULL) {
+internal_node = create_csg_node();
+if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = SCALE; /* this is an operator internal
@@ -1865,7 +1882,7 @@ CSG tree) using the following format:
 @<Read target solid for registration@>=
 read_count = fscanf(f, "(\"%[^\"]\")", op_solid);
 ++input_file_current_line;
-if (read_count == EOF || read_count != 1)
+if (EOF == read_count || 1 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 @ @<Register the target solid@>=
@@ -1941,7 +1958,7 @@ int read_geometry(const char *fname)
         @<Variables used for handling rotation operators@>;
 	@<Open input geometry file@>;
 	@<Initialise the hash table of solids@>;
-	while ((c = fgetc(f)) != EOF) {
+	while (EOF != (c = fgetc(f))) {
 		@<Discard comments, white spaces and empty lines@>;
 	        @<Process input command@>;
 	}
@@ -1960,7 +1977,8 @@ prefix and suffix strings to a base filename).
 @<Open input geometry file@>=
 input_file_current_line = 0;
 strcpy(input_file_name, fname); /* generate filename */
-if ((f = fopen(input_file_name, "r")) == NULL) {
+f = fopen(input_file_name, "r");
+if (NULL == f) {
         fprintf(stderr, "Failed to open input geometry file: %s\n",
 	        input_file_name);
 	return 1;
@@ -1978,16 +1996,16 @@ indentation of commands.
 end-of-line character.
 @<Discard comment lines@>=
 if (c == '%') {
-        while ((c = fgetc(f)) != EOF)
-                if (c == '\n') break; /* gobble comments */
-	if (c == EOF) break; /* done reading input file */
+        while (EOF != (c = fgetc(f)))
+                if ('\n' == c) break; /* gobble comments */
+	if (EOF == c) break; /* done reading input file */
 }
 
 @ @<Discard indentations@>=
-if (c == ' ' || c == '\t') continue;
+if (' ' == c || '\t' == c) continue;
 
 @ @<Discard empty lines@>=
-if (c == '\n') {
+if ('\n' == c) {
         ++input_file_current_line;
 	continue;
 }
@@ -2037,22 +2055,22 @@ default:
 
 @<Function to count number of primitive solids in a CSG tree@>=
 uint32_t count_primitive_solids(CSG_Node *temp) {
-         if (temp == NULL) return 0;
-	 if (temp->op == SOLID) return 1; /* a primitive solid */
-	 if (temp->op == PARAMETER) return 0; /* a parameter node */
+         if (NULL == temp) return 0;
+	 if (SOLID == temp->op) return 1; /* a primitive solid */
+	 if (PARAMETER == temp->op) return 0; /* a parameter node */
 	 return (count_primitive_solids(temp->internal.left) + 
 	        count_primitive_solids(temp->internal.right));
 }
 
 @ @<Function to destroy the CSG tree@>=
 void destroy_csg_tree(CSG_Node *temp) {
-        if (temp == NULL) return;
-        if (temp->op == SOLID) {
+        if (NULL == temp) return;
+        if (SOLID == temp->op) {
                 destroy_primitive_solid(temp->leaf.p);
                 free(temp);
                 return;
         }
-	if (temp->op == PARAMETER) {
+	if (PARAMETER == temp->op) {
 	        free(temp);
                 return;
         }
@@ -2067,12 +2085,12 @@ void destroy_csg_tree(CSG_Node *temp) {
 @<Function to print the CSG tree@>=
 void print_csg_tree(CSG_Node *temp, uint32_t indent) {
         int i;
-        if (temp == NULL) return;
-        if (temp->op == SOLID) {
+        if (NULL == temp) return;
+        if (SOLID == temp->op) {
                 @<Print primitive solid information@>;
                 return;
         }
-        if (temp->op == PARAMETER) {
+        if (PARAMETER == temp->op) {
                 @<Print operator parameters@>;
                 return;
         }
@@ -2919,7 +2937,7 @@ inside the solid defined by the CSG tree rooted at |root|; otherwise,
 @<Function to test if a vector is inside a solid@>=
 Containment solid_contains_vector(CSG_Node *root, vect3d v)
 {
-	if (root == NULL || v == NULL) return INVALID;
+	if (NULL == root || NULL == v) return INVALID;
 	vect3d_homogenise(v);
 	return recursively_test_containment(root, v);
 }
@@ -2929,10 +2947,10 @@ Containment recursively_test_containment(CSG_Node *root, vect3d v)
 {
         Containment left, right;
         vect3d r; /* used during inverse transformation */
-        if (root->op == SOLID) {
+        if (SOLID == root->op) {
                 @<Test containment inside primitive solid@>;
 	} else {
-                if (root->op >= UNION && root->op <= DIFFERENCE) {
+                if (UNION <= root->op && DIFFERENCE >= root->op) {
                         @<Test containment in subtrees using boolean operators@>;
                 } else {
                         @<Test containment after transformation or translation@>;
@@ -2960,28 +2978,28 @@ left = recursively_test_containment(root->internal.left, v);
 right = recursively_test_containment(root->internal.right, v);
 switch(root->op) {
 case UNION:
-	if (left == INVALID || right == INVALID)
+	if (INVALID == left || INVALID == right)
                 return INVALID; /* handle error */
-	if (left == INSIDE || right == INSIDE)
+	if (INSIDE == left || INSIDE == right)
                 return INSIDE;
-	if (left == SURFACE || right == SURFACE)
+	if (SURFACE == left || SURFACE == right)
                 return SURFACE;
 	return OUTSIDE;
 case INTERSECTION:
-	if (left == INVALID || right == INVALID)
+	if (INVALID == left || INVALID == right)
                 return INVALID; /* handle error */
-	if (left == OUTSIDE || right == OUTSIDE)
+	if (OUTSIDE == left || OUTSIDE == right)
                 return OUTSIDE;
-	if (left == INSIDE && right == INSIDE)
+	if (INSIDE == left && INSIDE == right)
                 return INSIDE;
         return SURFACE;
 case DIFFERENCE:
-	if (left == INVALID || right == INVALID)
+	if (INVALID == left || INVALID == right)
                 return INVALID; /* handle error */
-        if (right == OUTSIDE) {
-	        if (left == SURFACE) return SURFACE; /* definitely on
+        if (OUTSIDE == right) {
+	        if (SURFACE == left) return SURFACE; /* definitely on
 		the surface */
-	        if (left == INSIDE) return INSIDE; /* could be on the
+	        if (INSIDE == left) return INSIDE; /* could be on the
 		surface, but assume it is inside */
         }
 	return OUTSIDE;
@@ -3526,16 +3544,16 @@ if (c == 'i' || c == 'o' || c == 's') {
 @ @<Read parameters for the test-case@>=
 n = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
         op_solid, &point[0], &point[1], &point[2]);
-if (n == EOF || n != 4) {
+if (EOF == n || 4 != n) {
         printf("Invalid %s test at line %d\n",@/
-        c == 'i' ? "inside" :
-            (c == 'o' ? "outside" : "surface"), input_file_current_line);
+        'i' == c ? "inside" :
+            ('o' == c ? "outside" : "surface"), input_file_current_line);
         exit(1);
 }
 
 @ @<Validate the test-case@>=
 temp_node = find_solid(op_solid);
-if (temp_node == NULL) {
+if (NULL == temp_node) {
         printf("[%d] Solid '%s' not found\n",
 	input_file_current_line, op_solid);
 } else {
@@ -3544,21 +3562,21 @@ if (temp_node == NULL) {
         t = false;
         switch(flag) {
         case INSIDE:
-                if (c == 'i') t = true;
+                if ('i' == c) t = true;
                 break;
         case SURFACE:
-                if (c == 's') t = true;
+                if ('s' == c) t = true;
                 break;
         case OUTSIDE:
-                if (c == 'o') t = true;
+                if ('o' == c) t = true;
                 break;
         case INVALID:
                 printf("error: ");
                 break;
         }
 	printf("[%4d] %s test: %s\n", input_file_current_line,@/
-            c == 'i' ? "inside" :
-                (c == 'o' ? "outside" : "surface"),
+            'i' == c ? "inside" :
+                ('o' == c ? "outside" : "surface"),
             t ? "OK" : "Fail");
 }
 
@@ -3676,10 +3694,10 @@ array $p = \{A, B, C, D\}$.
 
 @<Evaluate the postfix boolean expression using the stack@>=
 for (i = 0; i < s->nc; ++i) {
-        if (s->c[i] > BOOLEAN_DIFFERENCE) {
+        if (BOOLEAN_DIFFERENCE < s->c[i]) {
 	        @<Push to stack the boolean containment of $v$ inside primitive@>;
 	} else {
-	        if (s->c[i] < BOOLEAN_UNION) {
+	        if (BOOLEAN_UNION > s->c[i]) {
 		        fprintf(stderr,
 			      "Invalid value '%d' in expression\n",
                               s->c[i]);
