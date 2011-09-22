@@ -1202,6 +1202,150 @@ goto error_invalid_file;
 fprintf(stderr, "Cleaning up resources...\n");
 @<Destroy the hash table of solids@>;
 
+@*2 Solid registry.
+The {\sl solid registry}@^solid registry@> is a hash table where we
+store all of the existing solids, both primitive and
+intermediate. Every solid registry is associated with a CSG tree. In
+{\tt MCS}, we only use one CSG tree.
+
+@<Global variables@>=
+CSG_Tree csg_tree; /* defines solids in the simulation world */
+
+@ Before using the hash table, it must be initialised.
+
+@<Initialise the hash table of solids@>=
+reset_list_of_solids();
+@<Reset the hash table of solids@>;
+
+@ Reset the hash table, which unregisters all of the solids. Since the
+hash table and the CSG tree are linked to one another, we must also
+discard the current CSG tree. The following code must only be invoked
+on hash tables with valid CSG trees; for error handling, use 
+|@<Destroy the hash table of solids@>| instead, because it can handle
+detached CSG nodes.
+
+@<Reset the hash table of solids@>=
+destroy_csg_tree(csg_tree.root);
+csg_tree.root = NULL;
+for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
+
+@ We destroy the hash table by freeing up all of the CSG nodes. The
+hash table is destroyed explicitly only when we encounter a fatal error
+that requires shutting down the application. This frees up all of the
+CSG nodes which correspond to existing primitive solids, parameters
+and operators. This is different from freeing resources using the
+|destroy_csg_tree()| function because |destroy_csg_tree()| requires
+that the CSG tree is valid, and that no CSG node is detached. During
+fatal failures we cannot guarantee that the CSG tree is valid,
+hence, we destroy the hash table instead.
+
+Note here that, since parameter nodes are not part of the hash table,
+we must also destroy the right nodes if they are parameter nodes.
+
+@<Destroy the hash table of solids@>=
+for (i = 0; i < MAX_CSG_NODES; ++i) {
+        temp_node = csg_tree.table[i];
+        if (NULL == temp_node) continue;
+        if (SOLID == temp_node->op)
+               destroy_primitive_solid(temp_node->leaf.p);
+        else {
+                @<Destroy parameter node if any@>;
+        }
+        free(temp_node);
+	csg_tree.table[i] = NULL;
+}
+
+@ Parameter nodes are only accessible through the corresponding
+translation or transformation operator node. If present, they are the
+right child of the parent operator node.
+
+@<Destroy parameter node if any@>=
+if (TRANSLATE <= temp_node->op)
+        free(temp_node->internal.right);
+
+@ We store and retrieve solids using the following functions:
+
+$$\vcenter{\halign{\hfil # & # \hfil\cr
+|register_csg_node(n,s)| & Register the solid represented by CSG node |n| using the name |s|, and\cr
+|find_csg_node(s)| & Find the solid that is associated with the name |s|.\cr
+}}$$
+
+Each of these functions uses a pseudo-random hash value $h$, which
+is calculated from a null-terminated character string. If $q$
+represents the number of nodes in the CSG tree, then $0 \le h < q$.
+
+@ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
+ nonlinear function of the characters. We borrow the
+hash function used in the {\sl Stanford Graph Base}
+@^Stanford Graph Base@> to calculate $h$. As noted in the
+ documentation, this hash function only works with ASCII encoded
+ strings.
+
+@d HASH_MULT 314159 /* random multiplier */
+@d HASH_PRIME 516595003 /* the 27182818th prime; which is less than $2^{29}$ */
+
+@<Global functions@>=
+long hash(const char *name, long ubound)
+{
+        register long h;
+        const char *t = name;
+        for (h = 0; *t; t++) {
+                h += (h ^ (h >> 1)) + HASH_MULT * (unsigned char) *t;
+	        while (h >= HASH_PRIME) h -= HASH_PRIME;
+        }
+        return (h % ubound);
+}
+
+@ The function |register_solid| registers a primitive or
+intermediate solid using their unique name. If the supplied name is
+already in use, it returns |NULL| to notify registration failure;
+otherwise, it returns a pointer to the solid to indicate success. 
+
+@<Global functions@>=
+CSG_Node *register_solid(CSG_Node *solid, char *name) {
+	 long h = hash(name, MAX_CSG_NODES);
+	 if (NULL == csg_tree.table[h]) {
+                 strcpy(solid->name, name);
+	         csg_tree.table[h] = solid;
+		 @<Set current solid as the root of the CSG tree@>;
+		 return solid;
+	 } else return NULL;
+}
+
+@ Because the CSG tree is built bottom-up, the CSG node that was
+registered last is considered the root of the CSG tree.
+
+@<Set current solid as the root of the CSG tree@>=
+csg_tree.root = solid;
+
+@ @<Find the solid associated with a specified |name|@>=
+CSG_Node *find_csg_node(char *name) {
+	 return csg_tree.table[hash(name, MAX_CSG_NODES)];
+}
+
+@ @<Global functions@>=
+CSG_Node *create_csg_node() {
+        CSG_Node *temp;
+	temp = (CSG_Node *) malloc(sizeof(CSG_Node));
+	if (NULL == temp)
+	        fprintf(stderr, "Failed to allocate memory\n");
+	@<Initialise affine matrix to identity@>;
+        return temp;
+}
+
+@ While reading in the operations, we use the following variables to
+store temporary values. Since each operation is defined independently
+of other operations before and after, these variables can be shared by
+all of the operation commands without confusion.
+
+@d MAX_LEN_FILENAME 256
+@<Global variables@>=
+double op_x, op_y, op_z, op_theta;
+char op_target[MAX_LEN_SOLID_NAME], op_solid[MAX_LEN_SOLID_NAME];
+char op_left[MAX_LEN_SOLID_NAME], op_right[MAX_LEN_SOLID_NAME];
+char *solid_name; /* points to name of solid while alerting error */
+CSG_Node *target_solid, *left_solid, *right_solid;
+
 @*1 Standard Primitives.
 We use four {\sl standard primitives}@^standard primitives@> that
 define closed solid volumes. These are: the {\sl
@@ -1413,6 +1557,7 @@ if (EOF == read_count || 2 != read_count) {
 }
 p->type = SPHERE;
 ++csg_tree.num_primitive;
+
 
 @*2 Cylinder.
 A primitive cylinder stores the following information.
@@ -1713,149 +1858,6 @@ char name[MAX_LEN_SOLID_NAME]; /* from input geometry file */
 @<Information common to all CSG nodes@>=
 CSG_Node *parent; /* pointer to parent node */
 
-@*2 Solid registry.
-The {\sl solid registry}@^solid registry@> is a hash table where we
-store all of the existing solids, both primitive and
-intermediate. Every solid registry is associated with a CSG tree. In
-{\tt MCS}, we only use one CSG tree.
-
-@<Global variables@>=
-CSG_Tree csg_tree; /* defines solids in the simulation world */
-
-@ Before using the hash table, it must be initialised.
-
-@<Initialise the hash table of solids@>=
-reset_list_of_solids();
-@<Reset the hash table of solids@>;
-
-@ Reset the hash table, which unregisters all of the solids. Since the
-hash table and the CSG tree are linked to one another, we must also
-discard the current CSG tree. The following code must only be invoked
-on hash tables with valid CSG trees; for error handling, use 
-|@<Destroy the hash table of solids@>| instead, because it can handle
-detached CSG nodes.
-
-@<Reset the hash table of solids@>=
-destroy_csg_tree(csg_tree.root);
-csg_tree.root = NULL;
-for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
-
-@ We destroy the hash table by freeing up all of the CSG nodes. The
-hash table is destroyed explicitly only when we encounter a fatal error
-that requires shutting down the application. This frees up all of the
-CSG nodes which correspond to existing primitive solids, parameters
-and operators. This is different from freeing resources using the
-|destroy_csg_tree()| function because |destroy_csg_tree()| requires
-that the CSG tree is valid, and that no CSG node is detached. During
-fatal failures we cannot guarantee that the CSG tree is valid,
-hence, we destroy the hash table instead.
-
-Note here that, since parameter nodes are not part of the hash table,
-we must also destroy the right nodes if they are parameter nodes.
-
-@<Destroy the hash table of solids@>=
-for (i = 0; i < MAX_CSG_NODES; ++i) {
-        temp_node = csg_tree.table[i];
-        if (NULL == temp_node) continue;
-        if (SOLID == temp_node->op)
-               destroy_primitive_solid(temp_node->leaf.p);
-        else {
-                @<Destroy parameter node if any@>;
-        }
-        free(temp_node);
-	csg_tree.table[i] = NULL;
-}
-
-@ Parameter nodes are only accessible through the corresponding
-translation or transformation operator node. If present, they are the
-right child of the parent operator node.
-
-@<Destroy parameter node if any@>=
-if (TRANSLATE <= temp_node->op)
-        free(temp_node->internal.right);
-
-@ We store and retrieve solids using the following functions:
-
-$$\vcenter{\halign{\hfil # & # \hfil\cr
-|register_csg_node(n,s)| & Register the solid represented by CSG node |n| using the name |s|, and\cr
-|find_csg_node(s)| & Find the solid that is associated with the name |s|.\cr
-}}$$
-
-Each of these functions uses a pseudo-random hash value $h$, which
-is calculated from a null-terminated character string. If $q$
-represents the number of nodes in the CSG tree, then $0 \le h < q$.
-
-@ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
- nonlinear function of the characters. We borrow the
-hash function used in the {\sl Stanford Graph Base}
-@^Stanford Graph Base@> to calculate $h$. As noted in the
- documentation, this hash function only works with ASCII encoded
- strings.
-
-@d HASH_MULT 314159 /* random multiplier */
-@d HASH_PRIME 516595003 /* the 27182818th prime; which is less than $2^{29}$ */
-
-@<Function to calculate the hash value |h| of a string@>=
-long hash(const char *name, long ubound)
-{
-        register long h;
-        const char *t = name;
-        for (h = 0; *t; t++) {
-                h += (h ^ (h >> 1)) + HASH_MULT * (unsigned char) *t;
-	        while (h >= HASH_PRIME) h -= HASH_PRIME;
-        }
-        return (h % ubound);
-}
-
-@ The function |register_solid| registers a primitive or
-intermediate solid using their unique name. If the supplied name is
-already in use, it returns |NULL| to notify registration failure;
-otherwise, it returns a pointer to the solid to indicate success. 
-
-@<Register a solid using a specified |name|@>=
-CSG_Node *register_solid(CSG_Node *solid, char *name) {
-	 long h = hash(name, MAX_CSG_NODES);
-	 if (NULL == csg_tree.table[h]) {
-                 strcpy(solid->name, name);
-	         csg_tree.table[h] = solid;
-		 @<Set current solid as the root of the CSG tree@>;
-		 return solid;
-	 } else return NULL;
-}
-
-@ Because the CSG tree is built bottom-up, the CSG node that was
-registered last is considered the root of the CSG tree.
-
-@<Set current solid as the root of the CSG tree@>=
-csg_tree.root = solid;
-
-@ @<Find the solid associated with a specified |name|@>=
-CSG_Node *find_csg_node(char *name) {
-	 return csg_tree.table[hash(name, MAX_CSG_NODES)];
-}
-
-@ @<Global functions@>=
-CSG_Node *create_csg_node() {
-        CSG_Node *temp;
-	temp = (CSG_Node *) malloc(sizeof(CSG_Node));
-	if (NULL == temp)
-	        fprintf(stderr, "Failed to allocate memory\n");
-	@<Initialise affine matrix to identity@>;
-        return temp;
-}
-
-@ While reading in the operations, we use the following variables to
-store temporary values. Since each operation is defined independently
-of other operations before and after, these variables can be shared by
-all of the operation commands without confusion.
-
-@d MAX_LEN_FILENAME 256
-@<Global variables@>=
-double op_x, op_y, op_z, op_theta;
-char op_target[MAX_LEN_SOLID_NAME], op_solid[MAX_LEN_SOLID_NAME];
-char op_left[MAX_LEN_SOLID_NAME], op_right[MAX_LEN_SOLID_NAME];
-char *solid_name; /* points to name of solid while alerting error */
-CSG_Node *target_solid, *left_solid, *right_solid;
 
 @*2 Union.
 
@@ -2438,9 +2440,10 @@ void print_all_solids()
 	}
 }
 
-@ We recursively travel the left and right subtrees.
+@ We recursively travel the left and right subtrees. Function to count
+number of primitive solids in a CSG tree
 
-@<Function to count number of primitive solids in a CSG tree@>=
+@<Global functions@>=
 uint32_t count_primitive_solids(CSG_Node *temp) {
          if (NULL == temp) return 0;
 	 if (SOLID == temp->op) return 1; /* a primitive solid */
@@ -2449,7 +2452,8 @@ uint32_t count_primitive_solids(CSG_Node *temp) {
 	        count_primitive_solids(temp->internal.right));
 }
 
-@ @<Function to destroy the CSG tree@>=
+@ Function to destroy the CSG tree
+@<Global functions@>=
 void destroy_csg_tree(CSG_Node *temp) {
         if (NULL == temp) return;
         if (SOLID == temp->op) {
@@ -2469,7 +2473,7 @@ void destroy_csg_tree(CSG_Node *temp) {
 @ Print the CSG tree using {\sl preorder tree traversal}.
 @^preorder tree traversal@>
 
-@<Function to print the CSG tree@>=
+@<Global functions@>=
 void print_csg_tree(CSG_Node *temp, uint32_t indent) {
         int i;
         if (NULL == temp) return;
@@ -2573,7 +2577,7 @@ matrix_print(stdout, temp->affine, 4, 4, indent + 1);
 printf("\n");
 matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
 
-@ @<Function to pre-process a CSG solid@>=
+@ @<Global functions@>=
 void pp(CSG_Node *n)
 {
 	if (NULL == n) return;
@@ -2599,22 +2603,7 @@ void pp(CSG_Node *n)
 	pp(n->internal.right);
 }
 
-@ @<Function to pre-process a CSG solid@>=
-void process_and_register_solid(const char *name, CSG_Node *root)
-{
-	long h;
-	CSG_Node *temp;
-	if (NULL == root || NULL == name) return;
-	temp = merge_affine_transformations(root);
-	if (NULL == temp) temp = root;
-	h = hash(name, MAX_CSG_SOLIDS);
-	strcpy(csg_solids.table[h].name, name);
-	csg_solids.table[h].solid = temp;
- 	move_affine_transformation_matrix(temp);
-	calculate_bounding_box(temp);
-}
-
-@ @<Function to find a CSG solid@>=
+@ @<Global functions@>=
 CSG_Node *find_solid(const char *name)
 {
 	return csg_solids.table[hash(name, MAX_CSG_SOLIDS)].solid;
@@ -2644,7 +2633,8 @@ applied.
 @<Information common to all CSG nodes@>=
 CSG_Node *affine_list; /* the list of affine transformations */
 
-@ @<Function to merge affine transformations@>=
+@ Function to merge affine transformations
+@<Global functions@>=
 CSG_Node *merge_affine_transformations(CSG_Node *root)
 {
 	CSG_Node *temp, *parent, *affine_list;
@@ -2693,7 +2683,8 @@ if (NULL != temp) root->internal.left = temp;
 temp = merge_affine_transformations(root->internal.right);
 if (NULL != temp) root->internal.right = temp;
 
-@ @<Function to move affine transformation matrix to the primitives@>=
+@ Function to move affine transformation matrix to the primitives
+@<Global functions@>=
 void move_affine_transformation_matrix(CSG_Node *node)
 {
 	Matrix temp;
@@ -2710,7 +2701,6 @@ void move_affine_transformation_matrix(CSG_Node *node)
 	move_affine_transformation_matrix(node->internal.left);
 	move_affine_transformation_matrix(node->internal.right);
 }
-
 
 @*2 Bounding Boxes.
 Each primitive is enclosed inside a parallelipiped referred to as the
@@ -2734,39 +2724,12 @@ printf(" [%lf, %lf, %lf : %lf, %lf, %lf]\n",
         temp->bb.l[0], temp->bb.l[1], temp->bb.l[2],
         temp->bb.u[0], temp->bb.u[1], temp->bb.u[2]);
 
-@ The function |calculate_bounding_box(n)| calculates the bounding box
-of the solid represented by the supplied root of a CSG tree. To
-calculate the bounding box at a given node, the function uses the
-bounding boxes of the left and right subtrees. Only at the leaves,
-where we reach a primitive solid, we calculate the bounding box using
-only the definition of the primitive solid. This function returns
-|true| if the bounding box was calculated successfully; otherwise,
-|false| is returned.
-
-@<Function to calculate bounding box of a CSG node@>=
-bool calculate_bounding_box(CSG_Node *n)
-{
-	CSG_Node *l, *r; /* left and right subtrees */
-	Vector temp, c[8]; /* for affine transformation */
-	int i, j;
-	if (SOLID == n->op) {
-	    if (primitive_bb(n->leaf.p, &n->bb)) {
-	        @<Calculate affine transformed bounding box@>;
-	        return true;
-            } else return false;
-        }
-	if (!calculate_bounding_box(n->internal.left)) return false;
-	if (!calculate_bounding_box(n->internal.right)) return false;
-	@<Find bounding box for the node using left and right subtrees@>;
-	return true;
-}
-
 @ The function |primitive_bb(p, bb)| calculates the bounding box of a
 primitive |p| and stores the result in the supplied bounding box
 variable |bb|. This function returns |true| if the bounding box was
 calculated successfully; otherwise, |false| is returned.
 
-@<Function to calculate bounding box of a primitive solid@>=
+@<Global functions@>=
 bool primitive_bb(Primitive *p, BoundingBox *bb)
 {
     switch(p->type) {
@@ -2862,7 +2825,8 @@ c[7][0] = n->bb.u[0];
 c[7][1] = n->bb.u[1];
 c[7][2] = n->bb.u[2];
 
-@ @<Function to apply affine transformation matrix@>=
+@ Function to apply affine transformation matrix.
+@<Global functions@>=
 void apply_affine(Matrix m, Vector v, Vector r)
 {
     r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
@@ -2927,7 +2891,7 @@ representing respectively the $x$, $y$ and $z$ axes.
 @d X_AXIS 0
 @d Y_AXIS 1
 @d Z_AXIS 2
-@<Function to calculate bounding box of intersection@>=
+@<Global functions@>=
 bool intersection_bb(BoundingBox *n, BoundingBox *l, BoundingBox *r, int a)
 {
     if (l->l[a] < r->l[a] && l->u[a] > r->u[a]) { /* left fully encloses right */
@@ -2976,6 +2940,48 @@ the right subtree.
 
 @<Calculate bounding box of difference@>=
 n->bb = l->bb;
+
+@ The function |calculate_bounding_box(n)| calculates the bounding box
+of the solid represented by the supplied root of a CSG tree. To
+calculate the bounding box at a given node, the function uses the
+bounding boxes of the left and right subtrees. Only at the leaves,
+where we reach a primitive solid, we calculate the bounding box using
+only the definition of the primitive solid. This function returns
+|true| if the bounding box was calculated successfully; otherwise,
+|false| is returned.
+
+@<Global functions@>=
+bool calculate_bounding_box(CSG_Node *n)
+{
+	CSG_Node *l, *r; /* left and right subtrees */
+	Vector temp, c[8]; /* for affine transformation */
+	int i, j;
+	if (SOLID == n->op) {
+	    if (primitive_bb(n->leaf.p, &n->bb)) {
+	        @<Calculate affine transformed bounding box@>;
+	        return true;
+            } else return false;
+        }
+	if (!calculate_bounding_box(n->internal.left)) return false;
+	if (!calculate_bounding_box(n->internal.right)) return false;
+	@<Find bounding box for the node using left and right subtrees@>;
+	return true;
+}
+
+@ @<Global functions@>=
+void process_and_register_solid(const char *name, CSG_Node *root)
+{
+	long h;
+	CSG_Node *temp;
+	if (NULL == root || NULL == name) return;
+	temp = merge_affine_transformations(root);
+	if (NULL == temp) temp = root;
+	h = hash(name, MAX_CSG_SOLIDS);
+	strcpy(csg_solids.table[h].name, name);
+	csg_solids.table[h].solid = temp;
+ 	move_affine_transformation_matrix(temp);
+	calculate_bounding_box(temp);
+}
 
 @** Particles inside solids.
 During the simulation, the {\sl MCS} system must determine which
@@ -3893,20 +3899,7 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Pop particle out of the particle stack@>;
 @<Tracking a particle@>;
 @<Set particle gun parameters@>;
-@<Function to calculate the hash value |h| of a string@>;
-@<Function to find a CSG solid@>;
-@<Register a solid using a specified |name|@>;
 @<Find the solid associated with a specified |name|@>;
-@<Function to count number of primitive solids in a CSG tree@>;
-@<Function to destroy the CSG tree@>;
-@<Function to print the CSG tree@>;
-@<Function to merge affine transformations@>;
-@<Function to move affine transformation matrix to the primitives@>;
-@<Function to apply affine transformation matrix@>;
-@<Function to calculate bounding box of a primitive solid@>;
-@<Function to calculate bounding box of intersection@>;
-@<Function to calculate bounding box of a CSG node@>;
-@<Function to pre-process a CSG solid@>;
 @<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
 @<Function to read geometry from input file@>;
