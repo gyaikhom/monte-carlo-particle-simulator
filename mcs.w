@@ -116,7 +116,23 @@ for (i = 0; i < num_events; i++) {
 @ @<Clean up the system@>=
 destroy_csg_tree(csg_tree.root);
 
-@** Vectors.
+@** Common types, constants, and utility functions.
+We define here common types, physical constants, and utility functions
+that are shared by the following sections.
+
+@ @<Type definitions@>=
+typedef enum {false = 0, true} bool;
+
+@ @<Global functions@>=
+double convert_radian_to_degree(double angle)
+{
+      angle *= RADIAN_TO_DEGREE; /* $|RADIAN_TO_DEGREE| = 180 / \pi$ */
+      if (angle < 0.0) angle += 360.0; /* positive angle required */
+      return angle;
+}
+
+
+@*1 Vectors.
 In {\tt MCS}, we use the {\sl homogeneous coordinate
 system}@^Homogeneous coordinate system@> introduced by August
 Ferdinand M\"obius@^August Ferdinand M\"obius@> in his work {\sl Der
@@ -302,7 +318,7 @@ double vector_distance(Vector u, Vector v)
 	return sqrt(x * x + y * y + z * z);
 }
 
-@**Matrices.
+@*1 Matrices.
 We use a $4 \times 4$ matrix to represent affine transformations such
 as translation, rotation and scaling. These matrices are applied to
 vectors in homogeneous coordinates, with $w$-component equal to 1, to
@@ -965,109 +981,290 @@ and translation, and set-theoretic operations on the volume defined by
 two solids. New solids are defined by recursively combining existing
 solids using these operations.
 
+@ The geometry of the solids and their placement and orientation within
+the world is specified in the input file. The grammar for this input
+file is very simple. The file consist of several commands, where an
+entire line of text is used to specify a specific command. Each
+command has the following format:
+
+\smallskip
+
+$\langle command \rangle \langle parameters \rangle \langle newline \rangle$
+
+\smallskip
+
+Here, $\langle command \rangle$ is a single character code, which
+defines its intended action. The commands and their intended actions
+are as follows: 
+
+\smallskip
+
+$$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
+B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
+u, i, d & Carry out a union, intersection, or difference.\cr
+t, r, s & Translate, rotate, or scale the solid.\cr
+\%\ & Begin comment line. Stop at the first newline character.\cr 
+}}$$
+
+\smallskip
+
+To support this intended action, the user must supply all of the
+required parameters in the $\langle parameters \rangle$
+field. Finally, every command must be terminated by a $\langle newline
+\rangle$ character. The following is an example:
+
+\bigskip
+
+{\tt
+\hash\ Define primitive solids
+
+T ("Torus A" 0.0 359.999999 10.0 2.0)
+
+C ("Cylinder A" 10.0 20.0)
+
+C ("Cylinder B" 10.0 20.0)
+
+\
+
+\hash\ Operation on primitive solids
+
+u ("U1" "Torus A" "Cylinder A")
+
+d ("D1" "U1" "Cylinder B")
+
+t ("T1" "D1" 10.0 50.0 20.0)
+
+s ("S1" "T1" 10.0 20.0 30.0)
+}
+
+\bigskip
+
+@ Function |read_geometry(n)| reads the geometry data by opening the
+file named |n|.
+@<Function to read geometry from input file@>=
+bool read_geometry(const char *n)
+{
+	FILE *f;
+	char c;
+        @<Variables used for handling rotation operators@>;
+	@<Open input geometry file@>;
+	@<Initialise the hash table of solids@>;
+	while (EOF != (c = fgetc(f))) {
+		@<Discard comments, white spaces and empty lines@>;
+	        @<Process input command@>;
+	}
+	fclose(f);
+	return true;
+	
+	@<Handle geometry file errors@>;
+	return false;
+}
+
+@ We use the temporary variable |input_file_name| to store the name of
+the file that is currently being processed, so that if we wish, we
+might generate the name of the file at runtime (e.g., by appending
+prefix and suffix strings to a base filename).
+
+@<Open input geometry file@>=
+input_file_current_line = 0;
+strcpy(input_file_name, n); /* generate filename */
+f = fopen(input_file_name, "r");
+if (NULL == f) {
+        fprintf(stderr, "Failed to open input geometry file: %s\n",
+	        input_file_name);
+	return 1;
+}
+
+@ To improve readability, we allow comments, empty lines and
+indentation of commands.
+
+@<Discard comments, white spaces and empty lines@>=
+@<Discard comment lines@>;
+@<Discard indentations@>;
+@<Discard empty lines@>;
+
+@ Comments begin with the `{\tt \%}' character, and end after the
+end-of-line character.
+@<Discard comment lines@>=
+if (c == '%') {
+        while (EOF != (c = fgetc(f)))
+                if ('\n' == c) break; /* gobble comments */
+	if (EOF == c) break; /* done reading input file */
+}
+
+@ @<Discard indentations@>=
+if (' ' == c || '\t' == c) continue;
+
+@ @<Discard empty lines@>=
+if ('\n' == c) {
+        ++input_file_current_line;
+	continue;
+}
+
+@ @<Process input command@>=
+switch(c) {
+case 'B':
+	@<Read block geometry@>;
+     	break;
+case 'S':
+	@<Read sphere geometry@>;
+     	break;
+case 'C':
+	@<Read cylinder geometry@>;
+        break;
+case 'T':
+        @<Read torus geometry@>;
+        break;
+case 'u':
+        @<Read union operation@>;
+        break;
+case 'i':
+        @<Read intersection operation@>;
+        break;
+case 'd':
+        @<Read difference operation@>;
+        break;
+case 't':
+        @<Read translation operation@>;
+        break;
+case 'r':
+        @<Read rotation operation@>;
+        break;
+case 's':
+        @<Read scaling operation@>;
+        break;
+case '+':
+        @<Read registration operation@>;
+	break;
+default:
+	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
+	input_file_name, input_file_current_line, c);
+        goto error_invalid_file;
+}
+
+@ When we cannot recover from an error (e.g., incorrect input file),
+we must exit the system after cleaning up the resources that were
+allocated by previous commands. Furthermore, the system must also
+alert the user about the error. This section defines all of the exit
+points and the corresponding error messages.
+
+@<Handle geometry file errors@>=
+@<Alert error while reading file@>;
+@<Alert failure to create primitive solid@>;
+@<Alert failure to create operator node@>;
+@<Alert failure to create parameter node@>;
+@<Alert solid already exists@>;
+@<Alert solid does not exists@>;
+error_invalid_file:@/
+@<Cleanup resources allocated to invalid geometry@>;
+fclose(f);
+
+@ @<Alert error while reading file@>=
+failed_read_exit_after_cleanup:@/
+fprintf(stderr, "Failed to read file '%s' at line %u\n"
+        "\tInvalid formatting of parameters\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert failure to create primitive solid@>=
+create_primitive_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] Failed to create primitive solid\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert failure to create operator node@>=
+create_operator_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] failed to create internal node\n",
+	input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert failure to create parameter node@>=
+create_parameter_failed_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] failed to create leaf node\n",
+input_file_name, input_file_current_line);
+goto error_invalid_file;
+
+@ @<Alert solid already exists@>=
+solid_exists_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
+"Solid named '%s' already exists\n", input_file_name,
+input_file_current_line, solid_name);
+goto error_invalid_file;
+
+@ @<Alert solid does not exists@>=
+no_solid_exists_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
+	"Solid named '%s' does not exists\n", input_file_name,
+	input_file_current_line, solid_name);
+goto error_invalid_file;
+
+@ @<Cleanup resources allocated to invalid geometry@>=
+fprintf(stderr, "Cleaning up resources...\n");
+@<Destroy the hash table of solids@>;
+
 @*1 Standard Primitives.
 We use four {\sl standard primitives}@^standard primitives@> that
-define closed solid volumes. These are: the {\it
+define closed solid volumes. These are: the {\sl
 parallelepiped}@^parallelepiped@>, the {\sl sphere}@^sphere@>,
 the {\sl cylinder}@^cylinder@>, and the {\sl torus}@^torus@>.
+
+{\bf NOTE:}
+In each of the following sections, we specify only the relevant
+details in relation to the context of the section. Additional details
+will be incorporated when we discuss other aspects of the solids. For
+instance, at the moment we are only concerned with the geometry of the
+solids, and not with their material properties. Hence, the
+details concerning their material properties will be added later on,
+when we discuss materials.
 
 @<Type definitions@>=
 typedef enum {
 	BLOCK = 0, SPHERE, CYLINDER, TORUS
 } Primitive_type;
 
-@ The standard primitives above are generic; hence, solid instances of
-these primitives can take different shapes and form. To use a given
-primitive while building a new solid, each primitive must therefore
-first be initialised by providing the specific parameters which define
-its shape and form. In the following, we forward declare the data
-structures that store data that are specific to a given primitive
-type, after they have been instantiated. Their structure will be
-defined in later sections.
+@ The standard primitives listed above are generic; solid instances of
+these primitives can take different shape and form. To use a
+primitive of a given type, a new instance of the generic primitive
+must first be created. This must then be initialised to the required
+specification by filling in the relevant parameters. The field |type|
+is used to identify the type of a primitive instance.
 
-@<Type definitions@>=
-typedef struct primitive_block_struct Block;
-typedef struct primitive_sphere_struct Sphere;
-typedef struct primitive_cylinder_struct Cylinder;
-typedef struct primitive_torus_struct Torus;
-typedef struct csg_node_struct CSG_Node;
+@<Information common to all primitives@>=
+Primitive_type type;
 
-@ The first field of all primitive data stores a primitive type. This
-is used while deciding the manner in which a solid instance must be
-processed: based on this type, we choose the appropriate \CEE/ union
-field.
-
-@<Container for a primitive@>=
-struct primitive_container_struct {
-	Primitive_type type;
-	@<Information common to all primitives@>;
-	union {
-       	        Block b;
-       		Sphere s;
-       		Cylinder c;
-       		Torus t;
-	};
-};
-typedef struct primitive_container_struct Primitive;
-
-@ For the moment, we are using a straight-forward memory
-allocator. Future revisions will make this efficient by using
-memory areas, as used in the {\sl Stanford Graph Base}
-@^Stanford Graph Base@> for storing graph data structures.
-
-@<Create a primitive solid@>=
-Primitive *create_primitive_solid() {
-	Primitive *temp;
-	if ((temp = (Primitive *) malloc(sizeof(Primitive))) == NULL)
-	        fprintf(stderr, "Failed to allocate memory\n");
-        return temp;
-}
-
-@ @<Destroy a primitive solid@>=
-void destroy_primitive_solid(Primitive *primitive) {
-        free(primitive);
-}
-
-@ It is important to note here that, in each of the following sections,
-we specify only the relevant details. Additional details will be
-incorporated when we discuss other aspects of the solids. For
-instance, at the moment we are only concerned with the geometry of the
-solids, and not with their material properties. Hence, the
-details concerning their material properties will be added later on,
-when we discuss materials.
-
-@ Every primitive has a {\sl unique identifier}@^unique identifier@>
-and a {\sl unique name}@^unique name@>. A unique human-readable name
-is supplied by the user to each instance of a primitive. From this
-name, the corresponding unique identifier is generated internally for
-use by the various algorithms.
+@ Every primitive has a {\sl unique identifier} and a {\sl unique
+name}. A unique human-readable name is supplied by the user to each
+instance of a primitive. From this name, the corresponding unique
+identifier is generated internally for use by the various
+algorithms.@^unique identifier@>@^unique name@>
 
 @d MAX_LEN_SOLID_NAME 128
 @<Information common to all primitives@>=
 uint32_t id; /* unique primitive identifier */
 char name[MAX_LEN_SOLID_NAME];
 
-@ In addition to the {\sl global coordinate frame}@^global coordinate frame@>
-defined by the simulation world, each initialised primitive also
-defines a {\sl local coordinate frame}@^local coordinate frame@>.
-The origin of this coordinate frame is used by the geometry
-construction algorithm to {\it conceptually} place a primitive inside
-the simulation world. By design, a primitive solid is created in such
-a way that its origin always coincides with the origin of the
+@ In addition to the {\sl global coordinate frame} defined by the
+simulation world, each initialised primitive also defines a {\sl local
+coordinate frame}. The origin of this coordinate frame is used by the
+geometry construction algorithm to conceptually place a primitive
+inside the simulation world. By design, a primitive solid is created
+in such a way that its origin always coincides with the origin of the
 world coordinate frame. Any translation or transformation henceforth
 is recorded separately in a binary tree. This will become clearer once
 we reach the section on {\sl Constructive Solid Geometry Tree}.
+@^global coordinate frame@>@^local coordinate frame@>
 @^Constructive Solid Geometry Tree@>
+
 
 @*2 Parallelepiped.
 For simplicity of exposition, we shall refer to a parallelepiped as
 a {\sl block}@^block@>. A primitive block stores the following
 information.
 
-@<Structure of a primitive block@>=
-struct primitive_block_struct {
+@<Type definitions@>=
+typedef struct primitive_block_struct {
        @<Information that defines a primitive block@>;
-};
+} Block;
 
 @ The geometry of a block is defined by its length, width and
 height. The origin of the block's local coordinate frame is defined by
@@ -1174,10 +1371,10 @@ if (NULL == leaf_node) {
 @*2 Sphere.
 A primitive sphere stores the following information.
 
-@<Structure of a primitive sphere@>=
-struct primitive_sphere_struct {
+@<Type definitions@>=
+typedef struct primitive_sphere_struct {
        @<Information that defines a primitive sphere@>;
-};
+} Sphere;
 
 @ The geometry of a sphere is defined by its radius, and the origin of
 its local coordinate frame is defined by the sphere's {\it
@@ -1220,10 +1417,10 @@ p->type = SPHERE;
 @*2 Cylinder.
 A primitive cylinder stores the following information.
 
-@<Structure of a primitive cylinder@>=
-struct primitive_cylinder_struct {
+@<Type definitions@>=
+typedef struct primitive_cylinder_struct {
        @<Information that defines a primitive cylinder@>;
-};
+} Cylinder;
 
 @ The geometry of a cylinder is defined by its base radius and its
 height.  The origin of the block's local coordinate frame is defined by
@@ -1280,10 +1477,10 @@ p->c.height /= 2.0;
 @*2 Torus.
 A primitive torus stores the following information.
 
-@<Structure of a primitive torus@>=
-struct primitive_torus_struct {
+@<Type definitions@>=
+typedef struct primitive_torus_struct {
        @<Information that defines a primitive torus@>;
-};
+} Torus;
 
 @ The origin of the torus' local coordinate frame is defined by
 its {\sl center}@^center@>, which coincides with the origin of the
@@ -1367,6 +1564,41 @@ p->type = TORUS;
 @<Calculate radial containment range for the torus@>;
 @<Calculate end angles for the torus@>;
 
+@ The first field of all primitive data stores a primitive type. This
+is used while deciding the manner in which a solid instance must be
+processed: based on this type, we choose the appropriate \CEE/ union
+field.
+
+@<Type definitions@>=
+typedef struct primitive_struct {
+	@<Information common to all primitives@>;
+	union {
+       	        Block b;
+       		Sphere s;
+       		Cylinder c;
+       		Torus t;
+	};
+} Primitive;
+
+@ For the moment, we are using a straight-forward memory
+allocator. Future revisions will make this efficient by using
+memory areas, as used in the {\sl Stanford Graph Base}
+@^Stanford Graph Base@> for storing graph data structures.
+
+@<Global functions@>=
+Primitive *create_primitive_solid()
+{
+	Primitive *temp;
+	if ((temp = (Primitive *) malloc(sizeof(Primitive))) == NULL)
+	        fprintf(stderr, "Failed to allocate memory\n");
+        return temp;
+}
+
+@ @<Global functions@>=
+void destroy_primitive_solid(Primitive *primitive) {
+        free(primitive);
+}
+
 @*1 Constructive Solid Geometry Tree.
 All solids in the simulation world are built from instances of
 primitive solids by using regularised set-theoretic operators. These
@@ -1397,6 +1629,7 @@ for short.
 
 @d MAX_CSG_NODES 4096 /* maximum number of CSG nodes allowed */
 @<Structure of a constructive solid geometry tree@>=
+typedef struct csg_node_struct CSG_Node;
 struct csg_tree_struct {
        @<House-keeping data@>;
        CSG_Node *root; /* pointer to the CSG root */
@@ -1601,7 +1834,7 @@ CSG_Node *find_csg_node(char *name) {
 	 return csg_tree.table[hash(name, MAX_CSG_NODES)];
 }
 
-@ @<Create a CSG node@>=
+@ @<Global functions@>=
 CSG_Node *create_csg_node() {
         CSG_Node *temp;
 	temp = (CSG_Node *) malloc(sizeof(CSG_Node));
@@ -2163,167 +2396,46 @@ if (EOF == read_count || 1 != read_count)
 @ @<Register the target solid@>=
 process_and_register_solid(op_solid, target_solid);
 
-@*1 The geometry input file.
-The geometry of the solids and their placement and orientation within
-the world is specified in the input file. The grammar for this input
-file is very simple. The file consist of several commands, where an
-entire line of text is used to specify a specific command. Each
-command has the following format:
+@** Pre-processing the simulation world.
+To improve efficiency, the original CSG tree as defined by the input
+file must be pre-processed before starting the simulation. This
+processing takes place as new solids are registered with the
+system.
 
-\smallskip
+@d MAX_CSG_SOLIDS 32
+@<Global variables@>=
+struct solid_table_entry {
+       char name[MAX_LEN_SOLID_NAME];
+       CSG_Node *solid;
+};
 
-$\langle command \rangle \langle parameters \rangle \langle newline \rangle$
+struct processed_csg_solids_struct {
+        uint32_t nsolids;
+	struct solid_table_entry table[MAX_CSG_SOLIDS];
+} csg_solids;
 
-\smallskip
-
-Here, $\langle command \rangle$ is a single character code, which
-defines its intended action. The commands and their intended actions
-are as follows: 
-
-\smallskip
-
-$$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
-B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
-u, i, d & Carry out a union, intersection, or difference.\cr
-t, r, s & Translate, rotate, or scale the solid.\cr
-\%\ & Begin comment line. Stop at the first newline character.\cr 
-}}$$
-
-\smallskip
-
-To support this intended action, the user must supply all of the
-required parameters in the $\langle parameters \rangle$
-field. Finally, every command must be terminated by a $\langle newline
-\rangle$ character. The following is an example:
-
-\bigskip
-
-{\tt
-\hash\ Define primitive solids
-
-T ("Torus A" 0.0 359.999999 10.0 2.0)
-
-C ("Cylinder A" 10.0 20.0)
-
-C ("Cylinder B" 10.0 20.0)
-
-\
-
-\hash\ Operation on primitive solids
-
-u ("U1" "Torus A" "Cylinder A")
-
-d ("D1" "U1" "Cylinder B")
-
-t ("T1" "D1" 10.0 50.0 20.0)
-
-s ("S1" "T1" 10.0 20.0 30.0)
-}
-
-\bigskip
-
-We have already discussed how the $\langle parameters \rangle$ field
-is specified in their respective sections.
-
-@ @<Read geometry from input file@>=
-int read_geometry(const char *fname)
+@ @<Function to reset list of solids@>=
+void reset_list_of_solids()
 {
-	FILE *f;
-	char c;
-        @<Variables used for handling rotation operators@>;
-	@<Open input geometry file@>;
-	@<Initialise the hash table of solids@>;
-	while (EOF != (c = fgetc(f))) {
-		@<Discard comments, white spaces and empty lines@>;
-	        @<Process input command@>;
+	int i;
+	csg_solids.nsolids = 0;
+	for (i = 0; i < MAX_CSG_SOLIDS; ++i)
+	        csg_solids.table[i].solid = NULL;
+}
+
+@ @<Function to print all of the solids@>=
+void print_all_solids()
+{
+	int i, j;
+	for (i = 0; i < MAX_CSG_SOLIDS; i++) {
+	        if (csg_solids.table[i].solid == NULL) continue;
+		printf("Solid %s:\n", csg_solids.table[i].name);
+		printf("\n");
+	        print_csg_tree(csg_solids.table[i].solid, 0);
+		printf("\n");
+		for (j = 0; j < 80; j++) printf("-");
+		printf("\n");
 	}
-	fclose(f);
-	return 0;
-	
-	@<Handle geometry file errors@>;
-	return 1;
-}
-
-@ We use the temporary variable |input_file_name| to store the name of
-the file that is currently being processed, so that if we wish, we
-might generate the name of the file at runtime (e.g., by appending
-prefix and suffix strings to a base filename).
-
-@<Open input geometry file@>=
-input_file_current_line = 0;
-strcpy(input_file_name, fname); /* generate filename */
-f = fopen(input_file_name, "r");
-if (NULL == f) {
-        fprintf(stderr, "Failed to open input geometry file: %s\n",
-	        input_file_name);
-	return 1;
-}
-
-@ To improve readability, we allow comments, empty lines and
-indentation of commands.
-
-@<Discard comments, white spaces and empty lines@>=
-@<Discard comment lines@>;
-@<Discard indentations@>;
-@<Discard empty lines@>;
-
-@ Comments begin with the `{\tt \%}' character, and end after the
-end-of-line character.
-@<Discard comment lines@>=
-if (c == '%') {
-        while (EOF != (c = fgetc(f)))
-                if ('\n' == c) break; /* gobble comments */
-	if (EOF == c) break; /* done reading input file */
-}
-
-@ @<Discard indentations@>=
-if (' ' == c || '\t' == c) continue;
-
-@ @<Discard empty lines@>=
-if ('\n' == c) {
-        ++input_file_current_line;
-	continue;
-}
-
-@ @<Process input command@>=
-switch(c) {
-case 'B':
-	@<Read block geometry@>;
-     	break;
-case 'S':
-	@<Read sphere geometry@>;
-     	break;
-case 'C':
-	@<Read cylinder geometry@>;
-        break;
-case 'T':
-        @<Read torus geometry@>;
-        break;
-case 'u':
-        @<Read union operation@>;
-        break;
-case 'i':
-        @<Read intersection operation@>;
-        break;
-case 'd':
-        @<Read difference operation@>;
-        break;
-case 't':
-        @<Read translation operation@>;
-        break;
-case 'r':
-        @<Read rotation operation@>;
-        break;
-case 's':
-        @<Read scaling operation@>;
-        break;
-case '+':
-        @<Read registration operation@>;
-	break;
-default:
-	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
-	input_file_name, input_file_current_line, c);
-        goto error_invalid_file;
 }
 
 @ We recursively travel the left and right subtrees.
@@ -2460,109 +2572,6 @@ default:
 matrix_print(stdout, temp->affine, 4, 4, indent + 1);
 printf("\n");
 matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
-
-@ When we cannot recover from an error (e.g., incorrect input file),
-we must exit the system after cleaning up the resources that were
-allocated by previous commands. Furthermore, the system must also
-alert the user about the error. This section defines all of the exit
-points and the corresponding error messages.
-
-@<Handle geometry file errors@>=
-@<Alert error while reading file@>;
-@<Alert failure to create primitive solid@>;
-@<Alert failure to create operator node@>;
-@<Alert failure to create parameter node@>;
-@<Alert solid already exists@>;
-@<Alert solid does not exists@>;
-error_invalid_file:@/
-@<Cleanup resources allocated to invalid geometry@>;
-fclose(f);
-
-@ @<Alert error while reading file@>=
-failed_read_exit_after_cleanup:@/
-fprintf(stderr, "Failed to read file '%s' at line %u\n"
-        "\tInvalid formatting of parameters\n",
-	input_file_name, input_file_current_line);
-goto error_invalid_file;
-
-@ @<Alert failure to create primitive solid@>=
-create_primitive_failed_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] Failed to create primitive solid\n",
-	input_file_name, input_file_current_line);
-goto error_invalid_file;
-
-@ @<Alert failure to create operator node@>=
-create_operator_failed_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] failed to create internal node\n",
-	input_file_name, input_file_current_line);
-goto error_invalid_file;
-
-@ @<Alert failure to create parameter node@>=
-create_parameter_failed_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] failed to create leaf node\n",
-input_file_name, input_file_current_line);
-goto error_invalid_file;
-
-@ @<Alert solid already exists@>=
-solid_exists_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
-"Solid named '%s' already exists\n", input_file_name,
-input_file_current_line, solid_name);
-goto error_invalid_file;
-
-@ @<Alert solid does not exists@>=
-no_solid_exists_exit_after_cleanup:@/
-fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
-	"Solid named '%s' does not exists\n", input_file_name,
-	input_file_current_line, solid_name);
-goto error_invalid_file;
-
-@ @<Cleanup resources allocated to invalid geometry@>=
-fprintf(stderr, "Cleaning up resources...\n");
-@<Destroy the hash table of solids@>;
-
-
-@** Pre-processing the simulation world.
-To improve efficiency, the original CSG tree as defined by the input
-file must be pre-processed before starting the simulation. This
-processing takes place as new solids are registered with the
-system.
-
-@d MAX_CSG_SOLIDS 32
-@<Global variables@>=
-struct solid_table_entry {
-       char name[MAX_LEN_SOLID_NAME];
-       CSG_Node *solid;
-};
-
-struct processed_csg_solids_struct {
-        uint32_t nsolids;
-	struct solid_table_entry table[MAX_CSG_SOLIDS];
-} csg_solids;
-
-@ @<Function to reset list of solids@>=
-void reset_list_of_solids()
-{
-	int i;
-	csg_solids.nsolids = 0;
-	for (i = 0; i < MAX_CSG_SOLIDS; ++i)
-	        csg_solids.table[i].solid = NULL;
-}
-
-@ @<Function to print all of the solids@>=
-void print_all_solids()
-{
-	int i, j;
-	for (i = 0; i < MAX_CSG_SOLIDS; i++) {
-	        if (csg_solids.table[i].solid == NULL) continue;
-		printf("Solid %s:\n", csg_solids.table[i].name);
-		printf("\n");
-	        print_csg_tree(csg_solids.table[i].solid, 0);
-		printf("\n");
-		for (j = 0; j < 80; j++) printf("-");
-		printf("\n");
-	}
-}
 
 @ @<Function to pre-process a CSG solid@>=
 void pp(CSG_Node *n)
@@ -3312,7 +3321,7 @@ In the following implementation, we carry out a surface test instead
 of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
-@<Function to test containment inside a block@>=
+@<Global functions@>=
 Containment is_inside_block(Vector v, Primitive *p)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
@@ -3346,7 +3355,7 @@ because, in a real-world setup, a spherical component is less likely
 to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
-@<Function to test containment inside a sphere@>=
+@<Global functions@>=
 Containment is_inside_sphere(Vector v, Primitive *p)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
@@ -3392,7 +3401,7 @@ on the surface, & otherwise.\cr
 Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
-@<Function to test containment inside a cylinder@>=
+@<Global functions@>=
 Containment is_inside_cylinder(Vector v, Primitive *p)
 {
         double delta;
@@ -3461,7 +3470,7 @@ rotation. However, since $\phi > 0^\circ$, we must always interpret
 this as a full rotation; hence, $\gamma$ is always in range when
 $\phi_0 = \phi_1$.
 
-@<Function to check if an angle lies outside a supplied range@>=
+@<Global functions@>=
 bool angle_outside_range(double gamma, double phi0, double phi1)
 {
         if (phi0 == phi1) return false; /* full rotation */
@@ -3486,7 +3495,7 @@ Notice that the function |angle_outside_rangle()| implicitly tests if
 the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
-@<Function to test containment inside a torus@>=
+@<Global functions@>=
 Containment is_inside_torus(Vector v, Primitive *p)
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial;
@@ -3500,14 +3509,6 @@ Containment is_inside_torus(Vector v, Primitive *p)
 	@<Check if |v| is outside the tube@>;
 	@<Check if |v| is on the surface of the tube@>;
 	return INSIDE;
-}
-
-@ @<Function to convert radian to degree@>=
-double convert_radian_to_degree(double angle)
-{
-      angle *= RADIAN_TO_DEGREE; /* $|RADIAN_TO_DEGREE| = 180 / \pi$ */
-      if (angle < 0.0) angle += 360.0; /* positive angle required */
-      return angle;
 }
 
 @ @<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>=
@@ -3564,7 +3565,7 @@ if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
 @<Include preamble for applications@>;
 int main(int argc, char *argv[])
 {
-        if (read_geometry("input.dat"))
+        if (false == read_geometry("input.dat"))
                 exit(1); /* fail */
 	@<Clean up the system@>;
 	return 0;
@@ -3581,7 +3582,7 @@ int main(int argc, char *argv[])
 	Containment flag;
 	char c;
 	bool t;
-        if (read_geometry("input.dat")) exit(1);
+        if (false == read_geometry("input.dat")) exit(1);
 	print_all_solids();
 	if ((f = fopen("points.dat", "r")) == NULL)
                exit(1);
@@ -3655,28 +3656,27 @@ form before deriving the boolean expression. This normalisation
 @^CSG normalisation@> can be done using the algorithm described by
 Jack Goldfeather, Steven Molnar, Greg Turk, and Henry Fuchs in {\sl
 Near Real-Time CSG Rendering Using Tree Normalization and Geometric
-Pruning} (IEEE Computer Graphics and Applications, May 1989,
-pp. 20--28).
+Pruning} [IEEE Computer Graphics and Applications, pp. 20--28, May {\bf 1989}].
 
-@d MAX_NUM_PRIMITIVES 1024
+@d MAX_NUM_CSG_PRIMITIVES 1024
 @d MAX_NUM_CSG_NODES 2047 /* $2^{\lceil \lg n\rceil + 1} - 1$ */
-@<Type definition boolean expression@>=
+@<Type definitions@>=
 typedef struct solids_struct {
 	int np, nc;
 	int c[MAX_NUM_CSG_NODES];
-        Primitive *p[MAX_NUM_PRIMITIVES];
+        Primitive *p[MAX_NUM_CSG_PRIMITIVES];
 } Solid;
 
 @ We use a boolean stack to evaluate the CSG boolean expression.
 
 @d MAX_BOOLEAN_STACK_SIZE 1024
-@<Type definition boolean expression@>=
+@<Type definitions@>=
 typedef struct boolean_stack_struct {
 	int tos, size;
 	bool v[MAX_STACK_SIZE];
 } boolean_stack;
 
-@ @<External functions@>=
+@ @<Global functions@>=
 bool boolean_stack_init(boolean_stack *s)
 {
 	if (NULL == s) return false;
@@ -3685,7 +3685,7 @@ bool boolean_stack_init(boolean_stack *s)
 	return true;
 }
 
-@ @<External functions@>=
+@ @<Global functions@>=
 bool boolean_stack_push(boolean_stack *s, bool v)
 {
 	if (s->tos == s->size) return false;
@@ -3693,7 +3693,7 @@ bool boolean_stack_push(boolean_stack *s, bool v)
 	return true;
 }
 
-@ @<External functions@>=
+@ @<Global functions@>=
 bool boolean_stack_pop(boolean_stack *s, bool *v)
 {
 	if (0 == s->tos) return false;
@@ -3701,7 +3701,7 @@ bool boolean_stack_pop(boolean_stack *s, bool *v)
 	return true;
 }
 
-@ @<External functions@>=
+@ @<Global functions@>=
 bool is_inside_primitive(Vector v, Primitive *p)
 {
 	Containment c;
@@ -3720,12 +3720,12 @@ bool is_inside_primitive(Vector v, Primitive *p)
 @d BOOLEAN_DIFFERENCE -1
 @d BOOLEAN_INTERSECTION -2
 @d BOOLEAN_UNION -3
-@<External functions@>=
+@<Global functions@>=
 bool is_inside(Vector v, Solid *s, bool *result)
 {
 	boolean_stack stack;
 	bool l, r; /* left and right operands */
-	bool cache[MAX_NUM_PRIMITIVES]; /* boolean cache */
+	bool cache[MAX_NUM_CSG_PRIMITIVES]; /* boolean cache */
 	int i;
 	@<Initialise stack and boolean cache@>;
 	@<Evaluate the postfix boolean expression using the stack@>;
@@ -3829,10 +3829,6 @@ following macros: |fatal|, |warn|, and |info|.
 @d warn(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
 @d info(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
 
-@ Utility type definitions.
-@<Type definitions@>=
-typedef enum {false = 0, true} bool;
-
 @* Physical constants.
 
 @d PI 3.14159265358979323846
@@ -3867,11 +3863,6 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Definition of an event@>;
 @<Definition of a particle gun@>;
 @<Definition of a stack@>;
-@<Structure of a primitive block@>;
-@<Structure of a primitive sphere@>;
-@<Structure of a primitive cylinder@>;
-@<Structure of a primitive torus@>;
-@<Container for a primitive@>;
 @<Structure of a constructive solid geometry tree@>;
 @<Type definition for bounding boxes@>;
 @<Structure of a CSG internal node@>;
@@ -3880,10 +3871,8 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Structure for scaling parameters@>;
 @<Structure of the data stored in a leaf node@>;
 @<Structure of a CSG tree node@>;
-@<Type definition boolean expression@>;
 
 @ @<Global functions@>=
-@<Function to convert radian to degree@>;
 @<Create particle@>;
 @<Create vertex@>;
 @<Create event@>;
@@ -3907,9 +3896,6 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to calculate the hash value |h| of a string@>;
 @<Function to find a CSG solid@>;
 @<Register a solid using a specified |name|@>;
-@<Create a primitive solid@>;
-@<Destroy a primitive solid@>;
-@<Create a CSG node@>;
 @<Find the solid associated with a specified |name|@>;
 @<Function to count number of primitive solids in a CSG tree@>;
 @<Function to destroy the CSG tree@>;
@@ -3923,15 +3909,9 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Function to pre-process a CSG solid@>;
 @<Function to reset list of solids@>;
 @<Function to print all of the solids@>;
-@<Read geometry from input file@>;
-@<Function to test containment inside a block@>;
-@<Function to test containment inside a sphere@>;
-@<Function to test containment inside a cylinder@>;
-@<Function to check if an angle lies outside a supplied range@>;
-@<Function to test containment inside a torus@>;
+@<Function to read geometry from input file@>;
 @<Function to recursively test containment@>;
 @<Function to test if a vector is inside a solid@>;
-@<External functions@>;
 
 @* History.
 The {\sl Monte Carlo Simulator} project began in June 2011, when
