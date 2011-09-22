@@ -133,14 +133,14 @@ z, w)$ for which $x' = x/w$, $y' = y/w$, and $z' =
 z/w$. Before applying any affine transformation matrix to a vector, we
 must ensure that $w = 1$. We shall refer to this as the $w$-component.
 
-@<Definition of a three-dimensional vector@>=
+@<Type definitions@>=
 typedef double Vector[4];
 
-@ Function |vector_print(v,f)| prints the components of vector
+@ Function |vector_print(f,v)| prints the components of vector
 |v| to the I/O stream pointed to by |f|. Vector |v| is left
 unmodified.
 @<Global functions@>=
-void vector_print(Vector v, FILE *f)
+void vector_print(FILE *f, Vector v)
 {
 	fprintf(f, "(%lf, %lf, %lf, %lf)", v[0], v[1], v[2], v[3]);
 }
@@ -171,11 +171,12 @@ void vector_homogenise(Vector v)
         }
 }
 
-@ Function |vector_copy(u,v)| modifies vector |u| by copying all of
+@ Function |vector_copy_f(u,v)| modifies vector |u| by copying all of
 the components of vector |v| to vector |u|. Vector |v| is left
 unmodified.
+@d vector_copy(X, Y) memcpy((X), (Y), 4*sizeof(double))
 @<Global functions@>=
-void vector_copy(Vector u, Vector v)
+void vector_copy_f(Vector u, Vector v)
 {
 	u[0] = v[0];
         u[1] = v[1];
@@ -301,6 +302,247 @@ double vector_distance(Vector u, Vector v)
 	return sqrt(x * x + y * y + z * z);
 }
 
+@**Matrices.
+We use a $4 \times 4$ matrix to represent affine transformations such
+as translation, rotation and scaling. These matrices are applied to
+vectors in homogeneous coordinates, with $w$-component equal to 1, to
+determine the transformed resultant vector. 
+
+@<Type definitions@>=
+typedef double Matrix[4][4]; /* a $4 \times 4$ matrix */
+
+@ The {\sl identity matrix} represents a null transformation. Applying
+an affine transformation represented by an identify matrix leaves the
+original vector unmodified. All new affine transformation matrices
+must be initialised to the |IDENTITY_MATRIX|. When we wish to convert
+an existing matrix into the identity matrix, we simply copy the values
+stored in the immutable global variable |identity_matrix|.
+
+@d IDENTITY_MATRIX {
+   {1.0, 0.0, 0.0, 0.0},
+   {0.0, 1.0, 0.0, 0.0},
+   {0.0, 0.0, 1.0, 0.0},
+   {0.0, 0.0, 0.0, 1.0}
+}
+@<Global variables@>=
+const Matrix identity_matrix = IDENTITY_MATRIX;
+
+@ Function |matrix_print(f,m,nr,nc,t)| prints the $|nr| \times |nc|$
+matrix |m| to the I/O stream pointed to by |f| using an indentation of
+|t| blank tabs.
+@<Global functions@>=
+void matrix_print(FILE *f, Matrix m, uint8_t nr, uint8_t nc, uint8_t t)
+{
+        uint8_t i, j, k;
+	for (i = 0; i < nr; ++i) {
+                for (k = 0; k < t; ++k) fprintf(f, "\t");
+                fprintf(f, "| ");
+	        for (j = 0; j < nc; ++j) fprintf(f, "%8.3lf ", m[i][j]);
+                fprintf(f, "|\n");
+        }
+}
+
+@ Function |matrix_copy_f(u,v)| modifies the matrix |u| by copying all
+of the 16 elements from matrix |v| to matrix |u|. Matrix |v| is left
+unmodified.
+@d matrix_copy(X, Y) memcpy((X), (Y), 16*sizeof(double))
+@<Global functions@>=
+void matrix_copy_f(Matrix u, Matrix v)
+{
+	u[0][0] = v[0][0];
+	u[0][1] = v[0][1];
+	u[0][2] = v[0][2];
+	u[0][3] = v[0][3];
+	u[1][0] = v[1][0];
+	u[1][1] = v[1][1];
+	u[1][2] = v[1][2];
+	u[1][3] = v[1][3];
+	u[2][0] = v[2][0];
+	u[2][1] = v[2][1];
+	u[2][2] = v[2][2];
+	u[2][3] = v[2][3];
+	u[3][0] = v[3][0];
+	u[3][1] = v[3][1];
+	u[3][2] = v[3][2];
+	u[3][3] = v[3][3];
+}
+
+@ Function |matrix_multiply(a,b,c)| multiplies the $4 \times 4$ matrix
+|a| to the $4 \times 4$ matrix |b|, and stores the result in matrix
+|c|. Matrix multiplication is {\sl noncommutative}---the order of the
+parameters are significant.@^matrix multiplication@>@^noncommutative@>
+@<Global functions@>=
+void matrix_multiply(Matrix a, Matrix b, Matrix c)
+{
+c[0][0] = a[0][0] * b[0][0] + a[0][1] * b[1][0] + a[0][2] * b[2][0] + a[0][3] * b[3][0];
+c[0][1] = a[0][0] * b[0][1] + a[0][1] * b[1][1] + a[0][2] * b[2][1] + a[0][3] * b[3][1];
+c[0][2] = a[0][0] * b[0][2] + a[0][1] * b[1][2] + a[0][2] * b[2][2] + a[0][3] * b[3][2];
+c[0][3] = a[0][0] * b[0][3] + a[0][1] * b[1][3] + a[0][2] * b[2][3] + a[0][3] * b[3][3];
+c[1][0] = a[1][0] * b[0][0] + a[1][1] * b[1][0] + a[1][2] * b[2][0] + a[1][3] * b[3][0];
+c[1][1] = a[1][0] * b[0][1] + a[1][1] * b[1][1] + a[1][2] * b[2][1] + a[1][3] * b[3][1];
+c[1][2] = a[1][0] * b[0][2] + a[1][1] * b[1][2] + a[1][2] * b[2][2] + a[1][3] * b[3][2];
+c[1][3] = a[1][0] * b[0][3] + a[1][1] * b[1][3] + a[1][2] * b[2][3] + a[1][3] * b[3][3];
+c[2][0] = a[2][0] * b[0][0] + a[2][1] * b[1][0] + a[2][2] * b[2][0] + a[2][3] * b[3][0];
+c[2][1] = a[2][0] * b[0][1] + a[2][1] * b[1][1] + a[2][2] * b[2][1] + a[2][3] * b[3][1];
+c[2][2] = a[2][0] * b[0][2] + a[2][1] * b[1][2] + a[2][2] * b[2][2] + a[2][3] * b[3][2];
+c[2][3] = a[2][0] * b[0][3] + a[2][1] * b[1][3] + a[2][2] * b[2][3] + a[2][3] * b[3][3];
+c[3][0] = a[3][0] * b[0][0] + a[3][1] * b[1][0] + a[3][2] * b[2][0] + a[3][3] * b[3][0];
+c[3][1] = a[3][0] * b[0][1] + a[3][1] * b[1][1] + a[3][2] * b[2][1] + a[3][3] * b[3][1];
+c[3][2] = a[3][0] * b[0][2] + a[3][1] * b[1][2] + a[3][2] * b[2][2] + a[3][3] * b[3][2];
+c[3][3] = a[3][0] * b[0][3] + a[3][1] * b[1][3] + a[3][2] * b[2][3] + a[3][3] * b[3][3];
+}
+
+@ Function |matrix_determinant(m)| returns the {\sl determinant}
+of a $4 \times 4$ matrix. Matrix |m| is left unmodified.
+@^matrix determinant@>
+@<Global functions@>=
+double matrix_determinant(Matrix m)
+{
+   return
+   m[0][3] * m[1][2] * m[2][1] * m[3][0] -
+   m[0][2] * m[1][3] * m[2][1] * m[3][0] -
+   m[0][3] * m[1][1] * m[2][2] * m[3][0] +
+   m[0][1] * m[1][3] * m[2][2] * m[3][0] +
+   m[0][2] * m[1][1] * m[2][3] * m[3][0] -
+   m[0][1] * m[1][2] * m[2][3] * m[3][0] -
+   m[0][3] * m[1][2] * m[2][0] * m[3][1] +
+   m[0][2] * m[1][3] * m[2][0] * m[3][1] +
+   m[0][3] * m[1][0] * m[2][2] * m[3][1] -
+   m[0][0] * m[1][3] * m[2][2] * m[3][1] -
+   m[0][2] * m[1][0] * m[2][3] * m[3][1] +
+   m[0][0] * m[1][2] * m[2][3] * m[3][1] +
+   m[0][3] * m[1][1] * m[2][0] * m[3][2] -
+   m[0][1] * m[1][3] * m[2][0] * m[3][2] -
+   m[0][3] * m[1][0] * m[2][1] * m[3][2] +
+   m[0][0] * m[1][3] * m[2][1] * m[3][2] +
+   m[0][1] * m[1][0] * m[2][3] * m[3][2] -
+   m[0][0] * m[1][1] * m[2][3] * m[3][2] -
+   m[0][2] * m[1][1] * m[2][0] * m[3][3] +
+   m[0][1] * m[1][2] * m[2][0] * m[3][3] +
+   m[0][2] * m[1][0] * m[2][1] * m[3][3] -
+   m[0][0] * m[1][2] * m[2][1] * m[3][3] -
+   m[0][1] * m[1][0] * m[2][2] * m[3][3] +
+   m[0][0] * m[1][1] * m[2][2] * m[3][3];
+}
+
+@ Function |matrix_inverse(m,i)| calculates the {\sl inverse} of a $4
+\times 4$ matrix and stores the result in the $4 \times 4$ matrix
+|i|. Matrix |m| is left unmodified.@^matrix inverse@>
+@<Global functions@>=
+void matrix_inverse(Matrix m, Matrix i) {
+   double det = matrix_determinant(m);
+   i[0][0] = (m[1][2] * m[2][3] * m[3][1] -
+             m[1][3] * m[2][2] * m[3][1] +
+	     m[1][3] * m[2][1] * m[3][2] -
+	     m[1][1] * m[2][3] * m[3][2] -
+	     m[1][2] * m[2][1] * m[3][3] +
+	     m[1][1] * m[2][2] * m[3][3]) / det;
+
+   i[0][1] = (m[0][3] * m[2][2] * m[3][1] -
+             m[0][2] * m[2][3] * m[3][1] -
+	     m[0][3] * m[2][1] * m[3][2] +
+	     m[0][1] * m[2][3] * m[3][2] +
+	     m[0][2] * m[2][1] * m[3][3] -
+	     m[0][1] * m[2][2] * m[3][3]) / det;
+
+   i[0][2] = (m[0][2] * m[1][3] * m[3][1] -
+             m[0][3] * m[1][2] * m[3][1] +
+	     m[0][3] * m[1][1] * m[3][2] -
+	     m[0][1] * m[1][3] * m[3][2] -
+	     m[0][2] * m[1][1] * m[3][3] +
+	     m[0][1] * m[1][2] * m[3][3]) / det;
+
+   i[0][3] = (m[0][3] * m[1][2] * m[2][1] -
+             m[0][2] * m[1][3] * m[2][1] -
+	     m[0][3] * m[1][1] * m[2][2] +
+	     m[0][1] * m[1][3] * m[2][2] +
+	     m[0][2] * m[1][1] * m[2][3] -
+	     m[0][1] * m[1][2] * m[2][3]) / det;
+
+   i[1][0] = (m[1][3] * m[2][2] * m[3][0] -
+             m[1][2] * m[2][3] * m[3][0] -
+	     m[1][3] * m[2][0] * m[3][2] +
+	     m[1][0] * m[2][3] * m[3][2] +
+	     m[1][2] * m[2][0] * m[3][3] -
+	     m[1][0] * m[2][2] * m[3][3]) / det;
+
+   i[1][1] = (m[0][2] * m[2][3] * m[3][0] -
+   	     m[0][3] * m[2][2] * m[3][0] +
+	     m[0][3] * m[2][0] * m[3][2] -
+	     m[0][0] * m[2][3] * m[3][2] -
+	     m[0][2] * m[2][0] * m[3][3] +
+	     m[0][0] * m[2][2] * m[3][3]) / det;
+
+   i[1][2] = (m[0][3] * m[1][2] * m[3][0] -
+             m[0][2] * m[1][3] * m[3][0] -
+	     m[0][3] * m[1][0] * m[3][2] +
+	     m[0][0] * m[1][3] * m[3][2] +
+	     m[0][2] * m[1][0] * m[3][3] -
+	     m[0][0] * m[1][2] * m[3][3]) / det;
+
+   i[1][3] = (m[0][2] * m[1][3] * m[2][0] -
+             m[0][3] * m[1][2] * m[2][0] +
+	     m[0][3] * m[1][0] * m[2][2] -
+	     m[0][0] * m[1][3] * m[2][2] -
+	     m[0][2] * m[1][0] * m[2][3] +
+	     m[0][0] * m[1][2] * m[2][3]) / det;
+
+   i[2][0] = (m[1][1] * m[2][3] * m[3][0] -
+             m[1][3] * m[2][1] * m[3][0] +
+	     m[1][3] * m[2][0] * m[3][1] -
+	     m[1][0] * m[2][3] * m[3][1] -
+	     m[1][1] * m[2][0] * m[3][3] +
+	     m[1][0] * m[2][1] * m[3][3]) / det;
+
+   i[2][1] = (m[0][3] * m[2][1] * m[3][0] -
+             m[0][1] * m[2][3] * m[3][0] -
+	     m[0][3] * m[2][0] * m[3][1] +
+	     m[0][0] * m[2][3] * m[3][1] +
+	     m[0][1] * m[2][0] * m[3][3] -
+	     m[0][0] * m[2][1] * m[3][3]) / det;
+
+   i[2][2] = (m[0][1] * m[1][3] * m[3][0] -
+             m[0][3] * m[1][1] * m[3][0] +
+	     m[0][3] * m[1][0] * m[3][1] -
+	     m[0][0] * m[1][3] * m[3][1] -
+	     m[0][1] * m[1][0] * m[3][3] +
+	     m[0][0] * m[1][1] * m[3][3]) / det;
+
+   i[2][3] = (m[0][3] * m[1][1] * m[2][0] -
+             m[0][1] * m[1][3] * m[2][0] -
+	     m[0][3] * m[1][0] * m[2][1] +
+	     m[0][0] * m[1][3] * m[2][1] +
+	     m[0][1] * m[1][0] * m[2][3] -
+	     m[0][0] * m[1][1] * m[2][3]) / det;
+
+   i[3][0] = (m[1][2] * m[2][1] * m[3][0] -
+             m[1][1] * m[2][2] * m[3][0] -
+	     m[1][2] * m[2][0] * m[3][1] +
+	     m[1][0] * m[2][2] * m[3][1] +
+	     m[1][1] * m[2][0] * m[3][2] -
+	     m[1][0] * m[2][1] * m[3][2]) / det;
+
+   i[3][1] = (m[0][1] * m[2][2] * m[3][0] -
+             m[0][2] * m[2][1] * m[3][0] +
+	     m[0][2] * m[2][0] * m[3][1] -
+	     m[0][0] * m[2][2] * m[3][1] -
+	     m[0][1] * m[2][0] * m[3][2] +
+	     m[0][0] * m[2][1] * m[3][2]) / det;
+
+   i[3][2] = (m[0][2] * m[1][1] * m[3][0] -
+             m[0][1] * m[1][2] * m[3][0] -
+	     m[0][2] * m[1][0] * m[3][1] +
+	     m[0][0] * m[1][2] * m[3][1] +
+	     m[0][1] * m[1][0] * m[3][2] -
+	     m[0][0] * m[1][1] * m[3][2]) / det;
+
+   i[3][3] = (m[0][1] * m[1][2] * m[2][0] -
+             m[0][2] * m[1][1] * m[2][0] +
+	     m[0][2] * m[1][0] * m[2][1] -
+	     m[0][0] * m[1][2] * m[2][1] -
+	     m[0][1] * m[1][0] * m[2][2] +
+	     m[0][0] * m[1][1] * m[2][2]) / det;
+}
 
 @** Particle.
 A {\sl particle}@^particle@> is the lowest-level data structure that
@@ -2153,9 +2395,9 @@ default:
         printf("unknown");
 }
 @<Print bounding box information@>;
-print_4x4_matrix(temp->affine, indent + 1);
+matrix_print(stdout, temp->affine, 4, 4, indent + 1);
 printf("\n");
-print_4x4_matrix(temp->inverse, indent + 1);
+matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
 
 @ Print the parameters for transformation or translation.
 
@@ -2167,7 +2409,7 @@ case TRANSLATE:
         temp->leaf.t.displacement[0],
 	temp->leaf.t.displacement[1],
 	temp->leaf.t.displacement[2]);
-	print_4x4_matrix(temp->affine, indent + 1);
+	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
 	printf("\n");
         break;
 case ROTATE:
@@ -2176,14 +2418,14 @@ case ROTATE:
         temp->leaf.r.axis[0],
 	temp->leaf.r.axis[1],
 	temp->leaf.r.axis[2]);
-	print_4x4_matrix(temp->affine, indent + 1);
+	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
         break;
 case SCALE:
         printf("scaling factor: (%lf, %lf, %lf)",
         temp->leaf.s.scale[0],
 	temp->leaf.s.scale[1],
 	temp->leaf.s.scale[2]);
-	print_4x4_matrix(temp->affine, indent + 1);
+	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
         break;
 default:
         printf("unknown");
@@ -2215,9 +2457,9 @@ default:
         printf("unknown");
 }
 @<Print bounding box information@>;
-print_4x4_matrix(temp->affine, indent + 1);
+matrix_print(stdout, temp->affine, 4, 4, indent + 1);
 printf("\n");
-print_4x4_matrix(temp->inverse, indent + 1);
+matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
 
 @ When we cannot recover from an error (e.g., incorrect input file),
 we must exit the system after cleaning up the resources that were
@@ -2369,9 +2611,6 @@ CSG_Node *find_solid(const char *name)
 	return csg_solids.table[hash(name, MAX_CSG_SOLIDS)].solid;
 }
 
-@ @<Global data structures@>=
-typedef double Matrix[4][4]; /* a $4 \times 4$ matrix */
-
 @ Every node has an affine transformation matrix, which is initialised
 to the identity matrix. When an affine transformation $T$ is applied
 to a node, the affine matrix for the node is updated. This affine
@@ -2382,19 +2621,7 @@ that node.
 Matrix affine; /* inverse affine transformations matrix */
 Matrix inverse; /* inverse of |affine| matrix */
 
-@
-@d IDENTITY_MATRIX {
-   {1.0, 0.0, 0.0, 0.0},
-   {0.0, 1.0, 0.0, 0.0},
-   {0.0, 0.0, 1.0, 0.0},
-   {0.0, 0.0, 0.0, 1.0}
-}
-@<Global variables@>=
-Matrix identity_matrix = IDENTITY_MATRIX;
-
-@
-@d matrix_copy(X, Y) memcpy((X), (Y), 16*sizeof(double))
-@<Initialise affine matrix to identity@>=
+@ @<Initialise affine matrix to identity@>=
 matrix_copy(temp->affine, identity_matrix);
 matrix_copy(temp->inverse, identity_matrix);
 
@@ -2435,27 +2662,6 @@ do {
 	@<Prepare affine list for later detachment@>;
 } while (TRANSLATE == root->op || ROTATE == root->op || SCALE == root->op);
 
-@ @<Function to multiply two 4x4 matrices@>=
-void matrix_multiply(Matrix a, Matrix b, Matrix c)
-{
-c[0][0] = a[0][0] * b[0][0] + a[0][1] * b[1][0] + a[0][2] * b[2][0] + a[0][3] * b[3][0];
-c[0][1] = a[0][0] * b[0][1] + a[0][1] * b[1][1] + a[0][2] * b[2][1] + a[0][3] * b[3][1];
-c[0][2] = a[0][0] * b[0][2] + a[0][1] * b[1][2] + a[0][2] * b[2][2] + a[0][3] * b[3][2];
-c[0][3] = a[0][0] * b[0][3] + a[0][1] * b[1][3] + a[0][2] * b[2][3] + a[0][3] * b[3][3];
-c[1][0] = a[1][0] * b[0][0] + a[1][1] * b[1][0] + a[1][2] * b[2][0] + a[1][3] * b[3][0];
-c[1][1] = a[1][0] * b[0][1] + a[1][1] * b[1][1] + a[1][2] * b[2][1] + a[1][3] * b[3][1];
-c[1][2] = a[1][0] * b[0][2] + a[1][1] * b[1][2] + a[1][2] * b[2][2] + a[1][3] * b[3][2];
-c[1][3] = a[1][0] * b[0][3] + a[1][1] * b[1][3] + a[1][2] * b[2][3] + a[1][3] * b[3][3];
-c[2][0] = a[2][0] * b[0][0] + a[2][1] * b[1][0] + a[2][2] * b[2][0] + a[2][3] * b[3][0];
-c[2][1] = a[2][0] * b[0][1] + a[2][1] * b[1][1] + a[2][2] * b[2][1] + a[2][3] * b[3][1];
-c[2][2] = a[2][0] * b[0][2] + a[2][1] * b[1][2] + a[2][2] * b[2][2] + a[2][3] * b[3][2];
-c[2][3] = a[2][0] * b[0][3] + a[2][1] * b[1][3] + a[2][2] * b[2][3] + a[2][3] * b[3][3];
-c[3][0] = a[3][0] * b[0][0] + a[3][1] * b[1][0] + a[3][2] * b[2][0] + a[3][3] * b[3][0];
-c[3][1] = a[3][0] * b[0][1] + a[3][1] * b[1][1] + a[3][2] * b[2][1] + a[3][3] * b[3][1];
-c[3][2] = a[3][0] * b[0][2] + a[3][1] * b[1][2] + a[3][2] * b[2][2] + a[3][3] * b[3][2];
-c[3][3] = a[3][0] * b[0][3] + a[3][1] * b[1][3] + a[3][2] * b[2][3] + a[3][3] * b[3][3];
-}
-
 @ @<Update composite affine transformation matrix@>=
 matrix_multiply(temp->internal.right->affine, m, result);
 matrix_copy(m, result);
@@ -2467,7 +2673,7 @@ affine_list = temp;
 
 @ @<Detach affine transformations@>=
 matrix_copy(root->affine, m);
-matrix_inverse_4x4(root->affine, m);
+matrix_inverse(root->affine, m);
 matrix_copy(root->inverse, m);
 root->affine_list = affine_list;
 root->parent = parent;
@@ -2487,7 +2693,7 @@ void move_affine_transformation_matrix(CSG_Node *node)
 	    if (NULL != node->parent) {
 	        matrix_multiply(node->parent->affine, node->affine, temp);
 	        matrix_copy(node->affine, temp);
-		matrix_inverse_4x4(node->affine, temp);
+		matrix_inverse(node->affine, temp);
 		matrix_copy(node->inverse, temp);
             }
 	    return;
@@ -2496,176 +2702,6 @@ void move_affine_transformation_matrix(CSG_Node *node)
 	move_affine_transformation_matrix(node->internal.right);
 }
 
-@ @<Function to calculate the determinant of a 3x3 matrix@>=
-double matrix_determinant_3x3(Matrix m)
-{
-        return m[0][0] * m[1][1] * m[2][2] +
-               m[0][1] * m[1][2] * m[2][0] +
-	       m[0][2] * m[1][0] * m[2][1] -
-	       m[0][0] * m[1][2] * m[2][1] -
-	       m[0][1] * m[1][0] * m[2][2] -
-	       m[0][2] * m[1][1] * m[2][0];
-}
-
-@ @<Function to calculate the inverse of a 3x3 matrix@>=
-void matrix_inverse_3x3(Matrix m, Matrix i) {
-     double det = matrix_determinant_3x3(m);
-     i[0][0] = (m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det;
-     i[0][1] = (m[0][2] * m[2][1] - m[0][1] * m[2][2]) / det;
-     i[0][2] = (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det;
-     i[1][0] = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) / det;
-     i[1][1] = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det;
-     i[1][2] = (m[0][2] * m[1][0] - m[0][0] * m[1][2]) / det;
-     i[2][0] = (m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det;
-     i[2][1] = (m[0][1] * m[2][0] - m[0][0] * m[2][1]) / det;
-     i[2][2] = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det;
-}
-
-@ @<Function to calculate the inverse of a 4x4 matrix@>=
-void matrix_inverse_4x4(Matrix m, Matrix inverse) {
-   double det = matrix_determinant_4x4(m);
-   inverse[0][0] = (m[1][2] * m[2][3] * m[3][1] -
-             m[1][3] * m[2][2] * m[3][1] +
-	     m[1][3] * m[2][1] * m[3][2] -
-	     m[1][1] * m[2][3] * m[3][2] -
-	     m[1][2] * m[2][1] * m[3][3] +
-	     m[1][1] * m[2][2] * m[3][3]) / det;
-
-   inverse[0][1] = (m[0][3] * m[2][2] * m[3][1] -
-             m[0][2] * m[2][3] * m[3][1] -
-	     m[0][3] * m[2][1] * m[3][2] +
-	     m[0][1] * m[2][3] * m[3][2] +
-	     m[0][2] * m[2][1] * m[3][3] -
-	     m[0][1] * m[2][2] * m[3][3]) / det;
-
-   inverse[0][2] = (m[0][2] * m[1][3] * m[3][1] -
-             m[0][3] * m[1][2] * m[3][1] +
-	     m[0][3] * m[1][1] * m[3][2] -
-	     m[0][1] * m[1][3] * m[3][2] -
-	     m[0][2] * m[1][1] * m[3][3] +
-	     m[0][1] * m[1][2] * m[3][3]) / det;
-
-   inverse[0][3] = (m[0][3] * m[1][2] * m[2][1] -
-             m[0][2] * m[1][3] * m[2][1] -
-	     m[0][3] * m[1][1] * m[2][2] +
-	     m[0][1] * m[1][3] * m[2][2] +
-	     m[0][2] * m[1][1] * m[2][3] -
-	     m[0][1] * m[1][2] * m[2][3]) / det;
-
-   inverse[1][0] = (m[1][3] * m[2][2] * m[3][0] -
-             m[1][2] * m[2][3] * m[3][0] -
-	     m[1][3] * m[2][0] * m[3][2] +
-	     m[1][0] * m[2][3] * m[3][2] +
-	     m[1][2] * m[2][0] * m[3][3] -
-	     m[1][0] * m[2][2] * m[3][3]) / det;
-
-   inverse[1][1] = (m[0][2] * m[2][3] * m[3][0] -
-   	     m[0][3] * m[2][2] * m[3][0] +
-	     m[0][3] * m[2][0] * m[3][2] -
-	     m[0][0] * m[2][3] * m[3][2] -
-	     m[0][2] * m[2][0] * m[3][3] +
-	     m[0][0] * m[2][2] * m[3][3]) / det;
-
-   inverse[1][2] = (m[0][3] * m[1][2] * m[3][0] -
-             m[0][2] * m[1][3] * m[3][0] -
-	     m[0][3] * m[1][0] * m[3][2] +
-	     m[0][0] * m[1][3] * m[3][2] +
-	     m[0][2] * m[1][0] * m[3][3] -
-	     m[0][0] * m[1][2] * m[3][3]) / det;
-
-   inverse[1][3] = (m[0][2] * m[1][3] * m[2][0] -
-             m[0][3] * m[1][2] * m[2][0] +
-	     m[0][3] * m[1][0] * m[2][2] -
-	     m[0][0] * m[1][3] * m[2][2] -
-	     m[0][2] * m[1][0] * m[2][3] +
-	     m[0][0] * m[1][2] * m[2][3]) / det;
-
-   inverse[2][0] = (m[1][1] * m[2][3] * m[3][0] -
-             m[1][3] * m[2][1] * m[3][0] +
-	     m[1][3] * m[2][0] * m[3][1] -
-	     m[1][0] * m[2][3] * m[3][1] -
-	     m[1][1] * m[2][0] * m[3][3] +
-	     m[1][0] * m[2][1] * m[3][3]) / det;
-
-   inverse[2][1] = (m[0][3] * m[2][1] * m[3][0] -
-             m[0][1] * m[2][3] * m[3][0] -
-	     m[0][3] * m[2][0] * m[3][1] +
-	     m[0][0] * m[2][3] * m[3][1] +
-	     m[0][1] * m[2][0] * m[3][3] -
-	     m[0][0] * m[2][1] * m[3][3]) / det;
-
-   inverse[2][2] = (m[0][1] * m[1][3] * m[3][0] -
-             m[0][3] * m[1][1] * m[3][0] +
-	     m[0][3] * m[1][0] * m[3][1] -
-	     m[0][0] * m[1][3] * m[3][1] -
-	     m[0][1] * m[1][0] * m[3][3] +
-	     m[0][0] * m[1][1] * m[3][3]) / det;
-
-   inverse[2][3] = (m[0][3] * m[1][1] * m[2][0] -
-             m[0][1] * m[1][3] * m[2][0] -
-	     m[0][3] * m[1][0] * m[2][1] +
-	     m[0][0] * m[1][3] * m[2][1] +
-	     m[0][1] * m[1][0] * m[2][3] -
-	     m[0][0] * m[1][1] * m[2][3]) / det;
-
-   inverse[3][0] = (m[1][2] * m[2][1] * m[3][0] -
-             m[1][1] * m[2][2] * m[3][0] -
-	     m[1][2] * m[2][0] * m[3][1] +
-	     m[1][0] * m[2][2] * m[3][1] +
-	     m[1][1] * m[2][0] * m[3][2] -
-	     m[1][0] * m[2][1] * m[3][2]) / det;
-
-   inverse[3][1] = (m[0][1] * m[2][2] * m[3][0] -
-             m[0][2] * m[2][1] * m[3][0] +
-	     m[0][2] * m[2][0] * m[3][1] -
-	     m[0][0] * m[2][2] * m[3][1] -
-	     m[0][1] * m[2][0] * m[3][2] +
-	     m[0][0] * m[2][1] * m[3][2]) / det;
-
-   inverse[3][2] = (m[0][2] * m[1][1] * m[3][0] -
-             m[0][1] * m[1][2] * m[3][0] -
-	     m[0][2] * m[1][0] * m[3][1] +
-	     m[0][0] * m[1][2] * m[3][1] +
-	     m[0][1] * m[1][0] * m[3][2] -
-	     m[0][0] * m[1][1] * m[3][2]) / det;
-
-   inverse[3][3] = (m[0][1] * m[1][2] * m[2][0] -
-             m[0][2] * m[1][1] * m[2][0] +
-	     m[0][2] * m[1][0] * m[2][1] -
-	     m[0][0] * m[1][2] * m[2][1] -
-	     m[0][1] * m[1][0] * m[2][2] +
-	     m[0][0] * m[1][1] * m[2][2]) / det;
-}
-
-@ @<Function to calculate the determinant of a 4x4 matrix@>=
-double matrix_determinant_4x4(Matrix m)
-{
-   return
-   m[0][3] * m[1][2] * m[2][1] * m[3][0] -
-   m[0][2] * m[1][3] * m[2][1] * m[3][0] -
-   m[0][3] * m[1][1] * m[2][2] * m[3][0] +
-   m[0][1] * m[1][3] * m[2][2] * m[3][0] +
-   m[0][2] * m[1][1] * m[2][3] * m[3][0] -
-   m[0][1] * m[1][2] * m[2][3] * m[3][0] -
-   m[0][3] * m[1][2] * m[2][0] * m[3][1] +
-   m[0][2] * m[1][3] * m[2][0] * m[3][1] +
-   m[0][3] * m[1][0] * m[2][2] * m[3][1] -
-   m[0][0] * m[1][3] * m[2][2] * m[3][1] -
-   m[0][2] * m[1][0] * m[2][3] * m[3][1] +
-   m[0][0] * m[1][2] * m[2][3] * m[3][1] +
-   m[0][3] * m[1][1] * m[2][0] * m[3][2] -
-   m[0][1] * m[1][3] * m[2][0] * m[3][2] -
-   m[0][3] * m[1][0] * m[2][1] * m[3][2] +
-   m[0][0] * m[1][3] * m[2][1] * m[3][2] +
-   m[0][1] * m[1][0] * m[2][3] * m[3][2] -
-   m[0][0] * m[1][1] * m[2][3] * m[3][2] -
-   m[0][2] * m[1][1] * m[2][0] * m[3][3] +
-   m[0][1] * m[1][2] * m[2][0] * m[3][3] +
-   m[0][2] * m[1][0] * m[2][1] * m[3][3] -
-   m[0][0] * m[1][2] * m[2][1] * m[3][3] -
-   m[0][1] * m[1][0] * m[2][2] * m[3][3] +
-   m[0][0] * m[1][1] * m[2][2] * m[3][3];
-}
 
 @*2 Bounding Boxes.
 Each primitive is enclosed inside a parallelipiped referred to as the
@@ -3078,18 +3114,6 @@ case SCALE:
 default: return INVALID;
 }
 return recursively_test_containment(root->internal.left, r);
-
-@ @<Function to print a 4x4 matrix@>=
-void print_4x4_matrix(Matrix m, uint32_t indent)
-{
-        int i, j, k;
-	for (i = 0; i < 4; ++i) {
-                for (k = 0; k < indent; ++k) printf("\t");
-                printf("| ");
-	        for (j = 0; j < 4; ++j) printf("%8.3lf ", m[i][j]);
-                printf("|\n");
-        }
-}
 
 @ The inverse translation matrix $T^{-1}$ for a translation with
 displacement vector $(x, y, z)$ is given by:
@@ -3838,7 +3862,6 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 
 @ @<Global data structures@>=
 @<Type definitions@>;
-@<Definition of a three-dimensional vector@>;
 @<Definition of a physics particle@>;
 @<Definition of a vertex@>;
 @<Definition of an event@>;
@@ -3890,13 +3913,7 @@ Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 @<Find the solid associated with a specified |name|@>;
 @<Function to count number of primitive solids in a CSG tree@>;
 @<Function to destroy the CSG tree@>;
-@<Function to print a 4x4 matrix@>;
 @<Function to print the CSG tree@>;
-@<Function to multiply two 4x4 matrices@>;
-@<Function to calculate the determinant of a 3x3 matrix@>;
-@<Function to calculate the inverse of a 3x3 matrix@>;
-@<Function to calculate the determinant of a 4x4 matrix@>;
-@<Function to calculate the inverse of a 4x4 matrix@>;
 @<Function to merge affine transformations@>;
 @<Function to move affine transformation matrix to the primitives@>;
 @<Function to apply affine transformation matrix@>;
