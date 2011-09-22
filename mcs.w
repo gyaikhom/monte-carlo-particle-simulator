@@ -117,40 +117,65 @@ for (i = 0; i < num_events; i++) {
 destroy_csg_tree(csg_tree.root);
 
 @** Vectors.
+In {\tt MCS}, we use the {\sl homogeneous coordinate
+system}@^Homogeneous coordinate system@> introduced by August
+Ferdinand M\"obius@^August Ferdinand M\"obius@> in his work {\sl Der
+barycentrische Calc\"ul} [Leipzig, {\bf 1827}]. By expressing vectors
+using homogeneous coordinates, we can simplify {\sl affine
+transformations}@^Affine transformations@> of a vector, such as
+translation, rotation and scaling, as these can be expressed simply
+as a left-hand multiplication of the vector by a $4 \times 4$ affine
+transformation matrix.
+
+The homogeneous coordinates of a finite point $(x', y', z')$ in the
+three-dimensional cartesian volume are any four numbers $(x, y,
+z, w)$ for which $x' = x/w$, $y' = y/w$, and $z' =
+z/w$. Before applying any affine transformation matrix to a vector, we
+must ensure that $w = 1$. We shall refer to this as the $w$-component.
 
 @<Definition of a three-dimensional vector@>=
-typedef double vect3d[4];
+typedef double Vector[4];
 
-@ Function |vect3d_zero(v)| sets all components of the vector |v| to
-zero, except for the homogeneous coordinate. Vector |v| is modified.
+@ Function |vector_print(v,f)| prints the components of vector
+|v| to the I/O stream pointed to by |f|. Vector |v| is left
+unmodified.
+@<Global functions@>=
+void vector_print(Vector v, FILE *f)
+{
+	fprintf(f, "(%lf, %lf, %lf, %lf)", v[0], v[1], v[2], v[3]);
+}
+
+@ Function |vector_zero(v)| modifies the vector |v| by setting all of
+its components to zero, except for its $w$-component, which is set
+to 1.
 
 @d ZERO_VECTOR { 0.0, 0.0, 0.0, 1.0 }
 @<Global functions@>=
-void vect3d_zero(vect3d v)
+void vector_zero(Vector v)
 {
 	v[0] = v[1] = v[2] = 0.0;
-	v[3] = 1.0; /* homogeneous coordinate */
+	v[3] = 1.0;
 }
 
-@ Function |vect3d_homogenise(v)| ensures that the vector |v| is in
-homogeneous coordinates, with the $w$ component set to 1.0. Vector |v|
-is modified.
+@ Function |vector_homogenise(v)| modifies the vector |v|, so that its
+$w$-component equals 1.
 @<Global functions@>=
-void vect3d_homogenise(vect3d v)
+void vector_homogenise(Vector v)
 {
 	if (1.0 == v[3]) return; /* already homogenised */
 	if (0.0 != v[3]) {
 	        v[0] /= v[3];
 	        v[1] /= v[3];
 	        v[2] /= v[3];
+		v[3] = 1.0;
         }
-	v[3] = 1.0;
 }
 
-@ Function |vect3d_copy(u,v)| copies all of the components of vector
-|v| to vector |u|. Vector |v| is left unmodified.
+@ Function |vector_copy(u,v)| modifies vector |u| by copying all of
+the components of vector |v| to vector |u|. Vector |v| is left
+unmodified.
 @<Global functions@>=
-void vect3d_copy(vect3d u, vect3d v)
+void vector_copy(Vector u, Vector v)
 {
 	u[0] = v[0];
         u[1] = v[1];
@@ -158,30 +183,26 @@ void vect3d_copy(vect3d u, vect3d v)
 	u[3] = v[3];
 }
 
-@ Function |vect3d_magnitude(v)| calculates the magnitude of the
-vector |v|. Vector |v| is left unmodified.
+@ Function |vector_magnitude(v)| returns the {\sl vector magnitude} of
+the vector |v|. Vector |v| is left unmodified.@^vector magnitude@>
 @<Global functions@>=
-double vect3d_magnitude(vect3d v)
+double vector_magnitude(Vector v)
 {
 	return sqrt(v[0] * v[0] +
 		    v[1] * v[1] +
 		    v[2] * v[2]);
 }
 
-@ Function |vect3d_print(v,f)| prints the components of vector
-|v| to the I/O stream |f|. Vector |v| is left unmodified.
+@ Function |vector_normalize(v,r)| {\sl normalises} the vector |v| and
+stores the result in |r|. Vector |v| is left unmodified. The
+normalised vector |r| is an {\sl unit vector} with magnitude 1. This
+function assumes that the $w$-component of |v| is already 1.
+@^unit vector@>
+@^vector normalisation@>
 @<Global functions@>=
-void vect3d_print(vect3d v, FILE *f)
+void vector_normalize(Vector v, Vector r)
 {
-	fprintf(f, "(%lf, %lf, %lf)", v[0], v[1], v[2]);
-}
-
-@ Function |vect3d_distance(v)| normalise the vector |v| and stores
-the result in |r|. Vector |v| is left unmodified.
-@<Global functions@>=
-void vect3d_normalize(vect3d v, vect3d r)
-{
-	double m = vect3d_magnitude(v);
+	double m = vector_magnitude(v);
 	if (m > 0.0) {
 		r[0] = v[0] / m;
 		r[1] = v[1] / m;
@@ -191,75 +212,87 @@ void vect3d_normalize(vect3d v, vect3d r)
 		r[1] = 0.0;
 		r[2] = 0.0;
 	}
+	r[3] = 1.0;
 }
 
-@ Function |vect3d_difference(u,v,r)| calculates the difference
-of vector |v| from vector |u|, and stores the result in |r|.
-Vectors |u| and |v| are left unmodified.@^vector difference@>
+@ Function |vector_difference(u,v,r)| calculates the {\sl vector
+difference} by subtracting vector |v| from vector |u|, and stores the
+result in vector |r|. Both vectors |u| and |v| are left unmodified. This
+function assumes that the $w$-components in |v| and |u| are already 1.
+@^vector difference@>
 @<Global functions@>=
-void vect3d_difference(vect3d u, vect3d v, vect3d r)
+void vector_difference(Vector u, Vector v, Vector r)
 {
 	r[0] = u[0] - v[0];
 	r[1] = u[1] - v[1];
 	r[2] = u[2] - v[2];
+	r[3] = 1.0;
 }
 
-@ Function |vect3d_dot(u,v)| returns the {\sl dot} (or, {\sl
-scalar}) product of the two vectors |u| and |v|. Vectors |u| and |v|
-are left unmodified.@^dot product@>@^scalar product@>
+@ Function |vector_dot(u,v)| returns the {\sl dot} (also known as the
+{\sl scalar}) product of the two vectors |u| and |v|. Vectors |u| and |v|
+are left unmodified. Vector dot products are {\sl
+commutative}@^commutative@>---the order of the parameters are
+irrelevant.@^dot product@>@^scalar product@>
 @<Global functions@>=
-double vect3d_dot(vect3d u, vect3d v)
+double vector_dot(Vector u, Vector v)
 {
-	double t = 0.0;
-	t = u[0] * v[0];
-	t += u[1] * v[1];
-	t += u[2] * v[2];
-	return t;
+	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
 
-@ Function |vect3d_cross(u,v,r)| calculates the {\sl cross} product
-from vector |u| to vector |v|, and stores the result in |r|. Vectors
-|u| and |v| are left unmodified.@^cross product@>
+@ Function |vector_cross(u,v,r)| calculates the {\sl cross} product
+between vector |u| and vector |v|, and stores the result in vector
+|r|. Vectors |u| and |v| are left unmodified.
+
+Vector |r| is perpendicular to both |v| and |u|, with a direction
+given by the {\sl right-hand rule}@^right-hand rule@> (when |u| and
+|v| respectively point towards the index finger and the middle finger,
+|r| points in the direction of the thumb). The {\sl magnitude}
+@^vector magnitude@> of |r| is equal to the area of the parallelogram 
+that the vectors span from |u| towards |v|. Vector cross products are
+{\sl noncommutative}@^noncommutative@>---the order of the parameters are
+significant.
+@^cross product@>
 @<Global functions@>=
-void vect3d_cross(vect3d u, vect3d v, vect3d r)
+void vector_cross(Vector u, Vector v, Vector r)
 {
 	r[0] = (u[1] * v[2] - u[2] * v[1]);
 	r[1] = (u[2] * v[0] - u[0] * v[2]);
 	r[2] = (u[0] * v[1] - u[1] * v[0]);
 }
 
-@ Function |vect3d_angle_radian(u,v)| returns the angle $\theta$ (in
-radian) between the two vectors |u| and |v|, where rotation started
+@ Function |vector_angle_radian(u,v)| returns the angle $\theta$ in
+radians between the vectors |u| and |v|, where rotation started
 at vector |u|. The value of $\theta$ is in the range $[0, 2\pi]$.
 Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
-double vect3d_angle_radian(vect3d u, vect3d v)
+double vector_angle_radian(Vector u, Vector v)
 {
-        vect3d a, b, c = ZERO_VECTOR;
+        Vector a, b, c = ZERO_VECTOR;
 	double angle;
-        vect3d_normalize(u, a);
-	vect3d_normalize(v, b);
-        angle = acos(vect3d_dot(a, b));
-        vect3d_cross(u, v, c);
+        vector_normalize(u, a);
+	vector_normalize(v, b);
+        angle = acos(vector_dot(a, b));
+        vector_cross(u, v, c);
 	if (c[3] < 0.0) return (TWICE_PI - angle);
 	return angle;
 }
 
-@ Function |vect3d_angle_degree(u,v)| returns the angle $\theta$ (in
-degrees) between the two vectors |u| and |v|, where rotation started
+@ Function |vector_angle_degree(u,v)| returns the angle $\theta$ in
+degrees between the vectors |u| and |v|, where rotation began
 at vector |u|. The value of $\theta$ is in the range $[0^\circ, 
 360^\circ]$.  Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
-double vect3d_angle_degree(vect3d u, vect3d v)
+double vector_angle_degree(Vector u, Vector v)
 {
-	return RADIAN_TO_DEGREE * vect3d_angle_radian(u, v);
+	return RADIAN_TO_DEGREE * vector_angle_radian(u, v);
 }
 
-@ Function |vect3d_distance(u, v)| returns the distance between the
+@ Function |vector_distance(u, v)| returns the distance between the
 three-dimensional points represented by the vectors |u| and
 |v|. Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
-double vect3d_distance(vect3d u, vect3d v)
+double vector_distance(Vector u, Vector v)
 {
 	double x, y, z;
 	x = u[0] - v[0];
@@ -294,10 +327,10 @@ list.
 
 @<Definition of a physics particle@>=
 struct particle_struct {
-        vect3d momentum;
+        Vector momentum;
         double mass;  
       	double charge;
-      	vect3d polarisation;
+      	Vector polarisation;
 	uint32_t num_daughters;
       	struct particle_struct *next;
       	struct particle_struct *daughters;
@@ -384,7 +417,7 @@ with it. These are stored as a linked-list.
 @f uint32_t int
 @<Definition of a vertex@>=
 struct vertex_struct {
-       vect3d position;
+       Vector position;
        uint32_t num_particles;
        Particle *particles;
        struct vertex_struct *next;
@@ -460,9 +493,9 @@ for (j = 0; j < num_vertices; j++) {
 @<Definition of a particle gun@>=
 struct particle_gun_struct {
        uint32_t num_particles; /* no. particles to generate */
-       vect3d position; /* vertex position */
-       vect3d momentum;
-       vect3d polarisation;
+       Vector position; /* vertex position */
+       Vector momentum;
+       Vector polarisation;
        double energy;
        double charge;
 };
@@ -474,9 +507,9 @@ typedef struct particle_gun_struct Particle_gun;
 void reset_particle_gun()
 {
         particle_gun.num_particles = 0;
-	vect3d_zero(particle_gun.position);
-	vect3d_zero(particle_gun.momentum);
-	vect3d_zero(particle_gun.polarisation);
+	vector_zero(particle_gun.position);
+	vector_zero(particle_gun.momentum);
+	vector_zero(particle_gun.polarisation);
 	particle_gun.energy = 0.0;
 	particle_gun.charge = 0.0;
 }
@@ -499,21 +532,21 @@ void set_pg_num_particles(uint32_t n)
 }
 
 @ @<Set position of particle gun@>=
-void set_pg_position(vect3d position)
+void set_pg_position(Vector position)
 {
-	vect3d_copy(particle_gun.position, position);
+	vector_copy(particle_gun.position, position);
 }
 
 @ @<Set momentum of particle gun@>=
-void set_pg_momentum(vect3d momentum)
+void set_pg_momentum(Vector momentum)
 {
-	vect3d_copy(particle_gun.momentum, momentum);
+	vector_copy(particle_gun.momentum, momentum);
 }
 
 @ @<Set polarisation of particle gun@>=
-void set_pg_polarisation(vect3d polarisation)
+void set_pg_polarisation(Vector polarisation)
 {
-	vect3d_copy(particle_gun.polarisation, polarisation);
+	vector_copy(particle_gun.polarisation, polarisation);
 }
 
 @ @<Set energy of particle gun@>=
@@ -1575,7 +1608,7 @@ combined readily with other measurements in the same category.
 
 @<Structure for translation parameters@>=
 struct translation_parameters {
-       vect3d displacement; /* displacement of solid's origin */
+       Vector displacement; /* displacement of solid's origin */
 };
 
 @ @<Read translation operation@>=
@@ -1691,7 +1724,7 @@ is defined relative to the origin of the world coordinate frame.
 @<Structure for rotation parameters@>=
 struct rotation_parameters {
        double theta; /* angle of rotation in radians */
-       vect3d axis; /* axis of rotation (unit vector from origin of world
+       Vector axis; /* axis of rotation (unit vector from origin of world
        coordinate frame) */
 };
 
@@ -1779,7 +1812,7 @@ equal. This is referred to as {\sl uniform scaling}@^uniform scaling@>.
 
 @<Structure for scaling parameters@>=
 struct scaling_parameters {
-       vect3d scale; /* scaling factor */
+       Vector scale; /* scaling factor */
 };
 
 @ @<Read scaling operation@>=
@@ -2644,7 +2677,7 @@ encloses the solid).
 
 @<Type definition for bounding boxes@>=
 typedef struct bounding_box_struct {
-	vect3d l, u; /* lower and upper bounds */
+	Vector l, u; /* lower and upper bounds */
 } BoundingBox;
 
 @ Every node in the CSG tree of a solid must be enclosed by a bounding box.
@@ -2669,7 +2702,7 @@ only the definition of the primitive solid. This function returns
 bool calculate_bounding_box(CSG_Node *n)
 {
 	CSG_Node *l, *r; /* left and right subtrees */
-	vect3d temp, c[8]; /* for affine transformation */
+	Vector temp, c[8]; /* for affine transformation */
 	int i, j;
 	if (SOLID == n->op) {
 	    if (primitive_bb(n->leaf.p, &n->bb)) {
@@ -2785,7 +2818,7 @@ c[7][1] = n->bb.u[1];
 c[7][2] = n->bb.u[2];
 
 @ @<Function to apply affine transformation matrix@>=
-void apply_affine(Matrix m, vect3d v, vect3d r)
+void apply_affine(Matrix m, Vector v, Vector r)
 {
     r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
     r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
@@ -2797,7 +2830,7 @@ void apply_affine(Matrix m, vect3d v, vect3d r)
 for (i = 0; i < 8; ++i) {
         c[i][3] = 1.0; /* homogenise the corner vector */
         apply_affine(n->inverse, &c[i][0], temp);
-        vect3d_copy(&c[i][0], temp);
+        vector_copy(&c[i][0], temp);
 }
 
 @ After applying an affine transformation, a bounding box may no
@@ -2944,18 +2977,18 @@ inside the solid defined by the CSG tree rooted at |root|; otherwise,
 |false| is returned.
 
 @<Function to test if a vector is inside a solid@>=
-Containment solid_contains_vector(CSG_Node *root, vect3d v)
+Containment solid_contains_vector(CSG_Node *root, Vector v)
 {
 	if (NULL == root || NULL == v) return INVALID;
-	vect3d_homogenise(v);
+	vector_homogenise(v);
 	return recursively_test_containment(root, v);
 }
 
 @ @<Function to recursively test containment@>=
-Containment recursively_test_containment(CSG_Node *root, vect3d v)
+Containment recursively_test_containment(CSG_Node *root, Vector v)
 {
         Containment left, right;
-        vect3d r; /* used during inverse transformation */
+        Vector r; /* used during inverse transformation */
         if (SOLID == root->op) {
                 @<Test containment inside primitive solid@>;
 	} else {
@@ -3256,7 +3289,7 @@ of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
 @<Function to test containment inside a block@>=
-Containment is_inside_block(vect3d v, Primitive *p)
+Containment is_inside_block(Vector v, Primitive *p)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
 	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
@@ -3290,7 +3323,7 @@ to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
 @<Function to test containment inside a sphere@>=
-Containment is_inside_sphere(vect3d v, Primitive *p)
+Containment is_inside_sphere(Vector v, Primitive *p)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
@@ -3336,7 +3369,7 @@ Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
 @<Function to test containment inside a cylinder@>=
-Containment is_inside_cylinder(vect3d v, Primitive *p)
+Containment is_inside_cylinder(Vector v, Primitive *p)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -3430,10 +3463,10 @@ the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
 @<Function to test containment inside a torus@>=
-Containment is_inside_torus(vect3d v, Primitive *p)
+Containment is_inside_torus(Vector v, Primitive *p)
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial;
-	vect3d tube_center, from_tube_center_to_v, temp;
+	Vector tube_center, from_tube_center_to_v, temp;
 	@<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>;
 	if (delta < p->t.r0 || delta > p->t.r1) return OUTSIDE; /* check radial
 	containment on $xz$-plane */
@@ -3457,9 +3490,9 @@ double convert_radian_to_degree(double angle)
 delta = sqrt(v[0] * v[0] + v[2] * v[2]);
 
 @ @<Calculate $\gamma$ subtended by |v| on the $xz$-plane@>=
-vect3d_copy(temp, v);
+vector_copy(temp, v);
 temp[1] = 0.0; /* angle must be on the $xz$-plane */
-gamma = vect3d_angle_radian(positive_xaxis_unit_vector, temp);
+gamma = vector_angle_radian(positive_xaxis_unit_vector, temp);
 gamma_deg = convert_radian_to_degree(gamma);
 
 @ The vector |tube_center| gives the center of the tube which subtends
@@ -3483,11 +3516,11 @@ tube_center[1] = 0.0; /* the circular tube center always lies on the $xz$-plane 
 tube_center[2] = p->t.major * sin(gamma);
 
 @ @<Calculate radial distance of |v| from |tube_center|@>=
-vect3d_difference(v, tube_center, from_tube_center_to_v);
-radial = vect3d_magnitude(from_tube_center_to_v);
+vector_difference(v, tube_center, from_tube_center_to_v);
+radial = vector_magnitude(from_tube_center_to_v);
 
 @ @<Calculate the radial angle of |v| on the cross-section at |tube_center|@>=
-tau = vect3d_angle_radian(tube_center, from_tube_center_to_v);
+tau = vector_angle_radian(tube_center, from_tube_center_to_v);
 tau_deg = convert_radian_to_degree(tau);
 
 @ @<Check if |v| is on the surface of the tube@>=
@@ -3519,7 +3552,7 @@ int main(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
         FILE *f;
-        vect3d point = ZERO_VECTOR;
+        Vector point = ZERO_VECTOR;
 	int n;
 	Containment flag;
 	char c;
@@ -3566,7 +3599,7 @@ if (NULL == temp_node) {
         printf("[%d] Solid '%s' not found\n",
 	input_file_current_line, op_solid);
 } else {
-        vect3d_homogenise(point);
+        vector_homogenise(point);
         flag = solid_contains_vector(temp_node, point);
         t = false;
         switch(flag) {
@@ -3645,7 +3678,7 @@ bool boolean_stack_pop(boolean_stack *s, bool *v)
 }
 
 @ @<External functions@>=
-bool is_inside_primitive(vect3d v, Primitive *p)
+bool is_inside_primitive(Vector v, Primitive *p)
 {
 	Containment c;
 	switch(p->type) {
@@ -3664,7 +3697,7 @@ bool is_inside_primitive(vect3d v, Primitive *p)
 @d BOOLEAN_INTERSECTION -2
 @d BOOLEAN_UNION -3
 @<External functions@>=
-bool is_inside(vect3d v, Solid *s, bool *result)
+bool is_inside(Vector v, Solid *s, bool *result)
 {
 	boolean_stack stack;
 	bool l, r; /* left and right operands */
@@ -3800,8 +3833,8 @@ uint32_t num_vertices = 5;
 uint32_t num_particles = 5;
 Particle_gun particle_gun;
 Particle_stack particle_stack;
-vect3d temp_vector;
-vect3d positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
+Vector temp_vector;
+Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
 
 @ @<Global data structures@>=
 @<Type definitions@>;
