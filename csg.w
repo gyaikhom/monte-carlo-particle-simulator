@@ -191,7 +191,7 @@ when a new block is allocated.
 static Primitive *next_primitive = NULL;
 static Primitive *bad_primitive = NULL;
 
-@ To create a new primitive solid, we check if the available slot is
+@ To store a primitive solid, we check if the available slot is
 valid, i.e., |next_primitive != bad_primitive|. If valid, we use this
 slot; otherwise, we allocate a new block that can accommodate
 |primitives_per_block| primitive solids, and use the first slot in
