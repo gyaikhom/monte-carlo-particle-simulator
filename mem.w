@@ -7,7 +7,8 @@ their trajectories, the physics tables etc. To reduce the number of
 system calls that are required to satisfy the memory requirement, and
 to simplify deallocation of memory during clean, we use a memory
 management scheme derived from the notion of memory areas as described
-in the Stanford Graph Base.
+in the book {\sl The Stanford GraphBase}~[Addison-Wesley ({\bf 1993})]
+by Donald E. Knuth.
 
 With the concept of memory areas, we separate the conceptual
 representation of the data from their actual storage in physical

@@ -2,22 +2,22 @@
 
 @** Constructive Solid Geometry.
 During a simulation event, the tracking of a particle's trajectory
-happens inside a closed world defined by the solids that are part of
-this world. We use {\sl Constructive Solid Geometry} to represent
-these solids. Most of the concepts used in this implementation are
-based on the books {\sl Geometric and Solid Modelling: An
-Introduction} by Christoph M. Hoffman [Morgan Kaufmann Publishers,
-Inc., ({\bf 1989})] and {\sl An Integrated Introduction to Computer
-Graphics and Geometric Modelling} by Ronald Goldman [CRC Press ({\bf
-2009})].
+happens inside a closed three-dimensional simulation world composed of
+solids. Each of these solids is defined by a {\sl binary tree}
+data-structure, which is built recursively bottom-up from primitive
+convex solids through affine transformations and boolean combination
+of existing solids. A simulation world may be composed of several
+non-intersecting solids, and hence, it is best represented by a {\sl
+forest} of binary trees. Once the forest is ready, we pre-process it
+to generate a compact data-structure that is optimised for efficient
+processing during particle tracking.
 
-In constructive solid geometry, complex solids are built from
-primitive solids by combining them using well defined
-operations. These operations include {\sl affine transformations},
-such as translation, rotation and scaling, and volumetric {\sl boolean
-operations} which combine existing solid volumes to define new
-ones. Thus, a desired solid is created from a few basic primitive
-solids by recursively combining existing solids using these operations.
+We use {\sl Constructive Solid Geometry} to represent solids. Most of
+the concepts used in this implementation are based on the books {\sl
+Geometric and Solid Modelling: An Introduction} by Christoph
+M. Hoffman [Morgan Kaufmann, ({\bf 1989})] and {\sl An Integrated
+Introduction to Computer Graphics and Geometric Modelling} by Ronald
+Goldman [CRC Press ({\bf 2009})].
 
 @*1 Primitive solids.
 {\tt MCS} currently supports four types of {\sl primitive solids}: the
@@ -433,11 +433,10 @@ right child of the parent operator node.
 @<Destroy parameter node if any@>=
 
 @ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
- nonlinear function of the characters. We borrow the
-hash function used in the {\sl Stanford Graph Base}
-@^Stanford Graph Base@> to calculate $h$. As noted in the
- documentation, this hash function only works with ASCII encoded
- strings.
+ nonlinear function of the characters. We borrow the hash function
+ described by Donald E. Knuth in the book {\sl The Stanford
+ GraphBase}~[Addison-Wesley ({\bf 1993})] to calculate $h$. As noted
+ therein, this hash function only works with ASCII encoded strings.
 
 @d HASH_MULT 314159 /* random multiplier */
 @d HASH_PRIME 516595003 /* the 27182818th prime; which is less than $2^{29}$ */
