@@ -68,17 +68,6 @@ field.
 @<Information common to all primitives@>=
 Primitive_type type;
 
-@ Every primitive has a {\sl unique identifier} and a {\sl unique
-name}. A unique human-readable name is supplied by the user to each
-instance of a primitive. From this name, the corresponding unique
-identifier is generated internally for use by the various
-algorithms.@^unique identifier@>@^unique name@>
-
-@d MAX_LEN_SOLID_NAME 128
-@<Information common to all primitives@>=
-uint32_t id; /* unique primitive identifier */
-char name[MAX_LEN_SOLID_NAME];
-
 @ In addition to the {\sl global coordinate frame} defined by the
 simulation world, each initialised primitive also defines a {\sl local
 coordinate frame}. The origin of this coordinate frame is used by the
@@ -208,7 +197,7 @@ slot; otherwise, we allocate a new block that can accommodate
 |primitives_per_block| primitive solids, and use the first slot in
 this block.
 
-@d primitives_per_block 100
+@d primitives_per_block 195 /* 16384 bytes per block */
 @<Global functions@>=
 Primitive *create_primitive_solid() {
         Primitive *slot = next_primitive;
@@ -292,7 +281,7 @@ node in the CSG tree. They are supplied by the user through the
 geometry input file. Node names are used during registration of
 solids.
 
-@d MAX_LEN_NODE_NAME 128
+@d MAX_LEN_NODE_NAME 140
 @<Information common to all CSG nodes@>=
 char name[MAX_LEN_NODE_NAME];
 
@@ -321,7 +310,7 @@ valid, i.e., |next_csg_node != bad_csg_node|. If valid, we use this
 slot; otherwise, we allocate a new block that can accommodate
 |csg_node_per_block| CSG nodes, and use the first slot in this block.
 
-@d csg_nodes_per_block 100
+@d csg_nodes_per_block 128 /* 65536 bytes per block */
 @<Global functions@>=
 CSG_Node *create_csg_node() {
         CSG_Node *slot = next_csg_node;
@@ -733,8 +722,8 @@ all of the operation commands without confusion.
 @d MAX_LEN_FILENAME 256
 @<Global variables@>=
 double op_x, op_y, op_z, op_theta;
-char op_target[MAX_LEN_SOLID_NAME], op_solid[MAX_LEN_SOLID_NAME];
-char op_left[MAX_LEN_SOLID_NAME], op_right[MAX_LEN_SOLID_NAME];
+char op_target[MAX_LEN_NODE_NAME], op_solid[MAX_LEN_NODE_NAME];
+char op_left[MAX_LEN_NODE_NAME], op_right[MAX_LEN_NODE_NAME];
 char *solid_name; /* points to name of solid while alerting error */
 CSG_Node *target_solid, *left_solid, *right_solid;
 
@@ -789,7 +778,7 @@ CSG_Node *internal_node, *leaf_node, *temp_node;
 
 @ @<Initialise primitive block with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
-       p->name, &p->b.length, &p->b.width, &p->b.height);
+       op_solid, &p->b.length, &p->b.width, &p->b.height);
 ++input_file_current_line;
 if (EOF == read_count || 4 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
@@ -826,7 +815,7 @@ if (NULL == leaf_node) {
         leaf_node->op = SOLID; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
 	leaf_node->parent = NULL;
-	register_solid(leaf_node, p->name);
+	register_solid(leaf_node, op_solid);
 }
 
 @ The parameters for the sphere geometry are supplied in the following
@@ -851,7 +840,7 @@ discussed.
 
 @ @<Initialise primitive sphere with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf)",
-       p->name, &p->s.radius);
+       op_solid, &p->s.radius);
 ++input_file_current_line;
 if (EOF == read_count || 2 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
@@ -881,7 +870,7 @@ base radius 10.0 and height 20.0.
 
 @ @<Initialise primitive cylinder with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)",
-       p->name, &p->c.radius, &p->c.height);
+       op_solid, &p->c.radius, &p->c.height);
 ++input_file_current_line;
 if (EOF == read_count || 3 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
@@ -936,7 +925,7 @@ values of $360^{\circ}$, which signifie complete rotations.
 
 @ @<Initialise primitive torus with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)",
-       p->name, &p->t.phi, &p->t.phi_start, &p->t.theta,
+       op_solid, &p->t.phi, &p->t.phi_start, &p->t.theta,
        &p->t.theta_start, &p->t.major, &p->t.minor);
 ++input_file_current_line;
 if (EOF == read_count || 7 != read_count) {
@@ -1869,7 +1858,7 @@ void process_and_register_solid(const char *name, CSG_Node *root)
 @d MAX_CSG_SOLIDS 32
 @<Global variables@>=
 struct solid_table_entry {
-       char name[MAX_LEN_SOLID_NAME];
+       char name[MAX_LEN_NODE_NAME];
        CSG_Node *solid;
 };
 
