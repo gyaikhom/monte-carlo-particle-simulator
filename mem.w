@@ -4,11 +4,10 @@
 data that are required by the simulations. This include data
 structures for representing the simulation world, the particles and
 their trajectories, the physics tables etc. To reduce the number of
-system calls that are required to satisfy the memory requirement, and
-to simplify deallocation of memory during clean, we use a memory
-management scheme derived from the notion of memory areas as described
-in the book {\sl The Stanford GraphBase}~[Addison-Wesley ({\bf 1993})]
-by Donald E. Knuth.
+system calls required to allocate memory, and to simplify deallocation
+of memory during clean-up, we borrow the memory management scheme
+described by Donald E. Knuth in the book {\sl The Stanford
+GraphBase}~[Addison-Wesley ({\bf 1993})].
 
 With the concept of memory areas, we separate the conceptual
 representation of the data from their actual storage in physical
@@ -102,4 +101,4 @@ if (block) {
 
 @ We shall use only one memory area for the entire application.
 @<Global variables@>=
-Area mem;
+Area mem = NULL;

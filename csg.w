@@ -1217,19 +1217,6 @@ if (NULL == target_solid) {
 node which will become the right-child of the translation operator
 node.
 
-{\bf Note:} We could have applied the translation immediately to the
-target solid, instead of creating a separate parameter node. However,
-creating a parametr node allows us to retain the original state of the
-target solid. At the moment, I am doubtful that this is the correct
-way of doing things, since we could significantly improve performance
-by applying the translation directly to the target, so that future
-references to the solid already incorporates the required
-translation. Nonetheless, this is not true if the target 
-is an intermediate solid, hence, we will leave the translation
-parameters separated from the target. In future revisions, we might
-choose to apply the translations directly, at least for primitive
-solids.
-
 @<Create translation parameter node@>=
 leaf_node = create_csg_node();
 if (NULL == leaf_node) {
@@ -1388,7 +1375,7 @@ using the following format:
 \smallskip
 
 \noindent where, ``target'' is the name of the solid which is obtained
-after scaling ``solid'' by the scaling factors $ux$, $uy$ and $uz$
+after scaling ``solid'' by the scaling factors $sx$, $sy$ and $sz$
 along the $x$, $y$ and $z$ axes, respectively. For instance, the
 scaling specification {\tt ("S1" "Solid" 1.0 2.0 3.0)} means, increase
 the scale of the solid associated with the name ``Solid'' by a factor
