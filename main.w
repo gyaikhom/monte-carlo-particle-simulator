@@ -23,7 +23,7 @@ for (i = 0; i < num_events; i++) {
 }
 
 @ @<Clean up the system@>=
-destroy_csg_tree(csg_tree.root);
+mem_free(mem);
 
 @ @<Include system libraries@>=
 #include <math.h>

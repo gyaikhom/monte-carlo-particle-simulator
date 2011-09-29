@@ -186,23 +186,41 @@ double major, minor;
 double phi, phi_start, theta, theta_start; /* subtended angle, and
 start angle (in degrees) */
 
-@ For the moment, we are using a straight-forward memory
-allocator. Future revisions will make this efficient by using
-memory areas, as used in the {\sl Stanford Graph Base}
-@^Stanford Graph Base@> for storing graph data structures.
+@ To create a primitive solid, we use the global memory area
+|mem|. This memory area stores all of the primitive solids in blocks
+of items of type |Primitive|. Hence, we need a pointer that points to
+the slot that is currently available inside the active |Primitive|
+block, and a pointer to check if the available slot is indeed
+valid. The pointers |next_primitive| and |bad_primitive| keep track of
+this information.
 
+The |next_primitive| pointer is updated after the allocation of a slot
+from the current |Primitive| block, or when a new |Primitive| block is
+allocated using |mem_alloc(n,s)|; the |bad_primitive| is updated only
+when a new block is allocated.
+@<Global variables@>=
+static Primitive *next_primitive = NULL;
+static Primitive *bad_primitive = NULL;
+
+@ To create a new primitive solid, we check if the available slot is
+valid, i.e., |next_primitive != bad_primitive|. If valid, we use this
+slot; otherwise, we allocate a new block that can accommodate
+|primitives_per_block| primitive solids, and use the first slot in
+this block.
+
+@d primitives_per_block 100
 @<Global functions@>=
-Primitive *create_primitive_solid()
-{
-	Primitive *temp;
-	if ((temp = (Primitive *) malloc(sizeof(Primitive))) == NULL)
-	        fprintf(stderr, "Failed to allocate memory\n");
-        return temp;
-}
-
-@ @<Global functions@>=
-void destroy_primitive_solid(Primitive *primitive) {
-        free(primitive);
+Primitive *create_primitive_solid() {
+        Primitive *slot = next_primitive;
+	if (slot == bad_primitive) {
+	   slot = mem_typed_alloc(primitives_per_block, Primitive, mem);
+	   if (slot == NULL) return NULL;
+	   else {
+	   	next_primitive = slot + 1;
+		bad_primitive = slot + primitives_per_block;
+	   }
+	} else next_primitive++;
+        return slot;
 }
 
 @*1 Constructive Solid Geometry Tree.
@@ -283,14 +301,40 @@ backtracking during tree traversal.
 @<Information common to all CSG nodes@>=
 CSG_Node *parent; /* pointer to parent node */
 
-@ @<Global functions@>=
+@ To create a new CSG node, we use the global memory area |mem|. This
+memory area stores all of the CSG nodes in blocks of items of type
+|CSG_Node|. Hence, we need a pointer that points to the slot that is
+currently available inside the active |CSG_Node| block, and a pointer
+to check if the available slot is indeed valid. The pointers
+|next_csg_node| and |bad_csg_node| keep track of this information.
+
+The |next_csg_node| pointer is updated after the allocation of a slot
+from the current |CSG_Node| block, or when a new |CSG_Node| block is
+allocated using |mem_alloc(n,s)|; the |bad_csg_node| is updated only
+when a new block is allocated.
+@<Global variables@>=
+static CSG_Node *next_csg_node = NULL;
+static CSG_Node *bad_csg_node = NULL;
+
+@ To create a new CSG node, we check if the available slot is
+valid, i.e., |next_csg_node != bad_csg_node|. If valid, we use this
+slot; otherwise, we allocate a new block that can accommodate
+|csg_node_per_block| CSG nodes, and use the first slot in this block.
+
+@d csg_nodes_per_block 100
+@<Global functions@>=
 CSG_Node *create_csg_node() {
-        CSG_Node *temp;
-	temp = (CSG_Node *) malloc(sizeof(CSG_Node));
-	if (NULL == temp)
-	        fprintf(stderr, "Failed to allocate memory\n");
-	@<Initialise affine matrix to identity@>;
-        return temp;
+        CSG_Node *slot = next_csg_node;
+	if (slot == bad_csg_node) {
+	   slot = mem_typed_alloc(csg_nodes_per_block, CSG_Node, mem);
+	   if (slot == NULL) return NULL;
+	   else {
+	   	next_csg_node = slot + 1;
+		bad_csg_node = slot + csg_nodes_per_block;
+	   }
+	} else next_csg_node++;
+	@<Initialise affine matrices to the identity matrix@>;
+        return slot;
 }
 
 @ To build a complex solid, the required operators must be applied in
@@ -375,7 +419,6 @@ on hash tables with valid CSG trees; for error handling, use
 detached CSG nodes.
 
 @<Reset the hash table of solids@>=
-destroy_csg_tree(csg_tree.root);
 csg_tree.root = NULL;
 for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
 
@@ -393,25 +436,12 @@ Note here that, since parameter nodes are not part of the hash table,
 we must also destroy the right nodes if they are parameter nodes.
 
 @<Destroy the hash table of solids@>=
-for (i = 0; i < MAX_CSG_NODES; ++i) {
-        temp_node = csg_tree.table[i];
-        if (NULL == temp_node) continue;
-        if (SOLID == temp_node->op)
-               destroy_primitive_solid(temp_node->leaf.p);
-        else {
-                @<Destroy parameter node if any@>;
-        }
-        free(temp_node);
-	csg_tree.table[i] = NULL;
-}
 
 @ Parameter nodes are only accessible through the corresponding
 translation or transformation operator node. If present, they are the
 right child of the parent operator node.
 
 @<Destroy parameter node if any@>=
-if (TRANSLATE <= temp_node->op)
-        free(temp_node->internal.right);
 
 @ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
  nonlinear function of the characters. We borrow the
@@ -762,7 +792,6 @@ read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
        p->name, &p->b.length, &p->b.width, &p->b.height);
 ++input_file_current_line;
 if (EOF == read_count || 4 != read_count) {
-        destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = BLOCK;
@@ -825,7 +854,6 @@ read_count = fscanf(f, "(\"%[^\"]\" %lf)",
        p->name, &p->s.radius);
 ++input_file_current_line;
 if (EOF == read_count || 2 != read_count) {
-        destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = SPHERE;
@@ -856,7 +884,6 @@ read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)",
        p->name, &p->c.radius, &p->c.height);
 ++input_file_current_line;
 if (EOF == read_count || 3 != read_count) {
-        destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = CYLINDER;
@@ -913,7 +940,6 @@ read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)",
        &p->t.theta_start, &p->t.major, &p->t.minor);
 ++input_file_current_line;
 if (EOF == read_count || 7 != read_count) {
-        destroy_primitive_solid(p);
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = TORUS;
@@ -1733,9 +1759,9 @@ that node.
 Matrix affine; /* inverse affine transformations matrix */
 Matrix inverse; /* inverse of |affine| matrix */
 
-@ @<Initialise affine matrix to identity@>=
-matrix_copy(temp->affine, identity_matrix);
-matrix_copy(temp->inverse, identity_matrix);
+@ @<Initialise affine matrices to the identity matrix@>=
+matrix_copy(slot->affine, identity_matrix);
+matrix_copy(slot->inverse, identity_matrix);
 
 @ After pre-processing, all of the affine transformations are merged,
 so that the affine matrix in a node gives the required composite
@@ -1888,24 +1914,6 @@ uint32_t count_primitive_solids(CSG_Node *temp) {
 	 if (PARAMETER == temp->op) return 0; /* a parameter node */
 	 return (count_primitive_solids(temp->internal.left) + 
 	        count_primitive_solids(temp->internal.right));
-}
-
-@ Function to destroy the CSG tree
-@<Global functions@>=
-void destroy_csg_tree(CSG_Node *temp) {
-        if (NULL == temp) return;
-        if (SOLID == temp->op) {
-                destroy_primitive_solid(temp->leaf.p);
-                free(temp);
-                return;
-        }
-	if (PARAMETER == temp->op) {
-	        free(temp);
-                return;
-        }
-        destroy_csg_tree(temp->internal.left);
-	destroy_csg_tree(temp->internal.right);
-	free(temp);
 }
 
 @ Print the CSG tree using {\sl preorder tree traversal}.
