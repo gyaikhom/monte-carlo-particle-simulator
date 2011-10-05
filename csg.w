@@ -2819,6 +2819,8 @@ int main(int argc, char *argv[])
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
         }
+	build_neighbour_table(3, 3, 3);
+	print_neighbour_table(stdout);
 
 error:
         fclose(f);

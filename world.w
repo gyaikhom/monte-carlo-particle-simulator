@@ -78,11 +78,131 @@ trajectory step.
 
 Every particle has an $s$-field, which gives its location relative to
 the current subcuboid containing it. Before a trajectory step is
-applied for the first time, the $s$-field for a prticle is set to
+applied for the first time, the $s$-field for a particle is set to
 $\langle000000\rangle$. After applying a step, which could have
-changed the particles location, we update the $s$-field using the six
-faces of the containing subcuboid. During subsequent application of a
+changed the particle's location, we update the $s$-field using the six
+faces of the current subcuboid. During subsequent application of a
 trajectory step, we simply use a mapping table to retrieve the
-effective subcuboid for a given particle by using the index of the
-previous subcuboid and its current $s$-field.
+effective subcuboid for a given particle by using its current
+$s$-field and the previous subcuboid.
 
+This table will waste $16 \times |MAX_SUBCUBOIDS|$ table elements,
+since not all $s$ values are valid.
+
+@d MAX_SUBCUBOIDS 64
+@d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
+@d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
+@<Global variables@>=
+uint32_t neighbour_table[MAX_SUBCUBOIDS][MAX_SFIELD];
+uint32_t num_subcuboids = 0;
+
+@ Function |get_neighbour(s,i)| returns the next effective subcuboid
+for a particle, where it was previously in subcuboid |i| and the most
+recent application of a trajectory step updated the $s$-field to |s|.
+@<Global functions@>=
+uint32_t get_neighbour(uint32_t i, uint8_t *s)
+{
+	if (s) return neighbour_table[i][(int)s - 1];
+	return i; /* particle continues to exist in the same subcuboid */
+}
+
+@ Function |build_neighbour_table(l,m,n)| builds the subcuboid
+neighbourhood lookup-table when the cuboid representing the simulation
+world was divided into |l|, |m| and |n| equal parts along the $x$, $y$
+and $z$ axes. There will be a total of $|l| \times |m| \times |n|$
+subcuboids.
+@<Global functions@>=
+void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
+{
+	int i, j, k; /* indices along $x$, $y$ and $z$ axes */
+	int r; /* row for subcuboid currently filled in */
+	int x, y, z; /* indices along $x$, $y$ and $z$ axes for neighbour */
+	int xb, yb, zb; /* extracted bit pairs from $s$-field */
+	int t = m * n; /* cached value */
+	uint8_t s; /* index for the entire row */
+	num_subcuboids = t * l;
+	if (num_subcuboids > MAX_SUBCUBOIDS) {
+	    num_subcuboids = 0;
+	    return;
+	}
+	for (i = 0; i < l; ++i)
+	for (j = 0; j < m; ++j)
+	for (k = 0; k < n; ++k) {
+	        @<Set neighbours for the current subcuboid@>;
+	}
+}
+
+@ @<Set neighbours for the current subcuboid@>=
+r = i * t + j * n + k; /* row index for the current subcuboid */
+for (s = 1; s <= MAX_SFIELD; ++s) {
+    x = i; y = j; z = k;
+    if (((xb = s & 0x3) == 0x3) ||
+        ((yb = s & 0xC) == 0xC) ||
+	((zb = s & 0x30) == 0x30)) {
+	neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+        continue;
+    } else {
+    printf("%d %d\n", s, s % 26);
+
+        @<Calculate the neighbour using the axes bits@>;
+    }
+}
+
+@ @<Calculate the neighbour using the axes bits@>=
+@<Adjust index of the neighbour cuboid along the $x$-axis@>;
+@<Adjust index of the neighbour cuboid along the $y$-axis@>;
+@<Adjust index of the neighbour cuboid along the $z$-axis@>;
+neighbour_table[r][s - 1] = x * t + y * n + z;
+
+@ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
+if (xb == 0x1) {
+   if (--x < 0) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+} else if (xb == 0x2) {
+   if (++x == l) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+}
+
+@ @<Adjust index of the neighbour cuboid along the $y$-axis@>=
+if (yb == 0x4) {
+   if (--y < 0) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+} else if (yb == 0x8) {
+   if (++y == m) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+}
+
+@ @<Adjust index of the neighbour cuboid along the $z$-axis@>=
+if (zb == 0x10) {
+   if (--z < 0) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+} else if (zb == 0x20) {
+   if (++z == n) {
+      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+      continue;
+   }
+}
+
+
+@ @<Global functions@>=
+void print_neighbour_table(FILE *f)
+{
+	int i, s, k = MAX_SUBCUBOIDS + 1;
+	for (i = 0; i < MAX_SUBCUBOIDS; ++i) {
+	    for (s = 0; s < MAX_SFIELD; ++s)
+	    	if (neighbour_table[i][s] < k)
+		fprintf(f, "%3d ", neighbour_table[i][s]);
+		else fprintf(f, " .  ");
+	    fprintf(f, "\n");
+	}	
+}
