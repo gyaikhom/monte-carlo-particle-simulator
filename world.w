@@ -86,23 +86,42 @@ trajectory step, we simply use a mapping table to retrieve the
 effective subcuboid for a given particle by using its current
 $s$-field and the previous subcuboid.
 
-This table will waste $16 \times |MAX_SUBCUBOIDS|$ table elements,
-since not all $s$ values are valid.
+@ If we were to allocate the lookup-table for direct-mapping, the
+table will waste $16 \times |MAX_SUBCUBOIDS|$ table elements. This is
+because, in order to make every valid $s$ value indexable, we must
+allocate |MAX_SFIELD| table elements per row. However, out of this row
+only 26 elements actually contain a valid index to one of the
+neighbouring cuboids. Direct mapping is therefore space inefficient.
 
+If we were to use a two-tiered mapping, however, we only waste space
+equivalent to 16 table elements. This works by allocating an index
+lookup-table, which maps the first |MAX_SFIELD| $s$ values to an index
+that points to one of the 26 valid neighbouring cuboids.
+
+@f int8_t int
 @d MAX_SUBCUBOIDS 64
-@d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
+@d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
 @<Global variables@>=
-uint32_t neighbour_table[MAX_SUBCUBOIDS][MAX_SFIELD];
+int8_t neighbour_idx_table[MAX_SFIELD + 1] = {
+-1,  0,  1, -1,  2,  3,  4, -1,  5,  6,
+ 7, -1, -1, -1, -1, -1,  8,  9, 10, -1,
+11, 12, 13, -1, 14, 15, 16, -1, -1, -1,
+-1, -1, 17, 18, 19, -1, 20, 21, 22, -1,
+23, 24, 25
+};
+uint32_t neighbour_table[MAX_SUBCUBOIDS][NUM_NEIGHBOURS];
 uint32_t num_subcuboids = 0;
 
 @ Function |get_neighbour(s,i)| returns the next effective subcuboid
 for a particle, where it was previously in subcuboid |i| and the most
 recent application of a trajectory step updated the $s$-field to |s|.
+
+@d cuboid_lookup(i,s) neighbour_table[(i)][neighbour_idx_table[(int)(s)]]
 @<Global functions@>=
 uint32_t get_neighbour(uint32_t i, uint8_t *s)
 {
-	if (s) return neighbour_table[i][(int)s - 1];
+	if (s) return cuboid_lookup(i,s);
 	return i; /* particle continues to exist in the same subcuboid */
 }
 
@@ -111,6 +130,9 @@ neighbourhood lookup-table when the cuboid representing the simulation
 world was divided into |l|, |m| and |n| equal parts along the $x$, $y$
 and $z$ axes. There will be a total of $|l| \times |m| \times |n|$
 subcuboids.
+
+@f uint8_t int
+@d cuboid_assign(r,s,v) neighbour_table[(r)][neighbour_idx_table[(int)(s)]] = (v)
 @<Global functions@>=
 void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
 {
@@ -127,44 +149,47 @@ void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
 	}
 	for (i = 0; i < l; ++i)
 	for (j = 0; j < m; ++j)
-	for (k = 0; k < n; ++k) {
+	for (k = 0; k < n; ++k)
 	        @<Set neighbours for the current subcuboid@>;
-	}
 }
 
 @ @<Set neighbours for the current subcuboid@>=
+{
 r = i * t + j * n + k; /* row index for the current subcuboid */
 for (s = 1; s <= MAX_SFIELD; ++s) {
-    x = i; y = j; z = k;
+    @<Initialise neighbour indices with those from the current subcuboid@>;
     if (((xb = s & 0x3) == 0x3) ||
         ((yb = s & 0xC) == 0xC) ||
-	((zb = s & 0x30) == 0x30)) {
-	neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-        continue;
-    } else {
-    printf("%d %d\n", s, s % 26);
-
-        @<Calculate the neighbour using the axes bits@>;
-    }
+	((zb = s & 0x30) == 0x30))
+	continue;
+    else @<Calculate the neighbour using the axes bit-pairs@>;
+}
 }
 
-@ @<Calculate the neighbour using the axes bits@>=
+@ @<Initialise neighbour indices with those from the current subcuboid@>=
+x = i; y = j; z = k;
+
+@
+@d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
+@<Neighbour subcuboid is outside the simulation world@>=
+{
+    cuboid_assign(r,s, OUTSIDE_WORLD);
+    continue;
+}
+
+@ @<Calculate the neighbour using the axes bit-pairs@>=
+{
 @<Adjust index of the neighbour cuboid along the $x$-axis@>;
 @<Adjust index of the neighbour cuboid along the $y$-axis@>;
 @<Adjust index of the neighbour cuboid along the $z$-axis@>;
-neighbour_table[r][s - 1] = x * t + y * n + z;
+cuboid_assign(r,s, x * t + y * n + z);
+}
 
 @ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
 if (xb == 0x1) {
    if (--x < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (xb == 0x2) {
    if (++x == l) @<Neighbour subcuboid is outside the simulation world@>;
-}
-
-@ @<Neighbour subcuboid is outside the simulation world@>=
-{
-    neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-    continue;
 }
 
 @ @<Adjust index of the neighbour cuboid along the $y$-axis@>=
@@ -185,12 +210,13 @@ if (zb == 0x10) {
 @ @<Global functions@>=
 void print_neighbour_table(FILE *f)
 {
-	int i, s, k = MAX_SUBCUBOIDS + 1;
+	int i, j, c, k = MAX_SUBCUBOIDS + 1;
 	for (i = 0; i < MAX_SUBCUBOIDS; ++i) {
-	    for (s = 0; s < MAX_SFIELD; ++s)
-	    	if (neighbour_table[i][s] < k)
-		fprintf(f, "%3d ", neighbour_table[i][s]);
+	    for (j = 0; j < NUM_NEIGHBOURS; ++j) {
+	        c = neighbour_table[i][j];
+	    	if (c < k) fprintf(f, "%3d ", c);
 		else fprintf(f, " .  ");
+	    }
 	    fprintf(f, "\n");
 	}	
 }
