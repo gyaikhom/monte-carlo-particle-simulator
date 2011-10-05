@@ -20,5 +20,5 @@ mcs.tex: mcs.w
 	cweave mcs.w
 
 clean:
-	rm -f *~ *.tex *.scn *pdf *.log *.toc *.idx *.c mcs test_*
+	rm -f *~ mcs.tex *.scn *.log *.toc *.idx *.c mcs test_*
 
