@@ -113,6 +113,7 @@ parallelisation on GPUs.
 @i types.w
 @i common.w
 @i csg.w
+@i world.w
 @i sim.w
 @i main.w
 
