@@ -1,3 +1,7 @@
+\input miniltx 
+\input epsfig.sty 
+\resetatcatcode
+
 \def\hash{\char35}
 
 @* Introduction. The {\sl Monte Carlo Simulator}, \.{MCS} in short, is
