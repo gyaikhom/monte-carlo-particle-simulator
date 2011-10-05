@@ -25,6 +25,24 @@ double convert_radian_to_degree(double angle)
       return angle;
 }
 
+@ Function |roundup_pow2(v)| rounds up a positive number to the
+nearest power of two.
+
+@<Global functions@>=
+unsigned roundup_pow2(unsigned v)
+{
+        if (v == 0) return 1;
+        if (v & (v - 1)) { /* check if already power of two */
+                unsigned k;
+		@<Find non-zero most significant bit@>;
+                return (1 << (k + 1));
+        }
+        return v;
+}
+
+@ @<Find non-zero most significant bit@>=
+for (k = sizeof(unsigned) * 8 - 1; ((1 << k) & v) == 0; --k);
+
 @i vector.w
 @i matrix.w
 @i mem.w
