@@ -115,7 +115,7 @@ subcuboids.
 void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
 {
 	int i, j, k; /* indices along $x$, $y$ and $z$ axes */
-	int r; /* row for subcuboid currently filled in */
+	int r; /* row for subcuboid currently being filled in */
 	int x, y, z; /* indices along $x$, $y$ and $z$ axes for neighbour */
 	int xb, yb, zb; /* extracted bit pairs from $s$-field */
 	int t = m * n; /* cached value */
@@ -156,41 +156,29 @@ neighbour_table[r][s - 1] = x * t + y * n + z;
 
 @ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
 if (xb == 0x1) {
-   if (--x < 0) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (--x < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (xb == 0x2) {
-   if (++x == l) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (++x == l) @<Neighbour subcuboid is outside the simulation world@>;
+}
+
+@ @<Neighbour subcuboid is outside the simulation world@>=
+{
+    neighbour_table[r][s - 1] = OUTSIDE_WORLD;
+    continue;
 }
 
 @ @<Adjust index of the neighbour cuboid along the $y$-axis@>=
 if (yb == 0x4) {
-   if (--y < 0) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (--y < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (yb == 0x8) {
-   if (++y == m) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (++y == m) @<Neighbour subcuboid is outside the simulation world@>;
 }
 
 @ @<Adjust index of the neighbour cuboid along the $z$-axis@>=
 if (zb == 0x10) {
-   if (--z < 0) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (--z < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (zb == 0x20) {
-   if (++z == n) {
-      neighbour_table[r][s - 1] = OUTSIDE_WORLD;
-      continue;
-   }
+   if (++z == n) @<Neighbour subcuboid is outside the simulation world@>;
 }
 
 
