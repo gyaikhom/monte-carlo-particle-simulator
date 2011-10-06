@@ -420,13 +420,13 @@ uint32_t find_subcuboid(double *t, Vector v)
 {
 	uint32_t i, j, f, c[3], size[3];
 	for (i = 0; i < 3; ++i) {
-	    @<Initialise the active subcuboid search tree@>;
+	    @<Prepare the current subcuboid search tree@>;
 	    @<Search for subcuboid in the current tree@>;
 	    @<Move to the next subcuboid search tree@>;
 	}
 	return (c[0] * size[1] * size[2] + c[1] * size[2] + c[2]);
 }
-@ @<Initialise the active subcuboid search tree@>=
+@ @<Prepare the current subcuboid search tree@>=
 size[i] = *(long *) t + 1;
 j = 1;
 
