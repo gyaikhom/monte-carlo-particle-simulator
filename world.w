@@ -251,7 +251,8 @@ void print_neighbour_table(FILE *f)
 	}	
 }
 
-@ The previous sections gives us an efficient way to determine where a
+@ Finding the subcuboid containing a particle.
+The previous sections gives us an efficient way to determine where a
 particle will go to if we know the containing subcuboid and the
 particle's $s$-field. Now, how do we know where a particle is if we do
 not know either the containing subcuboid or the particle's $s$-field?
@@ -406,4 +407,27 @@ void print_subcuboid_search_tree(FILE *f, double *t)
 	fprintf(f, "tree[%ld]: ", j); 
 	for (i = 1; i <= j; ++i) fprintf(f, "%lf ", t[i]);
 	fprintf(f, "\n");
+}
+
+@ Function |find_cuboid(v)| finds the subcuboid that contains a
+particle at the position specified by the vector |v|.
+@<Global functions@>=
+uint32_t find_cuboid(Vector v)
+{
+	uint32_t i, j, c[3], t, d, size;
+	for (i = 0, j = 0; i < 3; ++i) {
+	    d = j;
+	    size = *(long *) t[j++];
+	    t = 0x0;
+	    while (j < size) {
+	        if (v[0] > t[j]) {
+		    t |= 0x1;
+		    j = (j << 1) + 1;
+		} else j <<= j;
+		t <<= 1;
+	    }
+	    c[i] = t;
+    	    j = d + size;
+	}
+	return (c[0] * m * n + c[1] * n + c[3]);
 }
