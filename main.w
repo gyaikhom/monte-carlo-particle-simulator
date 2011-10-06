@@ -24,6 +24,7 @@ for (i = 0; i < num_events; i++) {
 
 @ @<Clean up the system@>=
 mem_free(mem);
+mem_free(mem_p);
 
 @ @<Include system libraries@>=
 #include <math.h>

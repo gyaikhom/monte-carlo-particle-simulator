@@ -2819,8 +2819,11 @@ int main(int argc, char *argv[])
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
         }
-	build_neighbour_table(3, 3, 3);
-	print_neighbour_table(stdout);
+	BoundingBox bb = {{0.0, 0.0, 0.0, 1.0},{100.0, 40.0, 80.0, 1.0}};
+	build_subcuboid_trees(&bb, 4, 8, 16);
+	print_subcuboid_search_tree(stdout, cuboid_search_tree[0]);
+	print_subcuboid_search_tree(stdout, cuboid_search_tree[1]);
+	print_subcuboid_search_tree(stdout, cuboid_search_tree[2]);
 
 error:
         fclose(f);

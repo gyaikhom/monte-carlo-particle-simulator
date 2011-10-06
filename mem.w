@@ -102,3 +102,4 @@ if (block) {
 @ We shall use only one memory area for the entire application.
 @<Global variables@>=
 Area mem;
+Area mem_p; /* persistent */
