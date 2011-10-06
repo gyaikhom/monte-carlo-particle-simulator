@@ -151,9 +151,9 @@ uint32_t num_subcuboids = 0;
 for a particle, where it was previously in subcuboid |i| and the most
 recent application of a trajectory step updated the $s$-field to |s|.
 
-@d cuboid_lookup(i,s) neighbour_table[(i)][neighbour_idx_table[(int)(s)]]
+@d cuboid_lookup(i,s) neighbour_table[(i)][neighbour_idx_table[s]]
 @<Global functions@>=
-uint32_t get_neighbour(uint32_t i, uint8_t *s)
+uint32_t get_neighbour(uint32_t i, uint8_t s)
 {
 	if (s) return cuboid_lookup(i,s);
 	return i; /* particle continues to exist in the same subcuboid */
@@ -251,7 +251,7 @@ void print_neighbour_table(FILE *f)
 	}	
 }
 
-@ Finding the subcuboid containing a particle.
+@*1 Finding the subcuboid containing a particle.
 The previous sections gives us an efficient way to determine where a
 particle will go to if we know the containing subcuboid and the
 particle's $s$-field. Now, how do we know where a particle is if we do
@@ -280,7 +280,7 @@ three searches, we simply combine the results to give the index of the
 subcuboid.
 
 @<Global variables@>=
-double *cuboid_search_tree[3]; /* one for each axes */
+double *cuboid_search_tree; /* stores three binary search trees */
 
 @ If we us assume that the simulation world is divided into $l \times m
 \times n$ subcuboids. After the three one-dimensional searches, let
@@ -305,7 +305,7 @@ one-dimensional array. This not only reduces the space requirements
 for storing the binary tree, but also simplifies the tree traversal
 mechanism: Instead of using pointers, we use {\sl binary shift} operators.
 
-@ Function |build_tree_subcuboid_search(t,n,u,l)| builds a complete
+@ Function |build_tree_subcuboid_search(t,n,u,l)| builds a perfect
 binary search tree |t| where the upper and lower bounds of the
 simulation world are respectively |u| and |l| units in the selected
 axis. In the selected dimension, the simulation world has been divided
@@ -318,6 +318,7 @@ void build_tree_subcuboid_search(double *t, uint32_t n, double u, double l)
 	double d;
 	@<Initialise the first two elements@>;
 	@<Build the tree top-down by starting at the root@>;
+	@<Now displace the tree to the correct position@>;
 }
 
 @ The first initialisation is required because subsequent calculations
@@ -385,8 +386,9 @@ nodes. However, we allocate one extra element per tree because the
 root only begins at the second element (index 1). Instead of wasting
 the first element, we use it to store the tree size.
 @<Allocate memory for the three cuboid search trees@>=
-x = mem_typed_alloc(l + m + n, double, mem_p);
-if (x == NULL) return false;
+cuboid_search_tree = mem_typed_alloc(l + m + n, double, mem_p);
+if (cuboid_search_tree == NULL) return false;
+x = cuboid_search_tree;
 y = x + l;
 z = y + m;
 
@@ -396,38 +398,55 @@ the tree array.
 *(long *)x = l - 1;
 *(long *)y = m - 1;
 *(long *)z = n - 1;
-cuboid_search_tree[0] = x;
-cuboid_search_tree[1] = y;
-cuboid_search_tree[2] = z;
 
 @ @<Global functions@>=
-void print_subcuboid_search_tree(FILE *f, double *t)
+void print_subcuboid_search_trees(FILE *f, double *t)
 {
-	long i, j = *(long *)t;
-	fprintf(f, "tree[%ld]: ", j); 
-	for (i = 1; i <= j; ++i) fprintf(f, "%lf ", t[i]);
-	fprintf(f, "\n");
+	long i, j, k, s, size;
+	for (i = 0, s = 0; i < 3; ++i) {
+	    size = *(long *) &t[s] + 1;
+	    fprintf(f, "tree[%ld]: ", size - 1);
+	    k = s + 1;
+	    for (j = 1; j < size; ++j) fprintf(f, "%lf ", t[k++]);
+	    fprintf(f, "\n");
+   	    s += size; /* move to next tree array */
+	}
 }
 
-@ Function |find_cuboid(v)| finds the subcuboid that contains a
-particle at the position specified by the vector |v|.
+@ Function |find_subcuboid(v)| finds the subcuboid that contains a
+point with position vector |v| by searching the three binary search
+trees pointed to by |t|. 
 @<Global functions@>=
-uint32_t find_cuboid(Vector v)
+uint32_t find_subcuboid(double *t, Vector v)
 {
-	uint32_t i, j, c[3], t, d, size;
-	for (i = 0, j = 0; i < 3; ++i) {
-	    d = j;
-	    size = *(long *) t[j++];
-	    t = 0x0;
-	    while (j < size) {
-	        if (v[0] > t[j]) {
-		    t |= 0x1;
-		    j = (j << 1) + 1;
-		} else j <<= j;
-		t <<= 1;
-	    }
-	    c[i] = t;
-    	    j = d + size;
+	uint32_t i, j, c[3], f, s, size[3];
+	for (i = 0, s = 0; i < 3; ++i) {
+	    @<Initialise the active subcuboid search tree@>;
+	    @<Search for subcuboid in the current tree@>;
+	    @<Move to the next subcuboid search tree@>;
 	}
-	return (c[0] * m * n + c[1] * n + c[3]);
+	return (c[0] * size[1] * size[2] + c[1] * size[2] + c[2]);
 }
+@ @<Initialise the active subcuboid search tree@>=
+size[i] = *(long *) &t[s] + 1;
+j = 1;
+
+@ We start at the root and travel left or right, depending on the
+value at the node, until we reach a leaf. Each of this left-right
+decision is recorded in the bit-field |f|. Once we have reached the
+leaf, the value of |f| gives the index of the subcuboid in the
+selected dimension, which we copy to |c[i]| for later use in combining
+the indices along the three axes.
+@<Search for subcuboid in the current tree@>=
+f = 0x0;
+while (j < size[i]) {
+    f <<= 1;
+    if (v[i] > t[s + j]) {
+        f |= 0x1;
+	j = (j << 1) + 1; /* right subtree */
+    } else j <<= 1; /* left subtree */
+}
+c[i] = f;
+
+@ @<Move to the next subcuboid search tree@>=
+s += size[i];
