@@ -402,14 +402,13 @@ the tree array.
 @ @<Global functions@>=
 void print_subcuboid_search_trees(FILE *f, double *t)
 {
-	long i, j, k, s, size;
-	for (i = 0, s = 0; i < 3; ++i) {
-	    size = *(long *) &t[s] + 1;
+	long i, j, size;
+	for (i = 0; i < 3; ++i) {
+	    size = *(long *) t + 1;
 	    fprintf(f, "tree[%ld]: ", size - 1);
-	    k = s + 1;
-	    for (j = 1; j < size; ++j) fprintf(f, "%lf ", t[k++]);
+	    for (j = 1; j < size; ++j) fprintf(f, "%lf ", t[j]);
 	    fprintf(f, "\n");
-   	    s += size; /* move to next tree array */
+   	    t += size; /* move to next tree array */
 	}
 }
 
@@ -419,8 +418,8 @@ trees pointed to by |t|.
 @<Global functions@>=
 uint32_t find_subcuboid(double *t, Vector v)
 {
-	uint32_t i, j, c[3], f, s, size[3];
-	for (i = 0, s = 0; i < 3; ++i) {
+	uint32_t i, j, f, c[3], size[3];
+	for (i = 0; i < 3; ++i) {
 	    @<Initialise the active subcuboid search tree@>;
 	    @<Search for subcuboid in the current tree@>;
 	    @<Move to the next subcuboid search tree@>;
@@ -428,7 +427,7 @@ uint32_t find_subcuboid(double *t, Vector v)
 	return (c[0] * size[1] * size[2] + c[1] * size[2] + c[2]);
 }
 @ @<Initialise the active subcuboid search tree@>=
-size[i] = *(long *) &t[s] + 1;
+size[i] = *(long *) t + 1;
 j = 1;
 
 @ We start at the root and travel left or right, depending on the
@@ -441,7 +440,7 @@ the indices along the three axes.
 f = 0x0;
 while (j < size[i]) {
     f <<= 1;
-    if (v[i] > t[s + j]) {
+    if (v[i] > t[j]) {
         f |= 0x1;
 	j = (j << 1) + 1; /* right subtree */
     } else j <<= 1; /* left subtree */
@@ -449,4 +448,4 @@ while (j < size[i]) {
 c[i] = f;
 
 @ @<Move to the next subcuboid search tree@>=
-s += size[i];
+t += size[i];
