@@ -133,7 +133,7 @@ lookup-table, which maps the first |MAX_SFIELD| $s$ values to an index
 that points to one of the 26 valid neighbouring cuboids.
 
 @f int8_t int
-@d MAX_SUBCUBOIDS 64
+@d MAX_SUBCUBOIDS 1024
 @d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
 @<Global variables@>=
@@ -305,51 +305,35 @@ one-dimensional array. This not only reduces the space requirements
 for storing the binary tree, but also simplifies the tree traversal
 mechanism: Instead of using pointers, we use {\sl binary shift} operators.
 
-@ Function |build_tree_subcuboid_search(t,n,u,l)| builds a perfect
+@ Function |build_complete_tree(t,n,i)| recursively builds a complete
+binary search tree |t| so that its {\sl inorder} traversal will
+produce the sequence $s = \{i\}, 0 \le i < n$.
+@<Global functions@>=
+static int build_complete_tree_idx = 0;
+void build_complete_tree(double *t, uint32_t n, uint32_t i)
+{
+	uint32_t j;
+	if (i < n) {
+		j = i << 1;
+		build_complete_tree(t, n, j);
+		t[i] = ++build_complete_tree_idx;
+		build_complete_tree(t, n, j + 1);
+	}
+}
+
+@ Function |build_subcuboid_search_tree(t,n,u,l)| builds a perfect
 binary search tree |t| where the upper and lower bounds of the
 simulation world are respectively |u| and |l| units in the selected
 axis. In the selected dimension, the simulation world has been divided
 into |n| equal subcuboids. This function requires that $|n| = 2^k$ for
 some positive integer $k$.
 @<Global functions@>=
-void build_tree_subcuboid_search(double *t, uint32_t n, double u, double l)
+void build_subcuboid_search_tree(double *t, uint32_t n, double u, double l)
 {
-	int i, j, p;
-	double d;
-	@<Initialise the first two elements@>;
-	@<Build the tree top-down by starting at the root@>;
+	build_complete_tree_idx = 0;
+	build_complete_tree(t, n, 1);
 	@<Now displace the tree to the correct position@>;
 }
-
-@ The first initialisation is required because subsequent calculations
-use their parent node, which is calculated using a {\sl right
-shift}. Although the root of the tree is |t[1]|, |t[0]| is the parent
-of node |t[1]| according to the shift calculation, hence, it must be
-initialised. The second initialisation ensures that the tree being
-built is complete, no matter what the number of divisions |n| happens
-to be.
-@<Initialise the first two elements@>=
-t[0] = 0.0;
-t[1] = n / 2.0;
-
-@ For each node, we first calculate the left child. If this is outside
-the allowed node index, we are done. Otherwise, we calculate the
-node's parent value, and use its displacement from the parent to
-calculate the appropriate displacements for its children.
-@<Build the tree top-down by starting at the root@>=
-for (i = 1; i < n; ++i) {
-    j = i << 1; /* left child */
-    if (j < n) {
-        p =  i % 2 ? (i - 1) >> 1 : i >> 1;
-	@<Fill in the children with appropriate displacement@>;
-    } else break;
-}
-
-@ @<Fill in the children with appropriate displacement@>=
-d = (t[i] - t[p]) / 2.0;
-if (d < 0.0) d *= -1;
-t[j] = t[i] - d;
-t[j + 1] = t[i] + d;
 
 @ The tree array, as it currently is, assumes that the lower bound for
 the simulation space is at the origin, and that the size of each
@@ -357,8 +341,12 @@ subcuboid is 1 units. We must therefore displace the value in the
 tree nodes using the correct lower bound and subcuboid size in the
 selected direction.
 @<Now displace the tree to the correct position@>=
-d = (u - l) / n;
-for (i = 1; i < n; ++i) t[i] = (t[i] * d) + l;
+{
+	int i;
+	double d;
+	d = (u - l) / n;
+	for (i = 1; i < n; ++i) t[i] = (t[i] * d) + l;
+}
 
 @ Function |build_cuboid_trees(bb, l,m,n)| builds three complete
 binary search trees. In each of these trees, every node is the lower
@@ -373,12 +361,54 @@ bool build_subcuboid_trees(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
 {
 	double *x, *y, *z;
 	@<Allocate memory for the three cuboid search trees@>;
-	build_tree_subcuboid_search(x, l, bb->u[0], bb->l[0]);
-	build_tree_subcuboid_search(y, m, bb->u[1], bb->l[1]);
-	build_tree_subcuboid_search(z, n, bb->u[2], bb->l[2]);
+	build_subcuboid_search_tree(x, l, bb->u[0], bb->l[0]);
+	build_subcuboid_search_tree(y, m, bb->u[1], bb->l[1]);
+	build_subcuboid_search_tree(z, n, bb->u[2], bb->l[2]);
 	@<Finalise the subcuboid search trees@>;
 	return true;
 }
+
+@ @<Test subcuboid search@>=
+{
+	uint32_t l, m, n, i, j, k, e, r;
+	double dx, dy, dz;
+	Vector v;
+	BoundingBox bb = {{0.0, 0.0, 0.0, 1.0},{0.0, 0.0, 0.0, 1.0}};
+	do {
+	       printf("Give upper bound (x, y, z) of the simulation world:\n");
+	       scanf("%lf %lf %lf", &bb.u[0], &bb.u[1], &bb.u[2]);
+	       printf("Give lower bound (x, y, z) of the simulation world:\n");
+	       scanf("%lf %lf %lf", &bb.l[0], &bb.l[1], &bb.l[2]);
+	} while (bb.u[0] < bb.l[0] ||
+	         bb.u[1] < bb.l[1] ||
+	         bb.u[2] < bb.l[2]);
+        do {
+	       printf("Give number of divisions on the x, y, and z axes:\n");
+	       scanf("%d %d %d", &l, &m, &n);
+	} while (l * m * n > MAX_SUBCUBOIDS);	
+	build_subcuboid_trees(&bb, l, m, n);
+	print_subcuboid_search_trees(stdout, cuboid_search_tree);
+	@<Search subcuboid for all points in each of the subcuboids@>;
+}
+
+@ @<Search subcuboid for all points in each of the subcuboids@>=
+dx = (bb.u[0] - bb.l[0]) / l;
+dy = (bb.u[1] - bb.l[1]) / m;
+dz = (bb.u[2] - bb.l[2]) / n;
+for (i = 0, v[0] = bb.l[0]; i < l; ++i, v[0] += dx) {
+    for (j = 0, v[1] = bb.l[1]; j < m; ++j, v[1] += dy) {
+	for (k = 0, v[2] = bb.l[2]; k < n; ++k, v[2] += dz) {
+	    e = i * m * n + j * n + k;
+	    r = find_subcuboid(cuboid_search_tree, v);
+	    if (e != r) {
+	       printf("Failure at (%d, %d, %d): %d instead of %d for (%lf, %lf, %lf)\n",
+	       i, j, k, r, e, v[0], v[1], v[2]);
+	       break;
+	    }
+        }
+    }
+}
+printf("Test was a success...\n");
 
 @ This allocates a single array to hold all of the three trees. Each
 search tree with $n$ subcuboids only requires $n - 1$ tree
@@ -418,7 +448,7 @@ trees pointed to by |t|.
 @<Global functions@>=
 uint32_t find_subcuboid(double *t, Vector v)
 {
-	uint32_t i, j, f, c[3], size[3];
+	uint32_t i, j, k, f, c[3], size[3];
 	for (i = 0; i < 3; ++i) {
 	    @<Prepare the current subcuboid search tree@>;
 	    @<Search for subcuboid in the current tree@>;
@@ -440,12 +470,17 @@ the indices along the three axes.
 f = 0x0;
 while (j < size[i]) {
     f <<= 1;
-    if (v[i] > t[j]) {
-        f |= 0x1;
+    if (v[i] >= t[j]) {
 	j = (j << 1) + 1; /* right subtree */
-    } else j <<= 1; /* left subtree */
+        f |= 0x1;
+    } else j <<= 1; /* left subtree */	
 }
+@<Ensure that the correct depth has been fulfilled@>;
 c[i] = f;
+
+@ @<Ensure that the correct depth has been fulfilled@>=
+k = roundup_pow2(size[i]);
+if (j < k) ++f;
 
 @ @<Move to the next subcuboid search tree@>=
 t += size[i];

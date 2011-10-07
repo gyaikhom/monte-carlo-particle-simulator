@@ -2805,7 +2805,7 @@ int main(int argc, char *argv[])
 int main(int argc, char *argv[])
 {
         FILE *f;
-        Vector point = ZERO_VECTOR, v;
+        Vector point = ZERO_VECTOR;
 	int n;
 	Containment flag;
 	char c;
@@ -2819,13 +2819,7 @@ int main(int argc, char *argv[])
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
         }
-	BoundingBox bb = {{0.0, 0.0, 0.0, 1.0},{40.0, 80.0, 160.0, 1.0}};
-	build_subcuboid_trees(&bb, 4, 8, 16);
-	print_subcuboid_search_trees(stdout, cuboid_search_tree);
-
-	while(scanf("%lf %lf %lf", &v[0], &v[1], &v[2]) != EOF) {
-	printf("%u\n", find_subcuboid(cuboid_search_tree, v));
-	}
+	@<Test subcuboid search@>;
 
 error:
         fclose(f);
