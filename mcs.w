@@ -114,6 +114,7 @@ parallelisation on GPUs.
 @i common.w
 @i csg.w
 @i world.w
+@i heap.w
 @i sim.w
 @i main.w
 

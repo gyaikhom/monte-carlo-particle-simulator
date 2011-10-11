@@ -33,10 +33,10 @@ struct particle_struct {
       	double charge;
       	Vector polarisation;
 	uint32_t num_daughters;
+	uint32_t subcuboid;
       	struct particle_struct *next;
       	struct particle_struct *daughters;
 };
-typedef struct particle_struct Particle;
 
 @ Function |create_particle| creates a new particle and returns a
 valid particle, or |NULL| if a new particle cannot be created.

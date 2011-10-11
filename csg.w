@@ -2788,21 +2788,7 @@ exit_error:
 
 @*1 Testing.
 
-@ @(test_input.c@>=
-@h
-@<Include preamble for applications@>;
-int main(int argc, char *argv[])
-{
-        if (false == read_geometry("input.dat"))
-                exit(1); /* fail */
-	@<Clean up the system@>;
-	return 0;
-}
-
-@ @(test_containment.c@>=
-@h
-@<Include preamble for applications@>;
-int main(int argc, char *argv[])
+@ @<Test geometry input@>=
 {
         FILE *f;
         Vector point = ZERO_VECTOR;
@@ -2810,6 +2796,7 @@ int main(int argc, char *argv[])
 	Containment flag;
 	char c;
 	bool t;
+
         if (false == read_geometry("input.dat")) exit(1);
 	print_all_solids();
 	if ((f = fopen("points.dat", "r")) == NULL)
@@ -2819,10 +2806,15 @@ int main(int argc, char *argv[])
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
         }
-	@<Test subcuboid search@>;
+	fclose(f);
+}
 
-error:
-        fclose(f);
+@ @(test_containment.c@>=
+@h
+@<Include preamble for applications@>;
+int main(int argc, char *argv[])
+{
+	@<Test particle repository@>;
 	@<Clean up the system@>;
 	return 0;
 }
