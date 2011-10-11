@@ -9,7 +9,7 @@ can be simulated in one batch.
 typedef struct particle_struct Particle;
 
 @ The particle repository is implemented as a paged binary
-min-heap, which is allowed to grow. The heap is maintained as 
+max-heap, which is allowed to grow. The heap is maintained as 
 a linked list of heap pages, where each heap page is a fixed array
 of particles.
 
@@ -25,20 +25,20 @@ typedef struct heap_page_struct {
 HeapPage *bad_heap_page = NULL, *next_heap_page = NULL;
 HeapPage* create_heap_page()
 {
-	HeapPage *slot = next_heap_page;
-	if (slot == bad_heap_page) {
-	   slot = mem_typed_alloc(heap_nodes_per_block, HeapPage, mem_p);
-	   if (slot == NULL) return NULL;
+	HeapPage *t = next_heap_page;
+	if (t == bad_heap_page) {
+	   t = mem_typed_alloc(heap_nodes_per_block, HeapPage, mem_p);
+	   if (t == NULL) return NULL;
 	   else {
-	   	next_heap_page = slot + 1;
-		bad_heap_page = slot + heap_nodes_per_block;
+	   	next_heap_page = t + 1;
+		bad_heap_page = t + heap_nodes_per_block;
 	   }
 	} else next_heap_page++;
-        return slot;
+        return t;
 }
 
 @
-@d HEAP_PAGE_SIZE 170 /* 16384 bytes per page */
+@d HEAP_PAGE_SIZE 4 /* 16384 bytes per page */
 @<Type definitions@>=
 typedef struct particle_repository_struct {
 	uint32_t count; /* current number of particles in heap */
@@ -246,10 +246,8 @@ bool heap_expand(ParticleRepository *r)
 	if (NULL == t->start) return HEAP_ERROR_ALLOC;
 	t->next = NULL;
 	r->max += r->page_size;
-	if (NULL == r->head) r->head = t; /* first page */
-	else r->tail->next = t;
+	r->tail->next = t;
 	r->tail = t;
-	printf("Heap expanding\n");
 	return HEAP_SUCCESS;
 }
 
@@ -257,7 +255,7 @@ bool heap_expand(ParticleRepository *r)
 int heap_insert(ParticleRepository *r, Particle *p)
 {
 	int i;
-	if (NULL == r->head || r->count >= r->max) {
+	if (r->count >= r->max) {
 		i = heap_expand(r);
 		if (i) return i;
 	}
@@ -269,9 +267,23 @@ int heap_insert(ParticleRepository *r, Particle *p)
 @ @<Global functions@>=
 int heap_remove(ParticleRepository *r, Particle *p)
 {
-	if (NULL == r->head || r->count == 0) return HEAP_EMPTY;
+	if (r->count == 0) return HEAP_EMPTY;
 	if (r->count >= r->page_size) heap_remove_paged(r, p);
 	else heap_remove_fast(r, p);
+	return HEAP_SUCCESS;
+}
+
+@ @<Global functions@>=
+int heap_init(ParticleRepository *r)
+{
+	r->count = 0;
+	r->max = r->page_size = HEAP_PAGE_SIZE;
+	r->head = create_heap_page();
+	if (NULL == r->head) return HEAP_ERROR_ALLOC;
+	r->head->start = mem_typed_alloc(r->page_size, Particle, mem_p);
+	if (NULL == r->head->start) return HEAP_ERROR_ALLOC;
+	r->head->next = NULL;
+	r->tail = r->head;
 	return HEAP_SUCCESS;
 }
 
@@ -299,6 +311,7 @@ void heap_print(FILE *f, ParticleRepository *r)
 @ @<Test particle repository@>=
 {
 	Particle p;
+	heap_init(&particles);
 	do {
 	    printf("Enter subcuboid (enter 0 to remove from heap): ");
 	    scanf("%u", &(p.subcuboid));
