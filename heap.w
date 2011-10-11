@@ -238,7 +238,7 @@ place */
 must be expanded. This involves creating a new page and the associated
 particles array.
 @<Global functions@>=
-bool heap_expand(ParticleRepository *r)
+int heap_expand(ParticleRepository *r)
 {
 	HeapPage* t = create_heap_page();
 	if (NULL == t) return HEAP_ERROR_ALLOC;
@@ -255,12 +255,14 @@ bool heap_expand(ParticleRepository *r)
 int heap_insert(ParticleRepository *r, Particle *p)
 {
 	int i;
-	if (r->count >= r->max) {
-		i = heap_expand(r);
-		if (i) return i;
+	if (r->count < r->max) {
+	   if (r->count < r->page_size) heap_insert_fast(r, p);
+	   else heap_insert_paged(r, p);
+	} else {
+	   i = heap_expand(r);
+	   if (i) return i;
+	   heap_insert_paged(r, p);
 	}
-	if (r->count >= r->page_size) heap_insert_paged(r, p);
-	else heap_insert_fast(r, p);
 	return HEAP_SUCCESS;
 }
 
@@ -268,8 +270,8 @@ int heap_insert(ParticleRepository *r, Particle *p)
 int heap_remove(ParticleRepository *r, Particle *p)
 {
 	if (r->count == 0) return HEAP_EMPTY;
-	if (r->count >= r->page_size) heap_remove_paged(r, p);
-	else heap_remove_fast(r, p);
+	if (r->count < r->page_size) heap_remove_fast(r, p);
+	else heap_remove_paged(r, p);
 	return HEAP_SUCCESS;
 }
 
