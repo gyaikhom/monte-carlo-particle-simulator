@@ -299,10 +299,15 @@ for storing the binary tree, but also simplifies the tree traversal
 mechanism: Instead of using pointers, we use {\sl binary shift} operators.
 
 @ Function |build_complete_tree(t,n,i)| recursively builds a complete
-binary search tree |t| so that its {\sl inorder} traversal will
-produce the sequence $s = \{i\}, 0 \le i < n$.
+binary search tree |t| so that, during an {\sl inorder} traversal, the
+values in the internal nodes will produce the sequence $s = \{s_i\}, 0
+\le i < n$, where $s_0 = \delta$ and $s_j = s_{j-1} + \delta, 0 < j <
+n$. The increment $\delta$ is the dimension of each subcuboid in the
+selected axes. The leaf nodes, on the other hand, store indices of the
+subcuboids that contains the value range defined by the internal nodes.
 @<Global functions@>=
-static int build_complete_tree_idx = 0;
+static double build_complete_tree_val = 0.0;
+static double build_complete_tree_inc = 0.0;
 static int build_complete_leaf_idx = 0;
 void build_complete_tree(double *t, unsigned long n, unsigned long i)
 {
@@ -310,7 +315,8 @@ void build_complete_tree(double *t, unsigned long n, unsigned long i)
 	if (i < n) {
 		j = i << 1;
 		build_complete_tree(t, n, j);
-		t[i] = ++build_complete_tree_idx;
+		build_complete_tree_val += build_complete_tree_inc;
+		t[i] = build_complete_tree_val;
 		build_complete_tree(t, n, j + 1);
 	} else *(unsigned long *) &t[i] = build_complete_leaf_idx++;
 }
@@ -323,23 +329,10 @@ into |n| equal subcuboids.
 @<Global functions@>=
 void build_subcuboid_search_tree(double *t, unsigned long n, double u, double l)
 {
-	build_complete_tree_idx = 0;
+	build_complete_tree_val = 0.0;
+	build_complete_tree_inc = (u - l) / n;
 	build_complete_leaf_idx = 0;
 	build_complete_tree(t, n, 1);
-	@<Now displace the tree to the correct position@>;
-}
-
-@ The tree array, as it currently is, assumes that the lower bound for
-the simulation space is at the origin, and that the size of each
-subcuboid is 1 units. We must therefore displace the value in the
-tree nodes using the correct lower bound and subcuboid size in the
-selected direction.
-@<Now displace the tree to the correct position@>=
-{
-	int i;
-	double d;
-	d = (u - l) / n;
-	for (i = 1; i < n; ++i) t[i] = (t[i] * d) + l;
 }
 
 @ Function |build_cuboid_trees(bb, l,m,n)| builds three complete
@@ -439,7 +432,7 @@ t += 2 * size[i];
 @ @<Test subcuboid search@>=
 {
 	unsigned long l, m, n, i, j, k, e, r;
-	double dx, dy, dz, epsilon[3];
+	double dx, dy, dz;
 	Vector v;
 	BoundingBox bb = {{0.0, 0.0, 0.0, 1.0},{0.0, 0.0, 0.0, 1.0}};
 	do {
@@ -463,14 +456,11 @@ t += 2 * size[i];
 dx = (bb.u[0] - bb.l[0]) / (double) l;
 dy = (bb.u[1] - bb.l[1]) / (double) m;
 dz = (bb.u[2] - bb.l[2]) / (double) n;
-epsilon[0] = dx / 2.0; /* ensure points are inside subcuboid */
-epsilon[1] = dy / 2.0;
-epsilon[2] = dz / 2.0;
-v[0] = bb.l[0] + epsilon[0];
+v[0] = bb.l[0];
 for (i = 0; i < l; ++i, v[0] += dx) {
-    v[1] = bb.l[1] + epsilon[1];
+    v[1] = bb.l[1];
     for (j = 0; j < m; ++j, v[1] += dy) {
-        v[2] = bb.l[2] + epsilon[2];
+        v[2] = bb.l[2];
 	for (k = 0; k < n; ++k, v[2] += dz) {
 	    e = i * m * n + j * n + k;
 	    r = find_subcuboid(cuboid_search_tree, v);
