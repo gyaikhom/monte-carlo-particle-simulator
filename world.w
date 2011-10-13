@@ -1,16 +1,26 @@
 @q This file is part of the Monte Carlo Simulator (c) Cardiff University 2011 @>
 
-@*1 Cuboid. The simulation world is defined by a {\sl cuboid}, which is
-composed of solids. Only particles inside this cuboid are tracked
-during a simulation, and particles outside this cuboid are marked as
-``particles outside the simulation world''. To exploit parallelism
-during a simulation, {\tt MCS} logically divides this cuboid into
-smaller cuboids of equal shape and size. Each of these cuboids are
-referred to as a {\sl subcuboid}. A set of subcuboids decomposes the
-simulation world into disjointed volumes where particles can be
-tracked independently of other particles in other subcuboids.
+@*1 Subcuboids. The simulation world is defined by a {\sl cuboid},
+which is composed of solids. Only particles inside this cuboid are
+tracked during a simulation, and particles outside this cuboid are
+marked as ``particles outside the simulation world''. To exploit
+parallelism during a simulation, {\tt MCS} logically divides this
+cuboid into smaller cuboids of equal shape and size. Each of these
+cuboids are referred to as a {\sl subcuboid}. A set of subcuboids
+decomposes the simulation world into disjointed volumes where
+particles can be tracked independently of other particles in other
+subcuboids.
 
-The simulation world cuboid must be axis-aligned with the world
+@
+@d MAX_SOLIDS_SUBCUBOID 100 /* must depend on available memory */
+@<Type definitions@>=
+typedef struct subcuboid_struct {
+	uint32_t n; /* number of solids */
+	uint32_t s[MAX_SOLIDS_SUBCUBOID]; /* indices in solid array */
+	BoundingBox bb;
+} Subcuboid;
+
+@ The simulation world cuboid must be axis-aligned with the world
 coordinate frame. It is decomposed into subcuboids by dividing
 along each of the three axes. Division can be carried out in any
 combinations, however, all of the subcuboids resulting from a division
@@ -280,7 +290,8 @@ three searches, we simply combine the results to give the index of the
 subcuboid.
 
 @<Global variables@>=
-double *cuboid_search_tree; /* stores three binary search trees */
+double *subcuboid_search_tree; /* stores three binary search trees */
+Subcuboid subcuboids[MAX_SUBCUBOIDS]; /* TODO: fill up the values */
 
 @ Every node in the binary search tree stores the upper bound of each
 subcuboid in the selected axis, except for the upper bound that
@@ -361,9 +372,9 @@ and |n| leaf nodes. However, we allocate one extra element per tree
 because the root only begins at the second element (index 1). Instead
 of wasting this first element, we use it to store the number of nodes.
 @<Allocate memory for the three cuboid search trees@>=
-cuboid_search_tree = mem_typed_alloc(2 * (l + m + n), double, mem_p);
-if (cuboid_search_tree == NULL) return false;
-x = cuboid_search_tree;
+subcuboid_search_tree = mem_typed_alloc(2 * (l + m + n), double, mem_p);
+if (NULL == subcuboid_search_tree) return false;
+x = subcuboid_search_tree;
 y = x + 2 * l;
 z = y + 2 * m;
 
@@ -390,7 +401,7 @@ void print_subcuboid_search_trees(FILE *f, double *t)
 	}
 }
 
-@ Function |find_subcuboid(v)| finds the subcuboid that contains a
+@ Function |find_subcuboid(t,v)| finds the subcuboid that contains a
 point with position vector |v| by searching the three binary search
 trees pointed to by |t|. 
 
@@ -448,7 +459,7 @@ t += 2 * size[i];
 	       scanf("%lu %lu %lu", &l, &m, &n);
 	} while (l * m * n > MAX_SUBCUBOIDS);	
 	build_subcuboid_trees(&bb, l, m, n);
-	print_subcuboid_search_trees(stdout, cuboid_search_tree);
+	print_subcuboid_search_trees(stdout, subcuboid_search_tree);
 	@<Search subcuboid for all points in each of the subcuboids@>;
 }
 
@@ -463,7 +474,7 @@ for (i = 0; i < l; ++i, v[0] += dx) {
         v[2] = bb.l[2];
 	for (k = 0; k < n; ++k, v[2] += dz) {
 	    e = i * m * n + j * n + k;
-	    r = find_subcuboid(cuboid_search_tree, v);
+	    r = find_subcuboid(subcuboid_search_tree, v);
 	    if (e != r) goto test_subcuboid_search_failed;
         }
     }

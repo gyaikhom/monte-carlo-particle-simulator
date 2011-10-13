@@ -557,7 +557,7 @@ bool read_geometry(const char *n)
 {
 	FILE *f;
 	char c;
-        @<Variables used for handling rotation operators@>;
+        @<Local variables: |read_geometry()|@>;
 	@<Open input geometry file@>;
 	@<Initialise the hash table of solids@>;
 	while (EOF != (c = fgetc(f))) {
@@ -2538,7 +2538,8 @@ txz + sy & tyz - sx & tz^2 + c & 0.0\cr
 \noindent where, $c = \cos(\theta)$, $s = \sin(\theta)$, and $t = 1 -
 \cos(\theta)$.
 
-@<Variables used for handling rotation operators@>=
+@<Local variables: |read_geometry()|@>=
+int i;
 double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
 
 @ The matrix $R^{-1}$ is stored in the two dimensional
@@ -2636,7 +2637,7 @@ typedef struct {
 @<Type definitions@>=
 typedef struct {
 	int tos, size;
-	bool v[MAX_STACK_SIZE];
+	bool v[MAX_BOOLEAN_STACK_SIZE];
 } boolean_stack;
 
 @ @<Global functions@>=

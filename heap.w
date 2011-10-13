@@ -33,12 +33,13 @@ suffix assume paging.
 @d HEAP_PAGE_SIZE 4 /* 4096 bytes per page, including linked list `next' pointer */
 @<Type definitions@>=
 typedef struct particle_repository_struct {
+	uint32_t pid; /* particle identifier to use next */
 	uint32_t count; /* current number of particles in heap */
 	uint32_t max; /* maximum number of particles allowed in heap */
 	uint16_t page_size; /* number of particles per page */
 	Particle *head, *tail; /* pointers to first and last pages */
 } ParticleRepository;
-ParticleRepository particles = {0, 0, HEAP_PAGE_SIZE, NULL, NULL};
+ParticleRepository particles = {1, 0, 0, HEAP_PAGE_SIZE, NULL, NULL};
 
 @ Function |heap_insert_fast(pr,t)| inserts a new particle |t| into the
 particles repository |pr|. This insertion does not assume heap paging.
@@ -50,7 +51,7 @@ tree, and moving the node from parent to child as we climb. The
 insertion has completed when the node is finally placed at its rightful
 place.
 @<Global functions@>=
-void heap_insert_fast(ParticleRepository *pr, const Particle *t)
+void heap_insert_fast(ParticleRepository *pr, Particle *t)
 {
 	uint32_t p, n; /* indices of parent and current node */
 	Particle *fp;
@@ -64,6 +65,7 @@ void heap_insert_fast(ParticleRepository *pr, const Particle *t)
 	      n = p; /* climb up the tree */
 	      p = n >> 1;
 	}
+	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 	fp[n] = *t; /* place node */
 }
 
@@ -141,7 +143,7 @@ to reference, place, or move a node, we first find the correct page
 and index for each node using |heap_find_pidx(pr,n,p,i)|.
 
 @<Global functions@>=
-void heap_insert_paged(ParticleRepository *pr, const Particle *t)
+void heap_insert_paged(ParticleRepository *pr, Particle *t)
 {
 	uint32_t p, n; /* indices of parent and current node within
 	heap */
@@ -159,6 +161,7 @@ void heap_insert_paged(ParticleRepository *pr, const Particle *t)
 	    p = n >> 1;
        	}
         heap_find_pidx(pr, n, &n_pg, &n_idx);
+	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 	n_pg[n_idx] = *t;
 }
 
@@ -225,6 +228,10 @@ int heap_expand(ParticleRepository *r)
 @ Function |heap_insert(r,p,e)| inserts a new particle |p| into the
 particle repository |r|. If |e| is |true| and there is not enough
 space in the heap, the heap will be expanded to fit |p|.  
+
+The macro |heap_has_space(r)| may be used to check if there is empty
+space in |r| before making an insertion call.
+@d heap_has_space(r) ((r).count <= (r).max)
 @<Global functions@>=
 int heap_insert(ParticleRepository *r, Particle *p, bool e)
 {
@@ -262,6 +269,7 @@ int heap_init(ParticleRepository *r)
 	r->head = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
 	if (NULL == r->head) return HEAP_ERROR_ALLOC;
 	r->count = 0;
+	r->pid = 1;
 	r->max = r->page_size = HEAP_PAGE_SIZE;
 	*(char **) r->head = NULL;
 	r->tail = r->head;
