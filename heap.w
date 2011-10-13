@@ -7,13 +7,30 @@ can be simulated in one batch.
 
 @<Type definitions@>=
 typedef struct particle_struct Particle;
+enum {
+	HEAP_SUCCESS = 0,
+	HEAP_EMPTY,
+	HEAP_FULL,
+	HEAP_ERROR_ALLOC,
+	HEAP_ERROR_UNDEFINED
+};
 
 @ The particle repository is implemented as a paged binary
-max-heap, which is allowed to grow. The heap is maintained as 
-a linked list of heap pages, where each heap page is a fixed array
-of particles.
+{\sl max-heap} (we could have use a {\sl min-heap}, but this doesn't
+matter), which is allowed to grow. The heap is maintained as a linked
+list of heap pages, where each heap page is a fixed array of
+particles, with the first array element used as a
+pointer-to-a-pointer to maintain the linked list of heap pages.
 
-@d HEAP_PAGE_SIZE 41 /* 4096 bytes per page, including next pointer */
+The paging only becomes active when the first allocated heap page is
+insufficient to fulfill the required number of particles. Since paging
+adds computational overhead, it is expected that the first page is
+allocated carefully so as to avoid paging. Keeping this in mind, we
+provide two versions of all the heap functions. The functions with
+the `fast' suffix does not assume paging, whereas, those with `paged'
+suffix assume paging.
+
+@d HEAP_PAGE_SIZE 4 /* 4096 bytes per page, including linked list `next' pointer */
 @<Type definitions@>=
 typedef struct particle_repository_struct {
 	uint32_t count; /* current number of particles in heap */
@@ -23,193 +40,237 @@ typedef struct particle_repository_struct {
 } ParticleRepository;
 ParticleRepository particles = {0, 0, HEAP_PAGE_SIZE, NULL, NULL};
 
-@ @<Type definitions@>=
-enum {
-	HEAP_SUCCESS = 0,
-	HEAP_ERROR_UNDEFINED = -1,
-	HEAP_ERROR_ALLOC = -2,
-	HEAP_EMPTY = 1
-};
-
-@ The paging only becomes active when the first allocated heap page is
-insufficient to fulfill the required number of particles. Since paging
-adds computational overhead, it is expected that the first page is
-allocated carefully so as to avoid paging. Keeping this in mind, we
-provide two versions of all the heap functions. The functions with
-the `fast' suffix does not assume paging, whereas, those with `paged'
-suffix assume paging.
+@ Function |heap_insert_fast(pr,t)| inserts a new particle |t| into the
+particles repository |pr|. This insertion does not assume heap paging.
+In the first page, we {\sl bubble up} the new node to its rightful
+place using the containing subcuboid as the comparison key. This
+bubbling is done by climbing up the tree starting at the array
+position dictated by the array implementation of a complete binary
+tree, and moving the node from parent to child as we climb. The
+insertion has completed when the node is finally placed at its rightful
+place.
 @<Global functions@>=
-void heap_insert_fast(ParticleRepository *r, const Particle *p)
+void heap_insert_fast(ParticleRepository *pr, const Particle *t)
 {
-	uint32_t parent, node;
-	Particle *page = r->head;
-	@<In the first page, bubble up the new node to its rightful place@>;	
-	@<In the first page, place node in its rightful place@>;
-	r->count++;
-}
-@ @<In the first page, bubble up the new node to its rightful place@>=
-node = r->count + 1;
-parent = node >> 1;
-while (parent > 0) {
-	if (page[parent].subcuboid < p->subcuboid) page[node] = page[parent];
-        else break;
-	node = parent;
-	parent = node >> 1;
-}
-
-@ @<In the first page, place node in its rightful place@>=
-page[node] = *p;
-
-@ @<Global functions@>=
-void heap_remove_fast(ParticleRepository *r, Particle *p)
-{
-	uint32_t node, left, right;
-	Particle temp, *page;
-	page = r->head;
-	*p = page[1];
-	if (r->count > 1) {
-	   temp = page[r->count];
-	   @<In the first page, fix the heap by bubbling down the last node@>;
+	uint32_t p, n; /* indices of parent and current node */
+	Particle *fp;
+	fp = pr->head; /* first page */
+	n = ++pr->count; /* start bubbling from the last node */
+	p = n >> 1;
+	while (p > 0) { /* bubble up the tree */
+	      if (fp[p].subcuboid < t->subcuboid)
+	          fp[n] = fp[p];  /* move from parent to child */
+              else break; /* rightful place found */
+	      n = p; /* climb up the tree */
+	      p = n >> 1;
 	}
-	r->count--;
+	fp[n] = *t; /* place node */
 }
 
-@ @<In the first page, fix the heap by bubbling down the last node@>=
-node = 1;
-left = 2;
-while (left < r->count) {
-      right = left + 1;		
-      if (page[r->count].subcuboid < page[left].subcuboid) {
-      	 if (right < r->count &&
-	     page[left].subcuboid < page[right].subcuboid) {
-	     page[node] = page[right];
-	     node = right;
-	 } else {
-	     page[node] = page[left];
-	     node = left;
-	 }
-      } else {
-	  if (right < r->count &&
-	     page[r->count].subcuboid < page[right].subcuboid) {
-	     page[node] = page[right];
-	     node = right;
-	  } else break;
-      }
-      left = node << 1; /* go deeper until we have passed a leaf */
-}
-page[node] = temp; /* place last node in rightful place */
+@ Function |heap_remove_fast(pr,t)| removes the particle at the top of
+the max-heap representing the particles repository |pr|, and stores the
+particle into |t|. This removal does not assume heap paging. From the
+first page, we remove the first node, which is always the top of the
+heap. We then fill this void by promoting the last node of the
+complete binary tree to become the root. Finally, we rebalance the
+heap by {\sl bubbling down} the root until we find its rightful place,
+or we find that it has becomes a leaf. While bubbling down, we move
+either the left or right subtree root to the current node as we climb
+down the tree.
 
-@ For a given particle index |n| within the heap |r|, function
-|heap_find_pidx(r, n,p,i)| finds the page start address |p| and the
-index |i| within that page.
-
-The binary heap is implemented using an array representation of a
-complete binary tree. Hence, while maintaining this tree we are
-required to find the parent of a given tree node. If paging is active,
-we are sometimes required to find the page and index within the page
-for a given particle.
 @<Global functions@>=
-void heap_find_pidx(ParticleRepository *r, uint32_t n,
-     Particle **p, uint32_t *idx)
+void heap_remove_fast(ParticleRepository *pr, Particle *t)
 {
-	int i;
-	Particle *t = r->head;
-	n--;
-	for (i = n / r->page_size; i; --i) t = (Particle *) *(char **)t;
-	*idx = (n % r->page_size) + 1;
+	uint32_t n, l, r, q; /* indices to node, left, right and last */
+	Particle temp, *fp;
+	fp = pr->head; /* first page */
+	*t = fp[1]; /* particle to return */
+	q = pr->count--;
+	if (q) {
+	   temp = fp[q]; /* the last node to be promoted */
+	   n = 1; /* start at the root */
+	   l = 2;
+	   while (l < q) { /* bubble down the tree choosing left or
+	   right subtree */
+      	      r = l + 1;		
+      	      if (fp[q].subcuboid < fp[l].subcuboid) {
+      	          if (r < q && fp[l].subcuboid < fp[r].subcuboid) {
+	     	      fp[n] = fp[r];
+	     	      n = r;
+	 	  } else {
+	     	      fp[n] = fp[l];
+	     	      n = l;
+	 	  }
+      	      } else {
+	          if (r < q && fp[q].subcuboid < fp[r].subcuboid) {
+	     	      fp[n] = fp[r];
+	     	      n = r;
+	  	  } else break; /* rightful place found */
+      	      }
+      	      l = n << 1; /* go deeper until we have passed a leaf */
+	  }
+          fp[n] = temp; /* place node */
+	}
+}
+
+
+@ For a given particle index |n| within the heap |pr|, function
+|heap_find_pidx(pr,n,p,i)| finds the page start address |p| and the
+index |i| within that page. The binary heap is implemented using an
+array representation of a complete binary tree. Hence, while
+maintaining this tree we are required to find the parent, or children,
+of a given tree node, and if paging is active, we are required to find
+its page and index within the heap.
+@<Global functions@>=
+void heap_find_pidx(ParticleRepository *pr, uint32_t n,
+     Particle **p, uint32_t *i)
+{
+	Particle *t = pr->head;
+	while (n > pr->page_size) {
+	    t = (Particle *) *(char **)t;
+	    n -= pr->page_size;
+	}
+	*i = n;
 	*p = t;
 }
 
-@ @<Global functions@>=
-void heap_insert_paged(ParticleRepository *r, const Particle *p)
+@ Function |heap_insert_paged(pr,t)| inserts a new particle |t| into the
+particles repository |pr|. This insertion uses the same method as
+|heap_insert_fast(pr,t)|, except that it assumes heap paging; hence,
+to reference, place, or move a node, we first find the correct page
+and index for each node using |heap_find_pidx(pr,n,p,i)|.
+
+@<Global functions@>=
+void heap_insert_paged(ParticleRepository *pr, const Particle *t)
 {
-	uint32_t parent, node;
-	uint32_t parent_idx, node_idx;
-	Particle *parent_page, *node_page;
-	@<Bubble up the new node until we find its rightful place@>;	
-	r->count++;
+	uint32_t p, n; /* indices of parent and current node within
+	heap */
+	Particle *p_pg, *n_pg; /* heap pages of parent and current node */
+	uint32_t p_idx, n_idx; /* indices within heap pages of parent and current node */
+	n = ++pr->count; /* start bubbling from the last node */
+	p = n >> 1;
+	while (p > 0) { /* bubble up the tree */
+	    heap_find_pidx(pr, p, &p_pg, &p_idx);
+            heap_find_pidx(pr, n, &n_pg, &n_idx);
+	    if (p_pg[p_idx].subcuboid < t->subcuboid)
+	        n_pg[n_idx] = p_pg[p_idx];
+	    else break; /* rightful place found */
+	    n = p; /* climb up the tree */
+	    p = n >> 1;
+       	}
+        heap_find_pidx(pr, n, &n_pg, &n_idx);
+	n_pg[n_idx] = *t;
 }
 
-@ @<Bubble up the new node until we find its rightful place@>=
-node = r->count + 1; /* start bubbling at the last node */
-parent = node >> 1;
-while (parent > 0) {
-	heap_find_pidx(r, parent, &parent_page, &parent_idx);
-        heap_find_pidx(r, node, &node_page, &node_idx);
-	if (parent_page[parent_idx].subcuboid < p->subcuboid)
-	    node_page[node_idx] = parent_page[parent_idx];
-	else {
-	    node_page[node_idx] = *p;
-	    break; /* rightful place found */
-	}
-	node = parent;
-	parent = node >> 1; /* bubble up */
-}
-if (parent == 0) {
-    heap_find_pidx(r, node, &node_page, &node_idx);
-    node_page[node_idx] = *p;
-}
-
-@ @<Global functions@>=
-void heap_remove_paged(ParticleRepository *r, Particle *p)
+@ Function |heap_remove_paged(pr,t)| removes a new particle |t| into the
+particles repository |pr|. This removal uses the same method as
+|heap_remove_fast(pr,t)|, except that it assumes heap paging; hence,
+to reference, or change a node, we first find the correct page
+and index for each node using |heap_find_pidx(pr,n,p,i)|.
+@<Global functions@>=
+void heap_remove_paged(ParticleRepository *pr, Particle *t)
 {
-	uint32_t last_idx, left_idx, right_idx, node_idx;
-	uint32_t node, left, right;
+	uint32_t n, l, r, q;  /* indices to node, left, right and last */
+	Particle *n_pg, *l_pg, *r_pg, *q_pg; /* heap pages */
+	uint32_t n_idx, l_idx, r_idx, q_idx; /* indices within heap pages */
 	Particle temp;
-	Particle *last_page, *left_page, *right_page, *node_page;
-	*p = r->head[1]; /* particle currently at the top of the
-	heap, which will be removed */
-	if (r->count > 1) {
-	@<Get the page and index for the last node@>;
-	@<Fix the heap by bubbling down the last node@>;
-	@<Finalise bubbling down by placing the last node in its rightful place@>;
+	*t = pr->head[1]; /* particle to return */
+	q = pr->count--;
+	if (q) {
+	    heap_find_pidx(pr, q, &q_pg, &q_idx);
+	    temp = q_pg[q_idx]; /* the last node to be promoted */
+	    n = 1; /* start at the root */
+	    l = 2;
+	    while (l < q) { /* bubble down the tree choosing left or
+	   right subtree */
+	        r = l + 1;		
+		heap_find_pidx(pr, l, &l_pg, &l_idx);
+		heap_find_pidx(pr, r, &r_pg, &r_idx);
+		heap_find_pidx(pr, n, &n_pg, &n_idx);
+		if (q_pg[q_idx].subcuboid < l_pg[l_idx].subcuboid) {
+		    if (l_pg[l_idx].subcuboid < r_pg[r_idx].subcuboid) {
+	    	        n_pg[n_idx] = r_pg[r_idx];
+	    		n = r;
+		    } else {
+	    	        n_pg[n_idx] = l_pg[l_idx];
+	    		n = l;
+		    }
+		} else {
+    		    if (q_pg[q_idx].subcuboid < r_pg[r_idx].subcuboid) {
+		    	n_pg[n_idx] = r_pg[r_idx];
+			n = r;
+		    } else break; /* rightful place found */
+		}
+		l = n << 1; /* go deeper until we have passed a leaf */
+            }
+	    heap_find_pidx(pr, n, &n_pg, &n_idx);
+            n_pg[n_idx] = temp; /* place node */
 	}
-	r->count--;
 }
 
-@ @<Get the page and index for the last node@>=
-heap_find_pidx(r, r->count, &last_page, &last_idx);
-temp = last_page[last_idx];
-
-@ @<Fix the heap by bubbling down the last node@>=
-node = 1;
-left = 2;
-while (left < r->count) {
-	right = left + 1;		
-	@<Get page and index for left, right and current node@>;
-	@<Bubble down the last node relative to the current node@>;
-	left = node << 1; /* go deeper until we have passed a leaf */
+@ Function |heap_expand(r)| expands the heap |r| by adding a new page
+at the end of the linked list.
+@<Global functions@>=
+int heap_expand(ParticleRepository *r)
+{
+	Particle* t = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
+	if (NULL == t) return HEAP_ERROR_ALLOC;
+	*(char **) t = NULL; /* make last page: `next' points to |NULL| */
+	r->max += r->page_size;
+	*((char **) r->tail) = (char *) t;
+	r->tail = t;
+	return HEAP_SUCCESS;
 }
 
-@ @<Get page and index for left, right and current node@>=
-heap_find_pidx(r, left, &left_page, &left_idx);
-heap_find_pidx(r, right, &right_page, &right_idx);
-heap_find_pidx(r, node, &node_page, &node_idx);
-
-@ @<Bubble down the last node relative to the current node@>=
-if (last_page[last_idx].subcuboid
-    < left_page[left_idx].subcuboid) {
-	if (left_page[left_idx].subcuboid
-	    < right_page[right_idx].subcuboid) {
-	    node_page[node_idx] = right_page[right_idx];
-	    node = right;
+@ Function |heap_insert(r,p,e)| inserts a new particle |p| into the
+particle repository |r|. If |e| is |true| and there is not enough
+space in the heap, the heap will be expanded to fit |p|.  
+@<Global functions@>=
+int heap_insert(ParticleRepository *r, Particle *p, bool e)
+{
+	int i;
+	if (r->count < r->max) {
+	   if (r->count > r->page_size) heap_insert_paged(r, p); 
+	   else heap_insert_fast(r, p);
 	} else {
-	    node_page[node_idx] = left_page[left_idx];
-	    node = left;
+	   if (e) {
+	       i = heap_expand(r);
+	       if (i) return i;
+	       heap_insert_paged(r, p);
+	   } else return HEAP_FULL;
 	}
-} else {
-    if (last_page[last_idx].subcuboid
-        < right_page[right_idx].subcuboid) {
-	node_page[node_idx] = right_page[right_idx];
-	node = right;
-    } else break;
+	return HEAP_SUCCESS;
 }
 
-@ @<Finalise bubbling down by placing the last node in its rightful place@>=
-heap_find_pidx(r, node, &node_page, &node_idx); /* find rightful place */
-node_page[node_idx] = temp; /* place last node in rightful place */
+@ Function |heap_remove(r,t)| removes the particle at the top of
+the max-heap representing the particles repository |r|, and stores the
+particle into |p|.
+@<Global functions@>=
+int heap_remove(ParticleRepository *r, Particle *p)
+{
+	if (r->count == 0) return HEAP_EMPTY;
+	if (r->count > r->page_size) heap_remove_paged(r, p);
+	else heap_remove_fast(r, p);
+	return HEAP_SUCCESS;
+}
 
-@ @<Global functions@>=
+@ Function |heap_init(r)| initialises the max-heap |r| by creating the
+first page.
+@<Global functions@>=
+int heap_init(ParticleRepository *r)
+{
+	r->head = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
+	if (NULL == r->head) return HEAP_ERROR_ALLOC;
+	r->count = 0;
+	r->max = r->page_size = HEAP_PAGE_SIZE;
+	*(char **) r->head = NULL;
+	r->tail = r->head;
+	return HEAP_SUCCESS;
+}
+
+@ Function |heap_print(f,r)| prints the heap |r| to the I/O stream
+pointed to by |f|.
+@<Global functions@>=
 void heap_print(FILE *f, ParticleRepository *r)
 {
 	int i, j, p;
@@ -230,60 +291,6 @@ void heap_print(FILE *f, ParticleRepository *r)
 	fprintf(f, "\n");
 }
 
-@ When there is no space available to insert a new particle, the heap
-must be expanded. This involves creating a new page and the associated
-particles array.
-@<Global functions@>=
-int heap_expand(ParticleRepository *r)
-{
-	Particle* t = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
-	if (NULL == t) return HEAP_ERROR_ALLOC;
-	*(char **) t = NULL;
-	r->max += r->page_size;
-	*((char **) r->tail) = (char *) t;
-	r->tail = t;
-	printf("expanding...\n");
-	heap_print(stdout, r);
-	fprintf(stdout, "\n");
-	return HEAP_SUCCESS;
-}
-
-@ @<Global functions@>=
-int heap_insert(ParticleRepository *r, Particle *p)
-{
-	int i;
-	if (r->count >= r->max) {
-	   i = heap_expand(r);
-	   if (i) return i;
-	   heap_insert_paged(r, p);
-	} else {
-	   if (r->count > r->page_size) heap_insert_paged(r, p); 
-	   else heap_insert_fast(r, p);
-	}
-	return HEAP_SUCCESS;
-}
-
-@ @<Global functions@>=
-int heap_remove(ParticleRepository *r, Particle *p)
-{
-	if (r->count == 0) return HEAP_EMPTY;
-	if (r->count > r->page_size) heap_remove_paged(r, p);
-	else heap_remove_fast(r, p);
-	return HEAP_SUCCESS;
-}
-
-@ @<Global functions@>=
-int heap_init(ParticleRepository *r)
-{
-	r->head = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
-	if (NULL == r->head) return HEAP_ERROR_ALLOC;
-	r->count = 0;
-	r->max = r->page_size = HEAP_PAGE_SIZE;
-	*(char **) r->head = NULL;
-	r->tail = r->head;
-	return HEAP_SUCCESS;
-}
-
 @ @<Test particle repository@>=
 {
 	Particle p;
@@ -294,9 +301,7 @@ int heap_init(ParticleRepository *r)
 	    if (p.subcuboid == 0) {
 	        if (heap_remove(&particles, &p) != HEAP_SUCCESS) break;
 		printf("%u\n", p.subcuboid);
-	    } else {
-	        if (heap_insert(&particles, &p) != HEAP_SUCCESS) break;
-	    }
+	    } else if (heap_insert(&particles, &p, true) != HEAP_SUCCESS) break;
 	    heap_print(stdout, &particles);
 	} while (1);
 }
