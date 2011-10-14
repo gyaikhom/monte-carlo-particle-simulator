@@ -54,6 +54,14 @@ uint16_t nd; /* number of daughter particles */
 uint8_t s; /* the $s$-field */
 bool active; /* is the particle active (to be simulated) */
 
+@ @<Print particle information to |stdout|@>=
+fprintf(stdout, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
+		"(%lf, %lf, %lf) %lf %lf %u %u %u\n",
+	p->id, p->p[0], p->p[1], p->p[2], p->s,
+	p->mo[0], p->mo[1], p->mo[2],
+	p->po[0], p->po[1], p->po[2],
+	p->m, p->c, p->pi, p->si, p->nd);
+
 @*1 Vertex.
 To generate particles, a particle gun must first be placed inside the
 world by choosing a vertex. When the particle gun is activated,
@@ -65,7 +73,11 @@ with it. These are stored as a linked-list.
 @f uint32_t int
 @<Type definitions@>=
 typedef struct vertex_struct {
-       Vector p; /* position vector */
+       Vector p; /* particle gun position vector */
+       Vector mo; /* momentum */
+       Vector po; /* polarisation */
+       double e; /* energy */
+       double c; /* charge */
        uint32_t np; /* number of particles required */
        struct vertex_struct *next;
 } Vertex;
@@ -140,27 +152,6 @@ Event *create_event()
 
 @*1 Particle gun.
 
-@<Type definitions@>=
-typedef struct particle_gun_struct {
-       Vector v; /* vertex position */
-       Vector m; /* momentum */
-       Vector p; /* polarisation */
-       double e; /* energy */
-       double c; /* charge */
-       uint32_t np; /* number of particles to generate */
-} ParticleGun;
-
-@ Function |reset_pg()| resets the particle gun to default values.
-@<Global functions@>=
-void reset_pg(ParticleGun *pg)
-{
-	vector_zero(pg->v);
-	vector_zero(pg->m);
-	vector_zero(pg->p);
-	pg->e = 0.0;
-	pg->c = 0.0;
-        pg->np = 0;
-}
 
 @*1 Batch simulation.
 
@@ -198,36 +189,35 @@ int generate_primaries()
 {
     Particle p; /* primary particle to be generated */
     int n = 0; /* number of particles generated in this call */
-    while (e) {
-        while (v) {
-             while (c < v->np) {
+    while (ge) {
+        while (gv) {
+             while (gc < gv->np) {
 	         if (heap_has_space(particles)) {
                      @<Generate primary particle using particle gun@>;
 		     p.subcuboid = find_subcuboid(subcuboid_search_tree, p.p);
    		     heap_insert(&particles, &p, false);
    		     ++n;
-   		     ++c;
+   		     ++gc;
 		 } else goto heap_is_full;
              }
-	     v = v->next; /* move to the next vertex */
-	     c = 0;
+	     gv = gv->next; /* move to the next vertex */
+	     gc = 0;
 	}
-	e = e->next; /* move to the next event */
-	v = e->v;
+	ge = ge->next; /* move to the next event */
+	gv = ge->v;
     }
     heap_is_full: return n;
 }
 
-@ During multiple calls to |generate_primaries()|, we
-maintain from one call to the next the index of the current event, the
-index of the current vertex within that event, and the number of
-particles already generated for the current vertex, using global
-variables.
+@ During multiple calls to |generate_primaries()|, we maintain from
+one call to the next the index of the current event, the index of the
+current vertex within that event, and the number of particles already
+generated for the current vertex, using global variables.
 
 @<Global variables@>=
-Event *e = NULL; /* current simulation event */
-Vertex *v = NULL; /* current vertex within simulation event */
-int c = 0; /* current particle count for current vertex */
+Event *ge = NULL; /* current simulation event */
+Vertex *gv = NULL; /* current vertex within simulation event */
+uint32_t gc = 0; /* current particle count for current vertex */
 
 @ @<Generate primary particle using particle gun@>=
 
@@ -284,8 +274,6 @@ int create_batch(Batch *b)
 	i = j = 0; /* start at first slot of first block */
 	b->n = n = 0; /* reset block and particle count */
 	if (get_particle(&p)) {
-	    b->b[i].np = 1; /* initialise block particle count */
-	    b->b[i].ns = 0;
 	    b->b[i].s = p.subcuboid; /* subcuboid index for the block */
 	    b->b[i].p[j++] = p; /* add particle to block */
 	    b->n++; /* increment number of active blocks */
@@ -294,19 +282,22 @@ int create_batch(Batch *b)
 	        if (b->b[i].s != p.subcuboid ||
 		    MAX_PARTICLES_BLOCK == j) { /* change block */
 		    b->b[i].np = j; /* finalise current block */
+		    b->b[i].ns = 0;
 		    if (MAX_BLOCKS_BATCH == ++i) { /* move to next block */
-		        heap_insert(&particles, &p, false); /* batch is full: retain for next batch */
-		        break;
+		        heap_insert(&particles, &p, false); /* batch is full: retain particle for next batch */
+		        goto batch_is_full;
 		    }
+		    b->b[i].s = p.subcuboid; /* subcuboid index for the new block */
                     b->n++; /* increment number of active blocks */
 		    j = 0; /* first slot of new block */
-		    b->b[i].s = p.subcuboid; /* subcuboid index for the new block */
 	        }
 	        b->b[i].p[j++] = p; /* add particle to block */
 		++n;
 	    }
+    	    b->b[i].np = j; /* finalise current block */
+	    b->b[i].ns = 0;
     	}
-	return n;
+batch_is_full: return n;
 }
 
 @ @<Global functions@>=
@@ -315,11 +306,30 @@ int simulate_batch(Batch *b)
 	return 0;
 }
 
-@ @<Global functions@>=
+@
+@d MAX_STORE_BUFFER 10 /* number of particles in output buffer */
+@<Global functions@>=
 int store_particle(Particle *p)
 {
+	static Particle buff[MAX_STORE_BUFFER];
+	static int c = 0;
+	FILE *f = stdout;
+	int i;
+	if (c < MAX_STORE_BUFFER) buff[c++] = *p;
+	else {
+	    for (i = 0; i < c; ++i) @<Print particle information to |f|@>;
+	    c = 0;
+	}
 	return 0;
 }
+
+@ @<Print particle information to |f|@>=
+fprintf(f, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
+		"(%lf, %lf, %lf) %lf %lf %u %u %u\n",
+	buff[i].id, buff[i].p[0], buff[i].p[1], buff[i].p[2], buff[i].s,
+	buff[i].mo[0], buff[i].mo[1], buff[i].mo[2],
+	buff[i].po[0], buff[i].po[1], buff[i].po[2],
+	buff[i].m, buff[i].c, buff[i].pi, buff[i].si, buff[i].nd);
 
 @ Function |update_repository(b)| updates the particle repository
 following a successful batch simulation by moving primary and
@@ -364,12 +374,10 @@ int run_simulation()
 {
 	int i;
 	Batch b;
-	ParticleGun pg;
-	reset_pg(&pg);
 	while ((i = create_batch(&b))) {
 	    if (i < 0) goto handle_error;
-	    if ((i = simulate_batch(&b))) goto handle_error;
-	    else if ((i = update_repository(&b))) goto handle_error;
+	    if (simulate_batch(&b)) goto handle_error;
+	    else if (update_repository(&b)) goto handle_error;
 	}
 	return 0; /* simulation done */
 
@@ -377,3 +385,7 @@ handle_error:
 	return 1;
 }
 
+@ @<Test simulation batch@>=
+{
+	
+}
