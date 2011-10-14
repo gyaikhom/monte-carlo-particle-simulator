@@ -52,7 +52,7 @@ uint32_t pi; /* parent identifier */
 uint16_t si; /* sibling index (rank among siblings) */
 uint16_t nd; /* number of daughter particles */
 uint8_t s; /* the $s$-field */
-bool active; /* is the particle active (to be simulated) */
+uint8_t active; /* particle type */
 
 @ @<Print particle information to |stdout|@>=
 fprintf(stdout, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
@@ -61,6 +61,41 @@ fprintf(stdout, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
 	p->mo[0], p->mo[1], p->mo[2],
 	p->po[0], p->po[1], p->po[2],
 	p->m, p->c, p->pi, p->si, p->nd);
+
+@ @<Print particle information to |gpfile|@>=
+fprintf(gpfile, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
+		"(%lf, %lf, %lf) %lf %lf %u %u %u\n",
+	gpbuff[i].id, gpbuff[i].v[0], gpbuff[i].v[1], gpbuff[i].v[2], gpbuff[i].s,
+	gpbuff[i].mo[0], gpbuff[i].mo[1], gpbuff[i].mo[2],
+	gpbuff[i].po[0], gpbuff[i].po[1], gpbuff[i].po[2],
+	gpbuff[i].m, gpbuff[i].c, gpbuff[i].pi, gpbuff[i].si, gpbuff[i].nd);
+
+@ Function |save_particle(p)| saves particle |p| in the buffer to be
+written to the filesystem, evetually. When a particle is no longer
+active, they must be transferred to the filesystem for later
+analysis. To reduce the number of system calls, we use a particles
+buffer to hold particles until they can be written in a batch write to
+the file system. We maintain the buffer, the I/O stream and the number
+of particles as global variables. These must be initialised
+appropriately before calling |run_simulation()|.
+
+@d MAX_PARTICLE_BUFFER 60 /* number of particles in output buffer */
+@<Global functions@>=
+Particle gpbuff[MAX_PARTICLE_BUFFER];
+uint32_t gpbuffsize = 0; /* number of particles in buffer */
+FILE *gpfile = NULL; /* the I/O stream to write particle data */
+void save_particle(Particle *p)
+{
+	if (gpbuffsize == MAX_PARTICLE_BUFFER) @<Flush particles in buffer to filesystem@>;
+	gpbuff[gpbuffsize++] = *p;
+}
+
+@ @<Flush particles in buffer to filesystem@>=
+{
+	uint32_t i;
+	for (i = 0; i < gpbuffsize; ++i) @<Print particle information to |gpfile|@>;
+	gpbuffsize = 0;
+}
 
 @*1 Vertex.
 To generate particles, a particle gun must first be placed inside the
@@ -152,48 +187,48 @@ Event *create_event()
 
 @*1 Particle gun.
 
+@<Generate primary particle using particle gun@>=
+vector_zero(p.v);
+vector_zero(p.mo);
+vector_zero(p.po);
+p.m = p.c = 0.0;
+p.id = p.pi = p.si = 0;
+p.active = true; /* only active particles inside heap */
+p.s = 0x0; /* renew: $s$-field are changed by physics processes */
+p.nd = 0; /* no daughters yet */
+p.subcuboid = find_subcuboid(subcuboid_search_tree, p.v);
 
 @*1 Batch simulation.
 
-@ All of the particles that are currently processed as primaries are
-stored starting from the left-hand side of the particles array. The
-generated secondary particles, on the other hand, are stored starting
-from the right-hand side of the particle array. 
+@ Function |generate_primaries()| fills up the particles repository
+with primary partices generated using a particle gun. It returns zero
+if all of the primary particles required by the event vertices have
+already been processed; otherwise, the number of new primaries are
+returned. The batch simulation loop will continue to be valid as long
+as the return value of this function is nonzero.
 
-@d MAX_PRIMARIES_BLOCK 16 /* must depend on available memory */
-@d MAX_DAUGHTERS 10 /* maximum number of daughters allowed */
-@d MAX_SECONDARIES_BLOCK (MAX_DAUGHTERS * MAX_PRIMARIES_BLOCK)
-@<Type definitions@>=
-typedef struct block_struct {
-	uint32_t np; /* number of primaries */
-	uint32_t ns; /* number of secondaries */
-	uint32_t subcuboid; /* index of the associated subcuboid */
-	Particle p[MAX_PRIMARIES_BLOCK];
-	Particle s[MAX_SECONDARIES_BLOCK];
-} Block;
+While generating primaries, the aim is to fill up the max-heap without
+expanding the heap, so that only primary particles that are needed to
+fill up a batch are generated. Of course, since this function will be
+called multiple times by |get_particle()| while creating a simulation
+batch, all of the particles that are required by all of the vertices
+in all of the events will be processed, eventually.
 
-@
-@d MAX_BLOCKS_BATCH 10 /* must depend on available compute blocks */
-@<Type definitions@>=
-typedef struct sim_batch_struct {
-	uint32_t n; /* number of blocks with particles in them */
-	Block b[MAX_BLOCKS_BATCH]; /* array of blocks */
-} Batch;
-
-
-@ Function |generate_primaries()| fills up the particle repository
-with primary partices generated using a particle gun. The aim is to
-fill up the max-heap, without expanding the heap, so that all of the
-particles required by all of the vertices in all of the events are
-processed.
+During multiple calls to |generate_primaries()|, we maintain from
+one call to the next the current event, the current vertex within that
+event, and the number of particles already generated for the current
+vertex. Hence, before running a simulation, i.e., calling
+|run_simulation()|, these global variables must be initialised
+appropriately.
 
 @<Global functions@>=
+Event *ge = NULL; /* current simulation event */
+Vertex *gv = NULL; /* current vertex within simulation event */
+uint32_t gc = 0; /* current particle count for current vertex */
 int generate_primaries()
 {
-	static uint32_t call_count = 0;
     Particle p; /* primary particle to be generated */
     int n = 0; /* number of particles generated in this call */
-    fprintf(stderr, "\ngp: %u\n", call_count++);
     while (ge) {
         while (gv) {
              while (gc < gv->np) {
@@ -208,7 +243,7 @@ int generate_primaries()
 	     gc = 0;
 	}
 	ge = ge->next; /* move to the next event */
-	if (ge) {
+	if (ge) { 
 	    gv = ge->v;
 	    gc = 0;
 	}
@@ -217,36 +252,12 @@ int generate_primaries()
     return n;
 }
 
-@ During multiple calls to |generate_primaries()|, we maintain from
-one call to the next the index of the current event, the index of the
-current vertex within that event, and the number of particles already
-generated for the current vertex, using global variables.
-
-@<Global variables@>=
-Event *ge = NULL; /* current simulation event */
-Vertex *gv = NULL; /* current vertex within simulation event */
-uint32_t gc = 0; /* current particle count for current vertex */
-
-@ @<Generate primary particle using particle gun@>=
-vector_zero(p.v);
-vector_zero(p.mo);
-vector_zero(p.po);
-p.m = p.c = 0.0;
-p.id = p.pi = p.si = 0;
-p.active = true; /* only active particles inside heap */
-p.s = 0x0; /* renew: $s$-field are changed by physics processes */
-p.nd = 0; /* no daughters yet */
-p.subcuboid = find_subcuboid(subcuboid_search_tree, p.v);
-
-fprintf(stderr, "*");
-
 @ Function |get_particle(p)| retrieves a particle from the particle
 repository and stores the particle in |p|. It returns 1 if a particle
-was retrieved successfully; otherwise, returns 0.
-
-If there are not particles in the particles repository, it will
-attempt to fill the particles repository by generating primary
-particles using the particle gun.
+was retrieved successfully; otherwise, returns 0. If there are no
+particles in the particles repository, it will first attempt to fill
+up the particles repository, by generating primary particles using the
+particle gun, and then retry to retrieve particle from the heap.
 
 @<Global functions@>=
 int get_particle(Particle *p)
@@ -259,47 +270,82 @@ int get_particle(Particle *p)
 	return 1; /* one particle retrieved */
 }
 
+@ All of the primary particles that was added from the particles
+repository are stored in the particles array |p|, whereas, the
+particles generated as secondaries by the compute threads as a result
+of physics processes are stored in the particles array |s|. Before the
+compute threads have worked on the block, the number of secondaries
+|ns| are always set to zero by the function |create_batch()|. After
+the block has been processed, the primary particles array |p| could be
+empty; however, the secondary particles array |s| will never be empty.
+
+@d MAX_PRIMARIES_BLOCK 4 /* must depend on available memory */
+@d MAX_DAUGHTERS 4 /* maximum number of daughters allowed */
+@d MAX_SECONDARIES_BLOCK (MAX_DAUGHTERS * MAX_PRIMARIES_BLOCK)
+@<Type definitions@>=
+typedef struct block_struct {
+	uint32_t subcuboid; /* index of the associated subcuboid */
+	uint16_t np; /* number of primaries */
+	uint16_t ns; /* number of secondaries */
+	Particle p[MAX_PRIMARIES_BLOCK];
+	Particle s[MAX_SECONDARIES_BLOCK];
+} Block;
+
+@ Each simulation batch comprises of several simulation blocks that
+contain data about the particles and the subcuboid which contains
+those particles. Each of these blocks could be processed exclusively
+by a single thread, or a group of compute threads.
+
+We have used fixed-size arrays, instead of dynamically allocated
+memory blocks, so that the input data as they are available on the
+host application, or the output data as they are available in the
+compute memory, could be trasferred using a single memory copy of the
+batch. For instance, if we wish to use multiple threads that are
+available on graphics processing units, we can easily transfer the
+batches back and forth using a single memory copy between the host
+application and the graphics hardware. This is also important because,
+for cache efficiency, we required the memory footprint on the compute
+devices to be quite simple and compact.
+
+@d MAX_BLOCKS_BATCH 4 /* must depend on available compute blocks */
+@<Type definitions@>=
+typedef struct sim_batch_struct {
+	uint16_t n; /* number of blocks with particles in them */
+	Block b[MAX_BLOCKS_BATCH]; /* array of blocks */
+} Batch;
 
 @ Function |create_batch(b)| creates a simulation batch and stores the
 batch in |b|. If successful, it returns a positive number that gives
-the number of particles in the batch; otherwise, it returns a negative
-value which gives an error code.
+the number of particles in the batch; otherwise, it returns zero to
+mark a successful end of simulation.
 
-Each simulation batch comprises of several data blocks that
-contain information about the particles and the subcuboid which
-contains those particles. Each of these blocks will be processed
-exclusively by one of the compute blocks, which could have multiple
-threads in them.
-
-The batch is created by starting at the first slot of the first
-block. We continue filling each slot in each of the blocks by taking
-particles from the particle repository, until all of the blocks are
-full. Furthermore, since all of the particles must be contained by 
-the same subcuboid, we also move forward to the next block when the
-particle retrieved from the particle repository has a smaller
-subcuboid index. Because the particle repository is implemented as a
-max-heap, where the subcuboid index is used as a comparison key, the
-|get_particle()| call will never return a particle with subcuboid index
-greater than the subcuboid index of the current block. The blocks,
-therefore, effectively group the particles that belong in the same
-subcuboid.
+A simulation batch is created by starting at the first slot of the
+first block. We continue filling each slot in each of the blocks by
+taking particles from the particles repository, until all of the
+blocks are full. Furthermore, since all of the particles in a block
+must be contained by the same subcuboid that is associated with that
+block, we move forward to the next block when the particle retrieved
+from the particles repository has a smaller subcuboid index than the
+subcuboid index associated with the current block. Since the particles 
+repository is implemented as a max-heap, where the subcuboid index is
+used as a comparison key, the |get_particle()| call will never return
+a particle with subcuboid index greater than the subcuboid index of
+the current block. The blocks, therefore, effectively group the
+particles that belong in the same subcuboid.
 
 @<Global functions@>=
 int create_batch(Batch *b)
 {
-static uint32_t call_count = 0;
 	Particle p; /* particle retrieved from heap */
 	uint32_t n; /* number of particles in batch */
 	uint32_t i, j; /* current block, and current slot within block */
 	i = j = 0; /* start at first slot of first block */
 	b->n = n = 0; /* reset block and particle count */
-	fprintf(stderr, "\ncb: %u\n", call_count++);
 	if (get_particle(&p)) {
 	    b->b[i].subcuboid = p.subcuboid; /* subcuboid index for the block */
 	    b->b[i].p[j++] = p; /* add particle to block */
 	    b->n++; /* increment number of active blocks */
 	    ++n;
-	    fprintf(stderr, "block %u: %u\n", i, p.id);
 	    while (get_particle(&p)) {
 	        if (b->b[i].subcuboid != p.subcuboid ||
 		    MAX_PRIMARIES_BLOCK == j) { /* change block */
@@ -315,7 +361,6 @@ static uint32_t call_count = 0;
 	        }
 	        b->b[i].p[j++] = p; /* add particle to block */
 		++n;
-		fprintf(stderr, "block %u: %u\n", i, p.id);
 	    }
     	    b->b[i].np = j; /* finalise current block */
 	    b->b[i].ns = 0;
@@ -323,6 +368,70 @@ static uint32_t call_count = 0;
 batch_is_full:
 	return n;
 }
+
+@ Function |update_repository(b)| updates the max-heap, following a
+successful simulation of the batch |b|, by moving primary and
+secondary particles from the active blocks in that batch to the
+particles repository.
+
+@<Global functions@>=
+int update_repository(Batch *b)
+{
+    uint16_t i, j;
+    Particle p;
+    for (i = 0; i < b->n; ++i) {
+	@<Move unprocessed primary particles to repository@>;
+	@<Process particles in the secondary particles array after a batch simulation@>;
+    }
+    return 0;
+}
+
+@ It is unnecessary and inefficient to move primary particles from the
+block back to the particles repository. However, for now, we take the
+simpler route. Future changes must attempt to update the blocks
+without having to removed unprocessed primary particles that are
+already in the block.
+
+@<Move unprocessed primary particles to repository@>=
+for (j = 0; j < b->b[i].np; ++j)
+    heap_insert(&particles, &b->b[i].p[j], true);
+
+@ After a block has been processed by the compute threads, all of the
+particles in the block's secondary particles array |s| are of three
+types: 1) primary particles that are no longer active, 2) primary
+particles that are still active, and 3) daughter particles generated
+by the physics processes. All of these particles must first be saved
+to the file system for later analysis. In the second and third cases,
+we prepare the particle for further processing, by updating its
+containing subcuboid using the $s$-field. After this, we only move the
+particle to the particles repository if it continues to stay inside
+the simulation world.
+
+@<Process particles in the secondary particles array after a batch simulation@>=
+for (j = 0; j < b->b[i].ns; ++j) {
+    p = b->b[i].s[j];
+    save_particle(&p);
+    if (p.active) {
+        @<Prepare particle for further processing@>;
+	if (OUTSIDE_WORLD == p.subcuboid) continue;
+	heap_insert(&particles, &p, true);
+    }
+}
+
+@ After a primary particle has been processed, or a secondary particle
+has been generated by physics processes, the particle's position
+vector |v| reflects its new location. Using this new location, and the 
+bounding box |bb| of the containing subcuboid, we must first update the
+particles $s$-field. The $s$-field is then used in combination with
+the index of the current subcuboid to determine the index of the new
+subcuboid that will now contain the particle. Once this is done,
+we reset the $s$-field for the next simulation batch.
+
+@<Prepare particle for further processing@>=
+update_sfield(&(p.s), &(subcuboids[p.subcuboid].bb), p.v);
+p.subcuboid = get_neighbour(p.subcuboid, p.s);
+p.s = 0x0; /* renew particle */
+p.id = 0; /* get a new identifier from particle repository */
 
 @ @<Global functions@>=
 int simulate_batch(Batch *b)
@@ -332,7 +441,6 @@ int simulate_batch(Batch *b)
 	    j = 0;
 	    k = 0;
 	    while(j < b->b[i].np) {
-		fprintf(stderr, "%3u ", b->b[i].p[j].id);
 	        b->b[i].s[k] = b->b[i].p[j];
 		b->b[i].s[k].active = false;
 		++j;
@@ -340,78 +448,10 @@ int simulate_batch(Batch *b)
 	    }
 	    b->b[i].ns = k;
 	    b->b[i].np = 0;
-	    fprintf(stderr, "%u\n", b->b[i].ns);
-
 	    ++i;
 	}
 	return 0;
 }
-
-@ @<Global functions@>=
-Particle gpbuff[MAX_STORE_BUFFER];
-uint32_t gpbuffsize = 0;
-FILE *gpfile = NULL;
-void flush_particles()
-{
-	uint32_t i;
-	for (i = 0; i < gpbuffsize; ++i) @<Print particle information to |gpfile|@>;
-	gpbuffsize = 0;
-}
-
-@ @<Print particle information to |gpfile|@>=
-fprintf(gpfile, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
-		"(%lf, %lf, %lf) %lf %lf %u %u %u\n",
-	gpbuff[i].id, gpbuff[i].v[0], gpbuff[i].v[1], gpbuff[i].v[2], gpbuff[i].s,
-	gpbuff[i].mo[0], gpbuff[i].mo[1], gpbuff[i].mo[2],
-	gpbuff[i].po[0], gpbuff[i].po[1], gpbuff[i].po[2],
-	gpbuff[i].m, gpbuff[i].c, gpbuff[i].pi, gpbuff[i].si, gpbuff[i].nd);
-
-@
-@d MAX_STORE_BUFFER 60 /* number of particles in output buffer */
-@<Global functions@>=
-int store_particle(Particle *p)
-{
-	if (gpbuffsize == MAX_STORE_BUFFER) flush_particles();
-	gpbuff[gpbuffsize++] = *p;
-	return 0;
-}
-
-@ Function |update_repository(b)| updates the particle repository
-following a successful batch simulation by moving primary and
-secondary particles from the active blocks in the batch to the
-max-heap.
-
-@<Global functions@>=
-int update_repository(Batch *b)
-{
-    int i, j;
-    Particle p;
-    for (i = 0; i < b->n; ++i) {
-	@<Move unprocessed primary particles to repository@>;
-        @<Move secondary particles to repository@>;
-    }
-    return 0;
-}
-
-@ @<Move unprocessed primary particles to repository@>=
-fprintf(stderr, "mp: %u, ", b->b[i].np);
-for (j = 0; j < b->b[i].np; ++j)
-    heap_insert(&particles, &b->b[i].p[j], true);
-
-@ @<Move secondary particles to repository@>=
-fprintf(stderr, "ms: %u\n", b->b[i].ns);
-for (j = 0; j < b->b[i].ns; ++j) {
-    p = b->b[i].s[j];
-    if (p.active) {
-        @<Update subcuboid for active primaries and generated secondaries@>;
-        heap_insert(&particles, &p, true);
-    } else store_particle(&p); /* write to disk */
-}
-
-@ @<Update subcuboid for active primaries and generated secondaries@>=
-update_sfield(&(p.s), &(subcuboids[p.subcuboid].bb), p.v);
-p.subcuboid = get_neighbour(p.subcuboid, p.s);
-p.s = 0x0; /* renew: $s$-field are changed by physics processes */
 
 @ Function |run_simulation()| runs the simulation iteratively by 
 creating and simulating batches in each iteration, until all of the
@@ -420,14 +460,12 @@ particles, both primary and secondary, have been processed. It returns
 @<Global functions@>=
 int run_simulation()
 {
-	int i, j = 0;
+	int i = 0;
 	Batch b;
-        fprintf(stderr, "Batch: %d\n", j++);
 	while ((i = create_batch(&b))) {
 	    if (i < 0) goto handle_error;
 	    if (simulate_batch(&b)) goto handle_error;
 	    else if (update_repository(&b)) goto handle_error;
-	    fprintf(stderr, "Batch: %d\n", j++);
 	}
 	return 0; /* simulation done */
 
@@ -443,26 +481,26 @@ handle_error:
 
 	/* first event */
 	ee = create_event();
-	vv = create_vertex(ee); vv->np = 15;
-	v = create_vertex(ee); v->np = 25;
-	v = create_vertex(ee); v->np = 15;
-	v = create_vertex(ee); v->np = 25;
+	vv = create_vertex(ee); vv->np = 5;
+	v = create_vertex(ee); v->np = 5;
+	v = create_vertex(ee); v->np = 5;
+	v = create_vertex(ee); v->np = 5;
 
 	/* second event */
 	e = create_event();
-	v = create_vertex(e); v->np = 15;
-	v = create_vertex(e); v->np = 25;
-	v = create_vertex(e); v->np = 15;
-	v = create_vertex(e); v->np = 25;	
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;	
 	e->next = ee;
 	ee = e;
 
 	/* third event */
 	e = create_event();
-	v = create_vertex(e); v->np = 45;
-	v = create_vertex(e); v->np = 35;
-	v = create_vertex(e); v->np = 25;
-	v = create_vertex(e); v->np = 15;	
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;
+	v = create_vertex(e); v->np = 5;	
 	e->next = ee;
 	ee = e;
 
@@ -485,5 +523,5 @@ handle_error:
 	    gc = 0;
         }
 	run_simulation();
-	flush_particles();
+	@<Flush particles in buffer to filesystem@>;
 }

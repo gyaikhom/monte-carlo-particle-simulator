@@ -70,10 +70,7 @@ void heap_insert_fast(ParticleRepository *pr, Particle *t)
 }
 
 @ @<Initialise particle to validate its existence inside heap@>=
-if (0 == t->id) {
-   fprintf(stderr, "init p: %u\n", pr->pid);
-   t->id = pr->pid++; /* give unique id to particle */
-}
+if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 
 @ Function |heap_remove_fast(pr,t)| removes the particle at the top of
 the max-heap representing the particles repository |pr|, and stores the
