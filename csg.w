@@ -2815,7 +2815,7 @@ exit_error:
 @<Include preamble for applications@>;
 int main(int argc, char *argv[])
 {
-	@<Test particle repository@>;
+	@<Test simulation batch@>;
 	@<Clean up the system@>;
 	return 0;
 }

@@ -65,8 +65,14 @@ void heap_insert_fast(ParticleRepository *pr, Particle *t)
 	      n = p; /* climb up the tree */
 	      p = n >> 1;
 	}
-	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
+	@<Initialise particle to validate its existence inside heap@>;
 	fp[n] = *t; /* place node */
+}
+
+@ @<Initialise particle to validate its existence inside heap@>=
+if (0 == t->id) {
+   fprintf(stderr, "init p: %u\n", pr->pid);
+   t->id = pr->pid++; /* give unique id to particle */
 }
 
 @ Function |heap_remove_fast(pr,t)| removes the particle at the top of
@@ -160,8 +166,8 @@ void heap_insert_paged(ParticleRepository *pr, Particle *t)
 	    n = p; /* climb up the tree */
 	    p = n >> 1;
        	}
+	@<Initialise particle to validate its existence inside heap@>;
         heap_find_pidx(pr, n, &n_pg, &n_idx);
-	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 	n_pg[n_idx] = *t;
 }
 
@@ -231,7 +237,7 @@ space in the heap, the heap will be expanded to fit |p|.
 
 The macro |heap_has_space(r)| may be used to check if there is empty
 space in |r| before making an insertion call.
-@d heap_has_space(r) ((r).count <= (r).max)
+@d heap_has_space(r) ((r).count < (r).max)
 @<Global functions@>=
 int heap_insert(ParticleRepository *r, Particle *p, bool e)
 {
