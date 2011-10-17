@@ -6,6 +6,14 @@
 @s Vertex int
 @s Particle int
 
+@s int8_t int
+@s uint8_t int
+@s int16_t int
+@s uint16_t int
+@s int32_t int
+@s uint32_t int
+
+
 @ Forward-declare types of several data structures, so that we can
 easily reshuffle the sections for easy exposition, while avoiding
 compiler error.

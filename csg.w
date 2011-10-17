@@ -346,7 +346,6 @@ corresponds to the selected solid. We only store the overall
 statistics to minimise the memory footprint for storing each tree
 node.
 
-@f uint16_t int
 @<House-keeping data@>=
 uint16_t num_primitive;
 uint16_t num_union;
@@ -1674,13 +1673,14 @@ must not be defined for the node. This is represented simply by making
 the upper bound smaller than the lower bound---we only need to do this
 for only one axis; here, we choose the $x$-axis.
 
+@d no_intersection_bb(left,right) ((left).u[0] < (right).l[0] ||
+    (left).u[1] < (right).l[1] ||
+    (left).u[2] < (right).l[2] ||
+    (right).u[0] < (left).l[0] ||
+    (right).u[1] < (left).l[1] ||
+    (right).u[2] < (left).l[2])
 @<Calculate bounding box of intersection@>=
-if (l->bb.u[0] < r->bb.l[0] ||
-    l->bb.u[1] < r->bb.l[1] ||
-    l->bb.u[2] < r->bb.l[2] ||
-    r->bb.u[0] < l->bb.l[0] ||
-    r->bb.u[1] < l->bb.l[1] ||
-    r->bb.u[2] < l->bb.l[2]) { /* no intersection */
+if (no_intersection_bb(l->bb,r->bb)) {
         n->bb.l[0] = 1;
         n->bb.u[0] = -1;
 } else {
@@ -2613,14 +2613,18 @@ leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
 
 @*1 Evaluation of CSG boolean expression.
 
-This program checks if a three-dimensional point lies inside a
-solid, where the solid is represented by a postfix boolean
-expression. The CSG tree must first be normalised to sum-of-product
-form before deriving the boolean expression. This normalisation
-@^CSG normalisation@> can be done using the algorithm described by
-Jack Goldfeather, Steven Molnar, Greg Turk, and Henry Fuchs in {\sl
-Near Real-Time CSG Rendering Using Tree Normalization and Geometric
-Pruning} [IEEE Computer Graphics and Applications, pp. 20--28, May {\bf 1989}].
+This section is concerned with checking if a three-dimensional point
+lies inside a solid, where the solid is represented by a postfix
+boolean expression.
+
+NOTE:
+The performance of this evaluation can be improved significantly by
+first normalising the CSG tree into sum-of-product form before
+deriving the boolean expression. Normalisation to sum-of-product form
+can be done using the algorithm described by Jack Goldfeather, Steven
+Molnar, Greg Turk, and Henry Fuchs in {\sl Near Real-Time CSG
+Rendering Using Tree Normalization and Geometric Pruning} [IEEE
+Computer Graphics and Applications, pp. 20--28, May {\bf 1989}].
 
 @d MAX_NUM_CSG_PRIMITIVES 1024
 @d MAX_NUM_CSG_NODES 2047 /* $2^{\lceil \lg n\rceil + 1} - 1$ */

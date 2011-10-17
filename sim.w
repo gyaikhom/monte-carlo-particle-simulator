@@ -105,7 +105,6 @@ associated with a particle gun, however; they are stored with respect
 to an event. Hence, an event can have multiple vertices associated
 with it. These are stored as a linked-list.
 
-@f uint32_t int
 @<Type definitions@>=
 typedef struct vertex_struct {
        Vector v; /* particle gun position vector */

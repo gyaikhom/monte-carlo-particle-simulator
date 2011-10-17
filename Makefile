@@ -1,4 +1,4 @@
-SOURCES=mcs.w common.w csg.w error.w main.w matrix.w mem.w sim.w vector.w world.w heap.w
+SOURCES=mcs.w common.w csg.w error.w main.w matrix.w mem.w sim.w vector.w world.w heap.w table.w
 
 test_input: test_input.c
 	gcc -g -Wall -o test_input test_input.c -lm

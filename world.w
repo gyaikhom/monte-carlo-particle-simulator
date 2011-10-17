@@ -142,7 +142,6 @@ equivalent to 16 table elements. This works by allocating an index
 lookup-table, which maps the first |MAX_SFIELD| $s$ values to an index
 that points to one of the 26 valid neighbouring cuboids.
 
-@f int8_t int
 @d MAX_SUBCUBOIDS 1024
 @d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
@@ -175,7 +174,6 @@ world was divided into |l|, |m| and |n| equal parts along the $x$, $y$
 and $z$ axes. There will be a total of $|l| \times |m| \times |n|$
 subcuboids, which this function assumes is less than |MAX_SUBCUBOIDS|.
 
-@f uint8_t int
 @d cuboid_assign(r,s,v) neighbour_table[(r)][neighbour_idx_table[(int)(s)]] = (v)
 @<Global functions@>=
 void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
