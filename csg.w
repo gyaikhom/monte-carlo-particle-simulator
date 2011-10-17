@@ -2819,7 +2819,7 @@ exit_error:
 @<Include preamble for applications@>;
 int main(int argc, char *argv[])
 {
-	@<Test subcuboid search@>;
+	@<Test subcuboid functionalities@>;
 	@<Clean up the system@>;
 	return 0;
 }
