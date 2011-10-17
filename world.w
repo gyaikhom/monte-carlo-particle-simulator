@@ -11,16 +11,7 @@ decomposes the simulation world into disjointed volumes where
 particles can be tracked independently of other particles in other
 subcuboids.
 
-@
-@d MAX_SOLIDS_SUBCUBOID 100 /* must depend on available memory */
-@<Type definitions@>=
-typedef struct subcuboid_struct {
-	uint32_t n; /* number of solids */
-	uint32_t s[MAX_SOLIDS_SUBCUBOID]; /* indices in solid array */
-	BoundingBox bb;
-} Subcuboid;
-
-@ The simulation world cuboid must be axis-aligned with the world
+The simulation world cuboid must be axis-aligned with the world
 coordinate frame. It is decomposed into subcuboids by dividing
 along each of the three axes. Division can be carried out in any
 combinations, however, all of the subcuboids resulting from a division
@@ -289,7 +280,6 @@ subcuboid.
 
 @<Global variables@>=
 double *subcuboid_search_tree; /* stores three binary search trees */
-Subcuboid subcuboids[MAX_SUBCUBOIDS]; /* TODO: fill up the values */
 
 @ Every node in the binary search tree stores the upper bound of each
 subcuboid in the selected axis, except for the upper bound that
@@ -483,3 +473,49 @@ test_subcuboid_search_failed:
        printf("Failure at (%lu, %lu, %lu): %lu instead of %lu for (%lf, %lf, %lf)\n",
        i, j, k, r, e, v[0], v[1], v[2]);
 test_subcuboid_search_done:
+
+@ @<Type definitions@>=
+struct {
+    BoundingBox bb;
+} subcuboids[MAX_SUBCUBOIDS]; /* subcuboids table */
+
+@ @<Global functions@>=
+void create_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
+{
+	uint32_t i, j, k, c;
+	double dx, dy, dz, x, y, z;
+	dx = (bb->u[0] - bb->l[0]) / l;
+	dy = (bb->u[1] - bb->l[1]) / m;
+	dz = (bb->u[2] - bb->l[2]) / n;
+        x = bb->l[0];
+	for (i = 0; i < l; ++i) {
+            y = bb->l[1];
+	    for (j = 0; j < m; ++j) {
+                z = bb->l[2];
+	        for (k = 0; k < n; ++k) {
+	            c = i * m * n + j * n + k;
+	            subcuboids[c].bb.l[0] = x;
+		    subcuboids[c].bb.l[1] = y;
+		    subcuboids[c].bb.l[2] = z;
+	            x += dx;
+	            y += dy;
+	            z += dz;
+	            subcuboids[c].bb.u[0] = x;
+	            subcuboids[c].bb.u[1] = y;
+                    subcuboids[c].bb.u[2] = z;
+                }
+            }
+     	}
+}
+
+@ @<Global functions@>=
+void print_subcuboids_table(FILE *f)
+{
+	uint32_t i;
+	fprintf(f, "Subcuboids table\n");
+	for (i = 0; i < num_subcuboids; ++i)
+	    fprintf(f, "%u [%lf, %lf, %lf : %lf, %lf, %lf]\n",
+	    i, subcuboids[i].bb.l[0], subcuboids[i].bb.l[1],
+	    subcuboids[i].bb.l[2], subcuboids[i].bb.u[0],
+	    subcuboids[i].bb.u[1], subcuboids[i].bb.u[2]);
+}
