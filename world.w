@@ -240,7 +240,7 @@ if (zb == 0x10) {
 void print_neighbour_table(FILE *f)
 {
 	int i, j, c, k = MAX_SUBCUBOIDS + 1;
-	for (i = 0; i < MAX_SUBCUBOIDS; ++i) {
+	for (i = 0; i < num_subcuboids; ++i) {
 	    for (j = 0; j < NUM_NEIGHBOURS; ++j) {
 	        c = neighbour_table[i][j];
 	    	if (c < k) fprintf(f, "%3d ", c);
@@ -428,6 +428,54 @@ c[i] = *(unsigned long *) &t[j];
 @ @<Move to the next subcuboid search tree@>=
 t += 2 * size[i];
 
+@ @<Type definitions@>=
+struct {
+    BoundingBox bb;
+} subcuboids[MAX_SUBCUBOIDS]; /* subcuboids table */
+
+@ @<Global functions@>=
+void create_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
+{
+	uint32_t i, j, k, c;
+	double dx, dy, dz, x[2], y[2], z;
+	dx = (bb->u[0] - bb->l[0]) / l;
+	dy = (bb->u[1] - bb->l[1]) / m;
+	dz = (bb->u[2] - bb->l[2]) / n;
+        x[0] = bb->l[0];
+	for (i = 0; i < l; ++i) {
+            x[1] = x[0] + dx;
+            y[0] = bb->l[1];
+	    for (j = 0; j < m; ++j) {
+	        y[1] = y[0] + dy;
+                z = bb->l[2];
+	        for (k = 0; k < n; ++k) {
+	            c = i * m * n + j * n + k;
+	            subcuboids[c].bb.l[0] = x[0];
+		    subcuboids[c].bb.l[1] = y[0];
+		    subcuboids[c].bb.l[2] = z;
+	            z += dz;
+	            subcuboids[c].bb.u[0] = x[1];
+	            subcuboids[c].bb.u[1] = y[1];
+                    subcuboids[c].bb.u[2] = z;
+                }
+	        y[0] += dy;
+            }
+            x[0] += dx;
+     	}
+}
+
+@ @<Global functions@>=
+void print_subcuboids_table(FILE *f)
+{
+	uint32_t i;
+	fprintf(f, "Subcuboids table\n");
+	for (i = 0; i < num_subcuboids; ++i)
+	    fprintf(f, "%u [%lf, %lf, %lf : %lf, %lf, %lf]\n",
+	    i, subcuboids[i].bb.l[0], subcuboids[i].bb.l[1],
+	    subcuboids[i].bb.l[2], subcuboids[i].bb.u[0],
+	    subcuboids[i].bb.u[1], subcuboids[i].bb.u[2]);
+}
+
 @ @<Test subcuboid search@>=
 {
 	unsigned long l, m, n, i, j, k, e, r;
@@ -449,6 +497,11 @@ t += 2 * size[i];
 	build_subcuboid_trees(&bb, l, m, n);
 	print_subcuboid_search_trees(stdout, subcuboid_search_tree);
 	@<Search subcuboid for all points in each of the subcuboids@>;
+
+	build_neighbour_table(l, m, n);
+	create_subcuboids_table(&bb, l, m, n);
+	print_neighbour_table(stdout);
+	print_subcuboids_table(stdout);
 }
 
 @ @<Search subcuboid for all points in each of the subcuboids@>=
@@ -473,49 +526,3 @@ test_subcuboid_search_failed:
        printf("Failure at (%lu, %lu, %lu): %lu instead of %lu for (%lf, %lf, %lf)\n",
        i, j, k, r, e, v[0], v[1], v[2]);
 test_subcuboid_search_done:
-
-@ @<Type definitions@>=
-struct {
-    BoundingBox bb;
-} subcuboids[MAX_SUBCUBOIDS]; /* subcuboids table */
-
-@ @<Global functions@>=
-void create_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
-{
-	uint32_t i, j, k, c;
-	double dx, dy, dz, x, y, z;
-	dx = (bb->u[0] - bb->l[0]) / l;
-	dy = (bb->u[1] - bb->l[1]) / m;
-	dz = (bb->u[2] - bb->l[2]) / n;
-        x = bb->l[0];
-	for (i = 0; i < l; ++i) {
-            y = bb->l[1];
-	    for (j = 0; j < m; ++j) {
-                z = bb->l[2];
-	        for (k = 0; k < n; ++k) {
-	            c = i * m * n + j * n + k;
-	            subcuboids[c].bb.l[0] = x;
-		    subcuboids[c].bb.l[1] = y;
-		    subcuboids[c].bb.l[2] = z;
-	            x += dx;
-	            y += dy;
-	            z += dz;
-	            subcuboids[c].bb.u[0] = x;
-	            subcuboids[c].bb.u[1] = y;
-                    subcuboids[c].bb.u[2] = z;
-                }
-            }
-     	}
-}
-
-@ @<Global functions@>=
-void print_subcuboids_table(FILE *f)
-{
-	uint32_t i;
-	fprintf(f, "Subcuboids table\n");
-	for (i = 0; i < num_subcuboids; ++i)
-	    fprintf(f, "%u [%lf, %lf, %lf : %lf, %lf, %lf]\n",
-	    i, subcuboids[i].bb.l[0], subcuboids[i].bb.l[1],
-	    subcuboids[i].bb.l[2], subcuboids[i].bb.u[0],
-	    subcuboids[i].bb.u[1], subcuboids[i].bb.u[2]);
-}
