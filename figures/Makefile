@@ -4,5 +4,6 @@ all:
 	dvips figs.dvi;
 
 clean:
-	rm -f *~ *.dvi *.ps *.pdf *.mpx *.log
+	rm -f *~ *.dvi *.ps *.mpx *.log *.mps *.aux
+
 
