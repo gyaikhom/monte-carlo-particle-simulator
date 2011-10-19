@@ -502,6 +502,17 @@ void print_neighbour_table(FILE *f)
 	}	
 }
 
+@ The usage of the neighbourhood table makes the assumption that
+particles escaping a subcuboid will be found in one of the 26
+surrounding subcuboids. However, this assumption may not apply if
+the distance that a particle travels after a step application exceeds
+the dimension of the subcuboid in one of the three axes. In these
+cases, we must fall-back to finding the subcuboid using
+|find_subcuboid(t,v)|. In most cases, the subcuboid dimensions will be
+larger than the distance travelled, however, it is important to note
+the exception. After every step, we must check this distance.
+
+
 @ The following code segment tests the functionalities provided by
 this sections.
 
