@@ -5,22 +5,18 @@ stored in a particles repository. The particles are grouped according
 to their containing subcuboid, so that each group with the same solids
 can be simulated in one batch.
 
-@<Type definitions@>=
-typedef struct particle_struct Particle;
-enum {
-	HEAP_SUCCESS = 0,
-	HEAP_EMPTY,
-	HEAP_FULL,
-	HEAP_ERROR_ALLOC,
-	HEAP_ERROR_UNDEFINED
-};
-
-@ The particle repository is implemented as a paged binary
+The particle repository is implemented as a paged binary
 {\sl max-heap} (we could have use a {\sl min-heap}, but this doesn't
 matter), which is allowed to grow. The heap is maintained as a linked
 list of heap pages, where each heap page is a fixed array of
 particles, with the first array element used as a
 pointer-to-a-pointer to maintain the linked list of heap pages.
+
+\bigskip
+
+\centerline{\epsfig{file=figures/particle-repository.mps,scale=1}}
+
+\smallskip
 
 The paging only becomes active when the first allocated heap page is
 insufficient to fulfill the required number of particles. Since paging
@@ -32,6 +28,7 @@ suffix assume paging.
 
 @d HEAP_PAGE_SIZE 4 /* 4096 bytes per page, including linked list `next' pointer */
 @<Type definitions@>=
+typedef struct particle_struct Particle;
 typedef struct particle_repository_struct {
 	uint32_t pid; /* particle identifier to use next */
 	uint32_t count; /* current number of particles in heap */
@@ -65,12 +62,9 @@ void heap_insert_fast(ParticleRepository *pr, Particle *t)
 	      n = p; /* climb up the tree */
 	      p = n >> 1;
 	}
-	@<Initialise particle to validate its existence inside heap@>;
+	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 	fp[n] = *t; /* place node */
 }
-
-@ @<Initialise particle to validate its existence inside heap@>=
-if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
 
 @ Function |heap_remove_fast(pr,t)| removes the particle at the top of
 the max-heap representing the particles repository |pr|, and stores the
@@ -163,7 +157,7 @@ void heap_insert_paged(ParticleRepository *pr, Particle *t)
 	    n = p; /* climb up the tree */
 	    p = n >> 1;
        	}
-	@<Initialise particle to validate its existence inside heap@>;
+	if (0 == t->id) t->id = pr->pid++; /* give unique id to particle */
         heap_find_pidx(pr, n, &n_pg, &n_idx);
 	n_pg[n_idx] = *t;
 }
@@ -213,6 +207,16 @@ void heap_remove_paged(ParticleRepository *pr, Particle *t)
             n_pg[n_idx] = temp; /* place node */
 	}
 }
+
+@ The following are the return codes that must be checked by the caller of the following functions.
+@<Type definitions@>=
+enum {
+	HEAP_SUCCESS = 0,
+	HEAP_EMPTY,
+	HEAP_FULL,
+	HEAP_ERROR_ALLOC,
+	HEAP_ERROR_UNDEFINED
+};
 
 @ Function |heap_expand(r)| expands the heap |r| by adding a new page
 at the end of the linked list.
