@@ -44,7 +44,7 @@ struct {
 } c[subcuboids_table_size]; /* subcuboids table */
 
 @ @<Global functions@>=
-void fill_geometry_table_with_csg(GeometryTable *g, CSG_Node *n) {
+void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
     if (NULL == n) return;
     if (SOLID == n->op) {
         matrix_copy(g->p[g->ip].a, n->affine);
@@ -53,7 +53,7 @@ void fill_geometry_table_with_csg(GeometryTable *g, CSG_Node *n) {
 	g->pf[g->ipf++] = g->ip++;
         return;
     }
-    fill_geometry_table_with_csg(g, n->internal.left);
+    fill_geotab_with_csg(g, n->internal.left);
     switch(n->op) {
     case UNION:
         g->pf[g->ipf++] = BOOLEAN_UNION;
@@ -66,11 +66,11 @@ void fill_geometry_table_with_csg(GeometryTable *g, CSG_Node *n) {
         break;
     default: ;
     }
-    fill_geometry_table_with_csg(g, n->internal.right);
+    fill_geotab_with_csg(g, n->internal.right);
 }
 
 @ @<Global functions@>=
-void create_geometry_table(GeometryTable *g)
+void create_geotab(GeometryTable *g)
 {
     int i, j;
     CSG_Node *s;
@@ -89,7 +89,7 @@ for (i = 0; i < subcuboids_table_size; ++i) g->c[i].n = 0;
 @ @<Fill table entries for this solid@>=
 if (NULL == s) continue;
 g->s[g->is].s = g->ipf;
-fill_geometry_table_with_csg(g, s);
+fill_geotab_with_csg(g, s);
 g->s[g->is].e = g->ipf;
 
 @ @<Add solid to subcuboid if contained by subcuboid@>=
