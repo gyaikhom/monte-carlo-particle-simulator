@@ -2789,10 +2789,6 @@ exit_error:
 	fprintf(stderr, "while evaluating '%d' at index %d\n",
 	s->c[i], i);
 
-@*1 Find the list of potential solid containers.
-
-@*1 Testing.
-
 @ @<Test geometry input@>=
 {
         FILE *f;
@@ -2811,17 +2807,8 @@ exit_error:
 	       @<Discard comments, white spaces and empty lines@>;
                @<Process containment test-case@>;
         }
+error_invalid_command:
 	fclose(f);
-}
-
-@ @(test_containment.c@>=
-@h
-@<Include preamble for applications@>;
-int main(int argc, char *argv[])
-{
-	@<Test subcuboid functionalities@>;
-	@<Clean up the system@>;
-	return 0;
 }
 
 @ @<Process containment test-case@>=
@@ -2831,7 +2818,7 @@ if (c == 'i' || c == 'o' || c == 's') {
 } else {
         fprintf(stderr, "Invalid test command '%c' at line %u\n",
 	c, input_file_current_line);
-        goto error;
+        goto error_invalid_command;
 }
 
 @ @<Read parameters for the test-case@>=

@@ -63,7 +63,7 @@ fprintf(stdout, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
 	p->m, p->c, p->pi, p->si, p->nd);
 
 @ @<Print particle information to |gpfile|@>=
-fprintf(gpfile, "%u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
+fprintf(gpfile, "%6u (%lf, %lf, %lf) %u (%lf, %lf, %lf) "
 		"(%lf, %lf, %lf) %lf %lf %u %u %u\n",
 	gpbuff[i].id, gpbuff[i].v[0], gpbuff[i].v[1], gpbuff[i].v[2], gpbuff[i].s,
 	gpbuff[i].mo[0], gpbuff[i].mo[1], gpbuff[i].mo[2],

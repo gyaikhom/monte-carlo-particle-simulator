@@ -3,6 +3,12 @@
 @p
 @h
 @<Include preamble for applications@>@/
+int main(int argc, char *argv[])
+{
+	@<Test geometry input@>;
+	@<Clean up the system@>;
+	return 0;
+}
 
 @ @<Include preamble for applications@>=
 @<Include system libraries@>@/
@@ -32,3 +38,4 @@ mem_free(mem_p);
 
 @ @<Global variables@>=
 Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
+
