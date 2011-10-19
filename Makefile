@@ -6,12 +6,8 @@ mcs: mcs.c
 mcs.c: ${SOURCES}
 	ctangle mcs.w
 
-mcs.pdf: mcs.ps
-	pstopdf mcs.ps
-
-mcs.ps: mcs.tex
-	tex mcs.tex
-	dvips mcs.dvi
+mcs.pdf: mcs.tex
+	pdftex mcs.tex
 
 mcs.tex: ${SOURCES}
 	cweave mcs.w

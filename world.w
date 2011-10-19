@@ -385,7 +385,7 @@ neighbouring subcuboids. Direct mapping is therefore space inefficient.
 
 \bigskip
 
-\centerline{\epsfig{file=figures/neighbour-direct.mps,scale=1}}
+\centerline{\epsfig{file=figures/neighbour-direct,scale=1}}
 
 \bigskip
 
@@ -396,7 +396,7 @@ that points to one of the 26 valid neighbouring subcuboids.
 
 \bigskip
 
-\centerline{\epsfig{file=figures/neighbour-tiered.mps,scale=1}}
+\centerline{\epsfig{file=figures/neighbour-tiered,scale=1}}
 
 @ We now allocate a two-tiered neighbourhood table.
 @d MAX_SUBCUBOIDS 1024

@@ -14,7 +14,7 @@ pointer-to-a-pointer to maintain the linked list of heap pages.
 
 \bigskip
 
-\centerline{\epsfig{file=figures/particle-repository.mps,scale=1}}
+\centerline{\epsfig{file=figures/particle-repository,scale=1}}
 
 \smallskip
 
