@@ -6,12 +6,16 @@ mcs: mcs.c
 mcs.c: ${SOURCES}
 	ctangle mcs.w
 
-mcs.pdf: mcs.tex
-	pdftex mcs.tex
+mcs.pdf: mcs.ps
+	pstopdf mcs.ps
+
+mcs.ps: mcs.tex
+	tex mcs.tex
+	dvips mcs.dvi
 
 mcs.tex: ${SOURCES}
 	cweave mcs.w
 
 clean:
-	rm -f *~ mcs.tex *.scn *.log *.toc *.idx *.c mcs
+	rm -f *~ mcs.tex *.ps *.dvi *.pdf *.scn *.log *.toc *.idx *.c mcs
 
