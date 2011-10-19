@@ -490,7 +490,7 @@ neighbourhood table to the I/O stream pointed to by |f|.
 @<Global functions@>=
 void print_neighbour_table(FILE *f)
 {
-	int i, j, c, k = MAX_SUBCUBOIDS + 1;
+	uint32_t i, j, c, k = MAX_SUBCUBOIDS + 1;
 	fprintf(f, "Subcuboid neighbourhood table:\n");
 	for (i = 0; i < num_subcuboids; ++i) {
 	    for (j = 0; j < NUM_NEIGHBOURS; ++j) {
