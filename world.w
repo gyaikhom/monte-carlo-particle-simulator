@@ -383,10 +383,9 @@ allocate |MAX_SFIELD| table elements per row. However, out of this row
 only 26 elements actually contain a valid index to one of the
 neighbouring subcuboids. Direct mapping is therefore space inefficient.
 
-
 \bigskip
 
-\centerline{\epsfig{file=figures/neighbour,scale=0.5}}
+\centerline{\epsfig{file=figures/neighbour-direct.mps,scale=1}}
 
 \bigskip
 
@@ -395,6 +394,11 @@ equivalent to 16 table elements. This works by allocating an index
 lookup-table, which maps the first |MAX_SFIELD| $s$ values to an index
 that points to one of the 26 valid neighbouring subcuboids.
 
+\bigskip
+
+\centerline{\epsfig{file=figures/neighbour-tiered.mps,scale=1}}
+
+@ We now allocate a two-tiered neighbourhood table.
 @d MAX_SUBCUBOIDS 1024
 @d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
