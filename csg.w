@@ -367,7 +367,7 @@ hash table, where the name of the node is used as the hash key.
 @d MAX_CSG_NODES 65536 /* maximum number of CSG nodes allowed */
 @<Type definitions@>=
 typedef struct {
-       @<House-keeping data@>;
+       uint16_t stat[7]; /* geometry statistics */
        CSG_Node *root; /* pointer to the CSG root */
        CSG_Node *table[MAX_CSG_NODES]; /* hash table of nodes */
 } NodesRepository;
@@ -394,19 +394,15 @@ bool create_nodes_repository()
     return true;
 }
 
-@ Inside the nodes repository, we only maintain the overall statistics
-concerning the number of primitives, operators and solids. If we wish
-to obtain statistical information for a given solid, this information
-may be derived at runtime by traversing the CSG tree which corresponds
-to the selected solid. The array stores in order the number of:
-primitives, unions, intersections, differences, translations,
-rotations and scalings.
-
-@<House-keeping data@>=
-uint16_t stat[7];
-
 @ Function |print_geom_statistics(f)| prints the geometry statistics
 in the nodes repository to the I/O stream pointed to by |f|.
+Inside the nodes repository, we only maintain the overall statistics
+concerning the number of primitives, operators and solids. If we wish
+to obtain statistics for a specific solid, it may be derived at
+by traversing the CSG tree that corresponds to the selected solid. The
+array stores in order the number of: primitives, unions,
+intersections, differences, translations, rotations and scalings.
+
 @<Global functions@>=
 void print_geom_statistics(FILE *f)
 {
@@ -439,40 +435,33 @@ long hash(const char *name, long ubound)
         return (h % ubound);
 }
 
-@ We store and retrieve CSG nodes using the following functions:
-
-$$\vcenter{\halign{\hfil # & # \hfil\cr
-|register_csg_node(n,s)| & Register the CSG node |n| using the name |s|, and\cr
-|find_csg_node(s)| & Find the CSG node that has the name |s|.\cr
-}}$$
-
-Each of these functions uses a pseudo-random hash value $h$, which
-is calculated from a null-terminated character string. If $q$
-represents the number of nodes in the CSG tree, then $0 \le h < q$.
-
-@ The function |register_solid| registers a primitive or
-intermediate solid using their unique name. If the supplied name is
-already in use, it returns |NULL| to notify registration failure;
-otherwise, it returns a pointer to the solid to indicate success. 
+@ Function |register_csg_node(n,s)| registers into the nodes
+repository the CSG node pointed to by |n| using the unique name
+|s|. If any of the inputs are invalid, or if the supplied name is
+already in use, it returns |false| to notify registration failure; 
+otherwise, it returns |true| to indicate success. 
 
 @<Global functions@>=
-bool register_solid(CSG_Node *solid, char *name) {
+bool register_csg_node(CSG_Node *n, char *s) {
 	 long h;
-	 if (NULL == solid || NULL == name) return false;
-	 h = hash(name, MAX_CSG_NODES);
+	 if (NULL == n || NULL == s) return false;
+	 h = hash(s, MAX_CSG_NODES);
 	 if (NULL == nodes_repository->table[h]) {
-                 strcpy(solid->name, name);
-	         nodes_repository->table[h] = solid;
-		 nodes_repository->root = solid; /* set as current root */
+                 strcpy(n->name, s);
+	         nodes_repository->table[h] = n;
+		 nodes_repository->root = n; /* set as current root */
 		 return true;
-	 } else return false;
+	 }
+	 return false;
 }
 
-@ Find the solid associated with a specified |name|.
+@ Function |find_csg_node(s)| finds in the nodes repository the CSG
+node named |s|. If the input is invalid, or the node does not exists,
+NULL is returned; otherwise, a pointer to the node is returned.
 @<Global functions@>=
-CSG_Node *find_csg_node(char *name) {
-	 if (NULL == name) return NULL;
-	 return nodes_repository->table[hash(name, MAX_CSG_NODES)];
+CSG_Node *find_csg_node(char *s) {
+	 if (NULL == s) return NULL;
+	 return nodes_repository->table[hash(s, MAX_CSG_NODES)];
 }
 
 @*2 The geometry input file.
@@ -513,7 +502,7 @@ field. Finally, every command must be terminated by a $\langle newline
 \bigskip
 
 {\tt
-\hash\ Define primitive solids
+\% Define primitive solids
 
 T ("Torus A" 0.0 359.999999 10.0 2.0)
 
@@ -523,7 +512,7 @@ C ("Cylinder B" 10.0 20.0)
 
 \
 
-\hash\ Operation on primitive solids
+\% Operation on primitive solids
 
 u ("U1" "Torus A" "Cylinder A")
 
@@ -532,6 +521,10 @@ d ("D1" "U1" "Cylinder B")
 t ("T1" "D1" 10.0 50.0 20.0)
 
 s ("S1" "T1" 10.0 20.0 30.0)
+
++ ("SOLID") \% register CSG tree as a solid
+
+* (-100.0 -100.0 -100.0 100.0 100.0 100.0) \% define the simulation world
 }
 
 \bigskip
@@ -541,10 +534,8 @@ file named |n|.
 @<Global functions@>=
 bool read_geometry(const char *n)
 {
-	FILE *f;
-	char c;
         @<Local variables: |read_geometry()|@>;
-	@<Open input geometry file@>;
+	@<Open input geometry file and initialise nodes repository@>;
 	while (EOF != (c = fgetc(f))) {
 		@<Discard comments, white spaces and empty lines@>;
 	        @<Process input command@>;
@@ -561,13 +552,17 @@ the file that is currently being processed, so that if we wish, we
 might generate the name of the file at runtime (e.g., by appending
 prefix and suffix strings to a base filename).
 
-@<Open input geometry file@>=
+@<Open input geometry file and initialise nodes repository@>=
 input_file_current_line = 0;
 strcpy(input_file_name, n); /* generate filename */
 f = fopen(input_file_name, "r");
 if (NULL == f) {
         fprintf(stderr, "Failed to open input geometry file: %s\n",
 	        input_file_name);
+	return 1;
+}
+if (false == create_nodes_repository()) {
+        fprintf(stderr, "Failed to initialise nodes repository\n");
 	return 1;
 }
 
@@ -801,7 +796,7 @@ if (NULL == leaf_node) {
         leaf_node->op = SOLID; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
 	leaf_node->parent = NULL;
-	register_solid(leaf_node, op_solid);
+	register_csg_node(leaf_node, op_solid);
 }
 
 @ The parameters for the sphere geometry are supplied in the following
@@ -1008,7 +1003,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = UNION; /* this is an internal node */
 	@<Set parents, and pointers to intermediate solids@>;
-	register_solid(internal_node, op_target); /* register operator
+	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
 	++(nodes_repository->stat[1]);
 }
@@ -1075,7 +1070,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = INTERSECTION; /* this is an internal node */
         @<Set parents, and pointers to intermediate solids@>;
-	register_solid(internal_node, op_target); /* register operator
+	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
 	++(nodes_repository->stat[2]);
 }
@@ -1134,7 +1129,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = DIFFERENCE; /* this is an internal node */
 	@<Set parents, and pointers to intermediate solids@>;
-	register_solid(internal_node, op_target); /* register operator
+	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
 	++(nodes_repository->stat[3]);
 }
@@ -1229,7 +1224,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
-	register_solid(internal_node, op_target);
+	register_csg_node(internal_node, op_target);
 	++(nodes_repository->stat[4]);
 }
 
@@ -1327,7 +1322,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = ROTATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
-	register_solid(internal_node, op_target);
+	register_csg_node(internal_node, op_target);
 	++(nodes_repository->stat[5]);
 }
 
@@ -1413,7 +1408,7 @@ if (NULL == internal_node) {
         internal_node->op = SCALE; /* this is an operator internal
 	node */
         @<Set target, parameters and parent pointers@>;
-	register_solid(internal_node, op_target);
+	register_csg_node(internal_node, op_target);
 	++(nodes_repository->stat[6]);
 }
 
@@ -2569,6 +2564,8 @@ txz + sy & tyz - sx & tz^2 + c & 0.0\cr
 \cos(\theta)$.
 
 @<Local variables: |read_geometry()|@>=
+FILE *f;
+char c;
 double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
 
 @ The matrix $R^{-1}$ is stored in the two dimensional
