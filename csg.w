@@ -1767,6 +1767,12 @@ CSG_Node *affine_list; /* a record of the affine transformations */
 the paths starting at the root of the CSG tree |r| and stores the
 accumulated affine transformation matrix in each of the nodes.
 
+\bigskip
+
+\centerline{\epsfig{file=figures/affine-merge,scale=1}}
+
+\bigskip
+
 The merge begins by first merging transformations starting at the
 current node. As long as the left-hand child node is an affine
 transformation node, we accumulate the affine transformation into |t|,
@@ -1790,10 +1796,8 @@ CSG_Node *merge_affine(CSG_Node *r)
 	    @<Merge sequence of affine transformation nodes@>;
 	    @<Detach affine transformations@>;
 	}
-	if (SOLID != r->op) { /* |r| now points to the non-affine node */
-	    @<Merge affine transformations on subtrees@>;
-	}
-	return r;
+        @<Merge affine transformations on subtrees@>;
+	return r; /* return the first non-affine transformation node */
 }
 
 @ @<Merge sequence of affine transformation nodes@>=
@@ -1816,10 +1820,12 @@ r->affine_list = al;
 r->parent = p;
 
 @ @<Merge affine transformations on subtrees@>=
-t = merge_affine(r->internal.left);
-if (NULL != t) r->internal.left = t;
-t = merge_affine(r->internal.right);
-if (NULL != t) r->internal.right = t;
+if (SOLID != r->op) {
+    t = merge_affine(r->internal.left);
+    if (NULL != t) r->internal.left = t;
+    t = merge_affine(r->internal.right);
+    if (NULL != t) r->internal.right = t;
+}
 
 @ Function to move affine transformation matrix to the primitives
 @<Global functions@>=

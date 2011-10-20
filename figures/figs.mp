@@ -1,10 +1,11 @@
+\input boxes
 vardef arrowhead expr p =
-  save A,u,a,b; pair A,u; path a,b;
-  A := point length(p) of p;
-  u := unitvector(direction length(p) of p);
-  a := A{-u} .. (A - ahlength*u rotated 20);
-  b := A{-u} .. (A - ahlength*u rotated -20);
-  ( a & reverse(a) & b & reverse(b) ) --cycle
+save A,u,a,b; pair A,u; path a,b;
+A := point length(p) of p;
+u := unitvector(direction length(p) of p);
+a := A{-u}..(A - ahlength*u rotated 20);
+b := A{-u}..(A - ahlength*u rotated -20);
+( a & reverse(a) & b & reverse(b) ) --cycle
 enddef;
 
 outputtemplate := "neighbour-direct.mps";
@@ -157,5 +158,71 @@ beginfig(1);
   endfor
 endfig;
 
+outputtemplate := "affine-merge.mps";
+beginfig(1);
+  numeric q;
+  q := 0.75cm;
+  circleit.u1(btex $\cup$ etex);
+  circleit.u2(btex $\cup$ etex);
+  circleit.i1(btex $\cap$ etex);
+  circleit.i2(btex $\cap$ etex);
+  circleit.i3(btex $\cap$ etex);
+  circleit.t1(btex T etex);
+  circleit.t2(btex T etex);
+  circleit.r1(btex R etex);
+  circleit.r2(btex R etex);
+  circleit.s1(btex S etex);
+  circleit.p0(btex 0 etex);
+  circleit.p1(btex 1 etex);
+  circleit.p2(btex 2 etex);
+  circleit.p3(btex 3 etex);
+  circleit.p4(btex 4 etex);
+  circleit.p5(btex 5 etex);
+  
+  u1.c = (6*q, 4.75*q);
+  u2.c = (5*q, 2.5*q);
+  i1.c = (2*q, 1.75*q);
+  i2.c = (4*q, 1.75*q);
+  i3.c = (6*q, 1.75*q);
+  t1.c = (5*q, 4*q);
+  t2.c = (6*q, 3.25*q);
+  r1.c = (7*q, 4*q);
+  r2.c = (4*q, 3.25*q);
+  s1.c = (3*q, 2.5*q);
+  p0.c = (1.5*q, 1*q);
+  p1.c = (2.5*q, 1*q);
+  p2.c = (3.5*q, 1*q);
+  p3.c = (4.5*q, 1*q);
+  p4.c = (5.5*q, 1*q);
+  p5.c = (6.5*q, 1*q);
+
+  fill bpath.t1 withcolor .85white;
+  fill bpath.t2 withcolor .85white;
+  fill bpath.r1 withcolor .85white;
+  fill bpath.r2 withcolor .85white;
+  fill bpath.s1 withcolor .85white;
+
+  drawboxed(u1, u2, i1, i2, i3, t1, t2, r1);
+  drawboxed(r2, s1, p0, p1, p2, p3, p4, p5);
+  
+  draw u1.c--t1.c cutbefore bpath.u1 cutafter bpath.t1;
+  draw u1.c--r1.c cutbefore bpath.u1 cutafter bpath.r1;
+  draw t1.c--r2.c cutbefore bpath.t1 cutafter bpath.r2;
+  draw r1.c--t2.c cutbefore bpath.r1 cutafter bpath.t2;
+  draw r2.c--s1.c cutbefore bpath.r2 cutafter bpath.s1;
+  draw t2.c--u2.c cutbefore bpath.t2 cutafter bpath.u2;
+  draw s1.c--i1.c cutbefore bpath.s1 cutafter bpath.i1;
+  draw u2.c--i2.c cutbefore bpath.u2 cutafter bpath.i2;
+  draw u2.c--i3.c cutbefore bpath.u2 cutafter bpath.i3;
+  draw i1.c--p0.c cutbefore bpath.i1 cutafter bpath.p0;
+  draw i1.c--p1.c cutbefore bpath.i1 cutafter bpath.p1;
+  draw i2.c--p2.c cutbefore bpath.i2 cutafter bpath.p2;
+  draw i2.c--p3.c cutbefore bpath.i2 cutafter bpath.p3;
+  draw i3.c--p4.c cutbefore bpath.i3 cutafter bpath.p4;
+  draw i3.c--p5.c cutbefore bpath.i3 cutafter bpath.p5;
+  
+  drawarrow u1.c{left}..i1.c cutbefore bpath.u1 cutafter bpath.i1 dashed evenly;
+  drawarrow u1.c{down}..{down}u2.c cutbefore bpath.u1 cutafter bpath.u2 dashed evenly;
+endfig;
+
 end
-    
