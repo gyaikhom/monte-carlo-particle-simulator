@@ -172,12 +172,12 @@ beginfig(1);
   circleit.r1(btex R etex);
   circleit.r2(btex R etex);
   circleit.s1(btex S etex);
-  circleit.p0(btex 0 etex);
-  circleit.p1(btex 1 etex);
-  circleit.p2(btex 2 etex);
-  circleit.p3(btex 3 etex);
-  circleit.p4(btex 4 etex);
-  circleit.p5(btex 5 etex);
+  boxit.p0(btex 0 etex);
+  boxit.p1(btex 1 etex);
+  boxit.p2(btex 2 etex);
+  boxit.p3(btex 3 etex);
+  boxit.p4(btex 4 etex);
+  boxit.p5(btex 5 etex);
   
   u1.c = (6*q, 4.75*q);
   u2.c = (5*q, 2.5*q);
