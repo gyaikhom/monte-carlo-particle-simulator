@@ -1443,7 +1443,7 @@ root. Hence, if we define $n$ solids in the simulation world,
 each of these solids must be represented by $n$ CSG trees. We maintain
 a list of CSG solids using a table of pointers to CSG root nodes.
 
-@ @<Read solid registration@>=
+@<Read solid registration@>=
 @<Read target solid for registration@>;
 @<Find the target solid for the operation@>;
 @<Register the target solid@>; 
@@ -1484,7 +1484,7 @@ world uses the following format:
 
 \smallskip
 
-(lx ly lz ux uy uz)
+($lx$ $ly$ $lz$ $ux$ $uy$ $uz$)
 
 \smallskip
 
