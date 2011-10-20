@@ -202,7 +202,7 @@ this block.
 Primitive *create_primitive_solid() {
         Primitive *slot = next_primitive;
 	if (slot == bad_primitive) {
-	   slot = mem_typed_alloc(primitives_per_block, Primitive, mem);
+	   slot = mem_typed_alloc(primitives_per_block, Primitive, mem_phase_one);
 	   if (slot == NULL) return NULL;
 	   else {
 	   	next_primitive = slot + 1;
@@ -290,71 +290,6 @@ backtracking during tree traversal.
 @<Information common to all CSG nodes@>=
 CSG_Node *parent; /* pointer to parent node */
 
-@ To create a new CSG node, we use the global memory area |mem|. This
-memory area stores all of the CSG nodes in blocks of items of type
-|CSG_Node|. Hence, we need a pointer that points to the slot that is
-currently available inside the active |CSG_Node| block, and a pointer
-to check if the available slot is indeed valid. The pointers
-|next_csg_node| and |bad_csg_node| keep track of this information.
-
-The |next_csg_node| pointer is updated after the allocation of a slot
-from the current |CSG_Node| block, or when a new |CSG_Node| block is
-allocated using |mem_alloc(n,s)|; the |bad_csg_node| is updated only
-when a new block is allocated.
-@<Global variables@>=
-static CSG_Node *next_csg_node = NULL;
-static CSG_Node *bad_csg_node = NULL;
-
-@ To create a new CSG node, we check if the available slot is
-valid, i.e., |next_csg_node != bad_csg_node|. If valid, we use this
-slot; otherwise, we allocate a new block that can accommodate
-|csg_node_per_block| CSG nodes, and use the first slot in this block.
-
-@d csg_nodes_per_block 128 /* 65536 bytes per block */
-@<Global functions@>=
-CSG_Node *create_csg_node() {
-        CSG_Node *slot = next_csg_node;
-	if (slot == bad_csg_node) {
-	   slot = mem_typed_alloc(csg_nodes_per_block, CSG_Node, mem);
-	   if (slot == NULL) return NULL;
-	   else {
-	   	next_csg_node = slot + 1;
-		bad_csg_node = slot + csg_nodes_per_block;
-	   }
-	} else next_csg_node++;
-	@<Initialise affine matrices to the identity matrix@>;
-        return slot;
-}
-
-@ To build a complex solid, the required operators must be applied in
-a specific order. This order is conveniently expressed using a binary
-tree data structure.
-
-@d MAX_CSG_NODES 4096 /* maximum number of CSG nodes allowed */
-@<Type definitions@>=
-typedef struct {
-       @<House-keeping data@>;
-       CSG_Node *root; /* pointer to the CSG root */
-       CSG_Node *table[MAX_CSG_NODES]; /* hash table of nodes */
-} CSG_Tree;
-
-@ We only maintain the overall statistics for the entire CSG tree. If
-we wish to obtain statistical information for a given sub-solid, and
-there are multiple solids in the CSG tree, then this information
-must be derived at runtime by traversing the sub-tree which
-corresponds to the selected solid. We only store the overall
-statistics to minimise the memory footprint for storing each tree
-node.
-
-@<House-keeping data@>=
-uint16_t num_primitive;
-uint16_t num_union;
-uint16_t num_intersect;
-uint16_t num_difference;
-uint16_t num_translate;
-uint16_t num_rotate;
-uint16_t num_scale;
-
 @ The internal nodes of a CSG tree store operators. If the operator
 stored is binary (i.e., the set-theoretic operators) both left and
 right children point to solids. If the operator is unary, the left
@@ -384,52 +319,104 @@ union {
        Primitive *p;
 } leaf;
 
+@ To create a new CSG node, we use the global memory area |mem|. This
+memory area stores all of the CSG nodes in blocks of items of type
+|CSG_Node|. Hence, we need a pointer that points to the slot that is
+currently available inside the active |CSG_Node| block, and a pointer
+to check if the available slot is indeed valid. The pointers
+|next_csg_node| and |bad_csg_node| keep track of this information.
 
-@*2 Solid registry.
-The {\sl solid registry}@^solid registry@> is a hash table where we
-store all of the existing solids, both primitive and
-intermediate.
-
+The |next_csg_node| pointer is updated after the allocation of a slot
+from the current |CSG_Node| block, or when a new |CSG_Node| block is
+allocated using |mem_alloc(n,s)|; the |bad_csg_node| is updated only
+when a new block is allocated.
 @<Global variables@>=
-CSG_Tree csg_tree; /* defines solids in the simulation world */
+static CSG_Node *next_csg_node = NULL;
+static CSG_Node *bad_csg_node = NULL;
 
-@ Before using the hash table, it must be initialised.
+@ To create a new CSG node, we check if the available slot is
+valid, i.e., |next_csg_node != bad_csg_node|. If valid, we use this
+slot; otherwise, we allocate a new block that can accommodate
+|csg_node_per_block| CSG nodes, and use the first slot in this block.
 
-@<Initialise the hash table of solids@>=
-reset_list_of_solids();
-@<Reset the hash table of solids@>;
+@d csg_nodes_per_block 128 /* 65536 bytes per block */
+@<Global functions@>=
+CSG_Node *create_csg_node() {
+        CSG_Node *slot = next_csg_node;
+	if (slot == bad_csg_node) {
+	   slot = mem_typed_alloc(csg_nodes_per_block, CSG_Node, mem_phase_one);
+	   if (slot == NULL) return NULL;
+	   else {
+	   	next_csg_node = slot + 1;
+		bad_csg_node = slot + csg_nodes_per_block;
+	   }
+	} else next_csg_node++;
+	@<Initialise affine matrices to the identity matrix@>;
+        return slot;
+}
 
-@ Reset the hash table, which unregisters all of the solids. Since the
-hash table and the CSG tree are linked to one another, we must also
-discard the current CSG tree. The following code must only be invoked
-on hash tables with valid CSG trees; for error handling, use 
-|@<Destroy the hash table of solids@>| instead, because it can handle
-detached CSG nodes.
+@*2 Nodes repository.
+In the first phase, when the input files are processed, we must build
+the CSG trees which correspond to all of the solids bottom-up. This
+requires maintaining the CSG nodes already defined, which may be
+disconnected from the others nodes, so that subsequent commands may
+combine them using CSG operators. Hence, we use a nodes repository to
+stores all of the nodes already defined. This is implemented using a
+hash table, where the name of the node is used as the hash key.
 
-@<Reset the hash table of solids@>=
-csg_tree.root = NULL;
-for (i = 0; i < MAX_CSG_NODES; ++i) csg_tree.table[i] = NULL;
+@d MAX_CSG_NODES 65536 /* maximum number of CSG nodes allowed */
+@<Type definitions@>=
+typedef struct {
+       @<House-keeping data@>;
+       CSG_Node *root; /* pointer to the CSG root */
+       CSG_Node *table[MAX_CSG_NODES]; /* hash table of nodes */
+} NodesRepository;
+NodesRepository *nodes_repository = NULL;
 
-@ We destroy the hash table by freeing up all of the CSG nodes. The
-hash table is destroyed explicitly only when we encounter a fatal error
-that requires shutting down the application. This frees up all of the
-CSG nodes which correspond to existing primitive solids, parameters
-and operators. This is different from freeing resources using the
-|destroy_csg_tree()| function because |destroy_csg_tree()| requires
-that the CSG tree is valid, and that no CSG node is detached. During
-fatal failures we cannot guarantee that the CSG tree is valid,
-hence, we destroy the hash table instead.
+@ The nodes repository is only used in phase one, when the data from
+the input files are processed at the beginning. In phase two, this
+information will be reduced to a compact representation which requires
+less memory. After phase two is complete, we must free the resources
+allocated to the nodes repository as it consumes quite a lot of
+memory. Of course, since the nodes repository is allocated in the
+memory area |mem_phase_one|, it will be freed automatically when we
+free phase one memory area at the end of phase two.
 
-Note here that, since parameter nodes are not part of the hash table,
-we must also destroy the right nodes if they are parameter nodes.
+Note that the macro |mem_typed_alloc()| initialises all of the fields
+to zero, since it uses the |calloc()| system call to allocate the
+memory. Hence, we do not need to initiliase the fields separately.
 
-@<Destroy the hash table of solids@>=
+@<Global functions@>=
+bool create_nodes_repository()
+{
+    nodes_repository = mem_typed_alloc(1, NodesRepository, mem_phase_one);
+    if (NULL == nodes_repository) return false;
+    return true;
+}
 
-@ Parameter nodes are only accessible through the corresponding
-translation or transformation operator node. If present, they are the
-right child of the parent operator node.
+@ Inside the nodes repository, we only maintain the overall statistics
+concerning the number of primitives, operators and solids. If we wish
+to obtain statistical information for a given solid, this information
+may be derived at runtime by traversing the CSG tree which corresponds
+to the selected solid. The array stores in order the number of:
+primitives, unions, intersections, differences, translations,
+rotations and scalings.
 
-@<Destroy parameter node if any@>=
+@<House-keeping data@>=
+uint16_t stat[7];
+
+@ Function |print_geom_statistics(f)| prints the geometry statistics
+in the nodes repository to the I/O stream pointed to by |f|.
+@<Global functions@>=
+void print_geom_statistics(FILE *f)
+{
+    if (NULL == nodes_repository) return;
+    fprintf(f, "Geometry statistics\n\tprimitive: %u\tunion: %u\tintersection: %u\tdifference: %u\ttranslation: %u\trotation: %u\tscaling: %u\n",
+    nodes_repository->stat[0], nodes_repository->stat[1],
+    nodes_repository->stat[2], nodes_repository->stat[3],
+    nodes_repository->stat[4], nodes_repository->stat[5],
+    nodes_repository->stat[6]);
+}
 
 @ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
  nonlinear function of the characters. We borrow the hash function
@@ -452,11 +439,11 @@ long hash(const char *name, long ubound)
         return (h % ubound);
 }
 
-@ We store and retrieve solids using the following functions:
+@ We store and retrieve CSG nodes using the following functions:
 
 $$\vcenter{\halign{\hfil # & # \hfil\cr
-|register_csg_node(n,s)| & Register the solid represented by CSG node |n| using the name |s|, and\cr
-|find_csg_node(s)| & Find the solid that is associated with the name |s|.\cr
+|register_csg_node(n,s)| & Register the CSG node |n| using the name |s|, and\cr
+|find_csg_node(s)| & Find the CSG node that has the name |s|.\cr
 }}$$
 
 Each of these functions uses a pseudo-random hash value $h$, which
@@ -469,29 +456,27 @@ already in use, it returns |NULL| to notify registration failure;
 otherwise, it returns a pointer to the solid to indicate success. 
 
 @<Global functions@>=
-CSG_Node *register_solid(CSG_Node *solid, char *name) {
-	 long h = hash(name, MAX_CSG_NODES);
-	 if (NULL == csg_tree.table[h]) {
+bool register_solid(CSG_Node *solid, char *name) {
+	 long h;
+	 if (NULL == solid || NULL == name) return false;
+	 h = hash(name, MAX_CSG_NODES);
+	 if (NULL == nodes_repository->table[h]) {
                  strcpy(solid->name, name);
-	         csg_tree.table[h] = solid;
-		 @<Set current solid as the root of the CSG tree@>;
-		 return solid;
-	 } else return NULL;
+	         nodes_repository->table[h] = solid;
+		 nodes_repository->root = solid; /* set as current root */
+		 return true;
+	 } else return false;
 }
-
-@ Because the CSG tree is built bottom-up, the CSG node that was
-registered last is considered the root of the CSG tree.
-
-@<Set current solid as the root of the CSG tree@>=
-csg_tree.root = solid;
 
 @ Find the solid associated with a specified |name|.
 @<Global functions@>=
 CSG_Node *find_csg_node(char *name) {
-	 return csg_tree.table[hash(name, MAX_CSG_NODES)];
+	 if (NULL == name) return NULL;
+	 return nodes_repository->table[hash(name, MAX_CSG_NODES)];
 }
 
-@ The geometry of the solids and their placement and orientation within
+@*2 The geometry input file.
+The geometry of the solids and their placement and orientation within
 the world is specified in the input file. The grammar for this input
 file is very simple. The file consist of several commands, where an
 entire line of text is used to specify a specific command. Each
@@ -560,7 +545,6 @@ bool read_geometry(const char *n)
 	char c;
         @<Local variables: |read_geometry()|@>;
 	@<Open input geometry file@>;
-	@<Initialise the hash table of solids@>;
 	while (EOF != (c = fgetc(f))) {
 		@<Discard comments, white spaces and empty lines@>;
 	        @<Process input command@>;
@@ -715,7 +699,6 @@ goto error_invalid_file;
 
 @ @<Cleanup resources allocated to invalid geometry@>=
 fprintf(stderr, "Cleaning up resources...\n");
-@<Destroy the hash table of solids@>;
 
 @ While reading in the operations, we use the following variables to
 store temporary values. Since each operation is defined independently
@@ -788,7 +771,7 @@ if (EOF == read_count || 4 != read_count) {
 }
 p->type = BLOCK;
 @<Prepare block for containment testing@>;
-++csg_tree.num_primitive;
+++(nodes_repository->stat[0]);
 
 @ To improve containment testing, we precalculate some of the values
 that are used frequently. We first half the dimensions, and then
@@ -849,7 +832,7 @@ if (EOF == read_count || 2 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = SPHERE;
-++csg_tree.num_primitive;
+++(nodes_repository->stat[0]);
 
 
 @ The parameters for the cylinder geometry are supplied in the following
@@ -880,7 +863,7 @@ if (EOF == read_count || 3 != read_count) {
 }
 p->type = CYLINDER;
 @<Prepare cylinder for containment testing@>;
-++csg_tree.num_primitive;
+++(nodes_repository->stat[0]);
 
 @ @<Prepare cylinder for containment testing@>=
 @<Half the height the cylinder@>;
@@ -936,7 +919,7 @@ if (EOF == read_count || 7 != read_count) {
 }
 p->type = TORUS;
 @<Prepare torus for containment testing@>;
-++csg_tree.num_primitive;
+++(nodes_repository->stat[0]);
 
 @ @<Prepare torus for containment testing@>=
 @<Calculate radial containment range for the torus@>;
@@ -1027,7 +1010,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
-	++csg_tree.num_union;
+	++(nodes_repository->stat[1]);
 }
 
 @ @<Set parents, and pointers to intermediate solids@>=
@@ -1094,7 +1077,7 @@ if (NULL == internal_node) {
         @<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
-	++csg_tree.num_intersect;
+	++(nodes_repository->stat[2]);
 }
 
 @*2 Difference.
@@ -1153,7 +1136,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_solid(internal_node, op_target); /* register operator
 	node using the target name */
-	++csg_tree.num_difference;
+	++(nodes_repository->stat[3]);
 }
 
 @*2 Translation.
@@ -1247,7 +1230,7 @@ if (NULL == internal_node) {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
-	++csg_tree.num_translate;
+	++(nodes_repository->stat[4]);
 }
 
 @ @<Set target, parameters and parent pointers@>=
@@ -1345,7 +1328,7 @@ if (NULL == internal_node) {
         internal_node->op = ROTATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
-	++csg_tree.num_rotate;
+	++(nodes_repository->stat[5]);
 }
 
 
@@ -1431,7 +1414,7 @@ if (NULL == internal_node) {
 	node */
         @<Set target, parameters and parent pointers@>;
 	register_solid(internal_node, op_target);
-	++csg_tree.num_scale;
+	++(nodes_repository->stat[6]);
 }
 
 @*2 Registering a solid.
@@ -2586,7 +2569,6 @@ txz + sy & tyz - sx & tz^2 + c & 0.0\cr
 \cos(\theta)$.
 
 @<Local variables: |read_geometry()|@>=
-int i;
 double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
 
 @ The matrix $R^{-1}$ is stored in the two dimensional

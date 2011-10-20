@@ -225,7 +225,7 @@ and |n| leaf nodes. However, we allocate one extra element per tree
 because the root only begins at the second element (index 1). Instead
 of wasting this first element, we use it to store the number of nodes.
 @<Allocate memory for the three cuboid search trees@>=
-subcuboid_search_tree = mem_typed_alloc(2 * (l + m + n), double, mem_p);
+subcuboid_search_tree = mem_typed_alloc(2 * (l + m + n), double, mem_phase_two);
 if (NULL == subcuboid_search_tree) return false;
 x = subcuboid_search_tree;
 y = x + 2 * l;

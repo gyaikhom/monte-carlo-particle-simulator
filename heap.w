@@ -223,7 +223,7 @@ at the end of the linked list.
 @<Global functions@>=
 int heap_expand(ParticleRepository *r)
 {
-	Particle* t = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
+	Particle* t = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_phase_two);
 	if (NULL == t) return HEAP_ERROR_ALLOC;
 	*(char **) t = NULL; /* make last page: `next' points to |NULL| */
 	r->max += r->page_size;
@@ -273,7 +273,7 @@ first page.
 @<Global functions@>=
 int heap_init(ParticleRepository *r)
 {
-	r->head = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_p);
+	r->head = mem_typed_alloc(HEAP_PAGE_SIZE + 1, Particle, mem_phase_two);
 	if (NULL == r->head) return HEAP_ERROR_ALLOC;
 	r->count = 0;
 	r->pid = 1;

@@ -13,8 +13,8 @@ int main(int argc, char *argv[])
 @ @<Include preamble for applications@>=
 @<Include system libraries@>@/
 @<Type definitions@>@/
-@<Global variables@>@/
 @<Forward declare functions@>@/
+@<Global variables@>@/
 @<Global functions@>@/
 
 @ @<Parse command line arguments@>=
@@ -26,8 +26,8 @@ int main(int argc, char *argv[])
 @ @<Create and process events@>=
 
 @ @<Clean up the system@>=
-mem_free(mem);
-mem_free(mem_p);
+mem_free(mem_phase_one);
+mem_free(mem_phase_two);
 
 @ @<Include system libraries@>=
 #include <math.h>

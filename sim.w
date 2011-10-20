@@ -128,7 +128,7 @@ Vertex *create_vertex(Event *e)
 {
         Vertex *v = next_vertex;
 	if (v == bad_vertex) {
-	   v = mem_typed_alloc(vertices_per_block, Vertex, mem_p);
+	   v = mem_typed_alloc(vertices_per_block, Vertex, mem_phase_two);
 	   if (NULL == v) return NULL;
 	   else {
 	   	next_vertex = v + 1;
@@ -173,7 +173,7 @@ Event *create_event()
 {
         Event *e = next_event;
 	if (e == bad_event) {
-	   e = mem_typed_alloc(events_per_block, Event, mem_p);
+	   e = mem_typed_alloc(events_per_block, Event, mem_phase_two);
 	   if (NULL == e) return NULL;
 	   else {
 	   	next_event = e + 1;
