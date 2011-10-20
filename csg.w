@@ -1489,21 +1489,15 @@ void print_sim_world(FILE *f)
     sim_world.u[0], sim_world.u[1], sim_world.u[2]);
 }
 
-@*1 Pre-processing the simulation world.
-To improve efficiency, the original CSG tree as defined by the input
-file must be pre-processed before starting the simulation. This
-processing takes place as new solids are registered with the
-system.
-
 @*2 Bounding Boxes.
 Every node in the CSG tree is enclosed by a bounding box. This
 allows us to accelerate the search for solids by efficiently pruning
-the binary search tree.
+the search trees.
 
 @<Information common to all CSG nodes@>=
 BoundingBox bb;
 
-@ The function |primitive_bb(p, bb)| calculates the bounding box of a
+@ Function |primitive_bb(p, bb)| calculates the bounding box of a
 primitive solid |p| and stores the result in the supplied bounding box
 variable |bb|. This function returns |true| if the bounding box was
 calculated successfully; otherwise, |false| is returned.
@@ -1512,10 +1506,10 @@ calculated successfully; otherwise, |false| is returned.
 bool primitive_bb(Primitive *p, BoundingBox *bb)
 {
     switch(p->type) {
-    case BLOCK: @<Calculate bounding box of primitive block@>; break;
-    case SPHERE: @<Calculate bounding box of primitive sphere@>; break;
-    case CYLINDER: @<Calculate bounding box of primitive cylinder@>; break;
-    case TORUS: @<Calculate bounding box of primitive torus@>; break;
+    case BLOCK: @<Calculate bounding box of primitive block@>;
+    case SPHERE: @<Calculate bounding box of primitive sphere@>;
+    case CYLINDER: @<Calculate bounding box of primitive cylinder@>;
+    case TORUS: @<Calculate bounding box of primitive torus@>;
     default: return false; /* invalid primitive */
     }
     return true;
@@ -1527,141 +1521,41 @@ the block is centered at the origin of the world coordinate frame, so
 that it's centroid coincides with the origin.
 
 @<Calculate bounding box of primitive block@>=
-bb->l[0] = -p->b.length; /* x-axis */
+bb->l[0] = -p->b.length;
 bb->u[0] = p->b.length;
-bb->l[1] = -p->b.height; /* y-axis */
+bb->l[1] = -p->b.height;
 bb->u[1] = p->b.height;
-bb->l[2] = -p->b.width; /* z-axis */
+bb->l[2] = -p->b.width;
 bb->u[2] = p->b.width;
+break;
 
 @ The sphere is centered at the origin of the world coordinate frame.
 @<Calculate bounding box of primitive sphere@>=
-bb->l[0] = -p->s.radius; /* x-axis */
-bb->u[0] = p->s.radius;
-bb->l[1] = bb->l[0]; /* y-axis */
-bb->u[1] = bb->u[0];
-bb->l[2] = bb->l[0]; /* z-axis */
-bb->u[2] = bb->u[0];
+bb->l[0] = bb->l[1] = bb->l[2] = -p->s.radius;
+bb->u[0] = bb->u[1] = bb->u[2] = p->s.radius;
+break;
 
 @ The centroid of the cylinder is centered at the origin of the world
 coordinate frame, and the normals at the center of the two circular
 faces of the cylinder are parallel to the $y$-axis.
 @<Calculate bounding box of primitive cylinder@>=
-bb->l[0] = -p->c.radius; /* x-axis */
-bb->u[0] = p->c.radius;
-bb->l[1] = -p->c.height; /* y-axis */
+bb->l[0] = bb->l[2] = -p->c.radius;
+bb->u[0] = bb->u[2] = p->c.radius;
+bb->l[1] = -p->c.height;
 bb->u[1] = p->c.height;
-bb->l[2] = bb->l[0]; /* z-axis */
-bb->u[2] = bb->u[0];
+break;
 
 @ The torus is centered at the origin so that its center coincides
 with the origin of the world coordinate frame. Furthermore, the radial
 surface of the torus lies on the $xz$-plane.
 @<Calculate bounding box of primitive torus@>=
-bb->l[0] = -(p->t.major + p->t.minor); /* x-axis */
-bb->u[0] = p->t.major + p->t.minor;
-bb->l[1] = -p->t.minor; /* y-axis */
+bb->l[0] = bb->l[2] = -(p->t.major + p->t.minor);
+bb->u[0] = bb->u[2] = p->t.major + p->t.minor;
+bb->l[1] = -p->t.minor;
 bb->u[1] = p->t.minor;
-bb->l[2] = bb->l[0]; /* z-axis */
-bb->u[2] = bb->u[0];
+break;
 
-@ The bounding box of a primitive solid must be defined using the
-actual location and orientation of the primitive in the world
-coordinate frame. This means that, after the bounding box for the
-primitive has been calculated under the assumption that the center of
-the primitive coincides with the origin of the world coordinate frame,
-we must apply the affine transformation for that primitive to the
-calculated bounding box, to obtain the actual bounds.
-
-@<Calculate affine transformed bounding box@>=
-@<Calculate the eight corners of the bounding box@>;
-@<Apply inverse of the affine transformation to the corners@>;
-@<Calculate axis aligned bounding box of the transformed bounding box@>;
-
-@ @<Calculate the eight corners of the bounding box@>=
-c[0][0] = n->bb.l[0];
-c[0][1] = n->bb.l[1];
-c[0][2] = n->bb.l[2];
-c[1][0] = n->bb.l[0];
-c[1][1] = n->bb.l[1];
-c[1][2] = n->bb.u[2];
-c[2][0] = n->bb.l[0];
-c[2][1] = n->bb.u[1];
-c[2][2] = n->bb.l[2];
-c[3][0] = n->bb.l[0];
-c[3][1] = n->bb.u[1];
-c[3][2] = n->bb.u[2];
-c[4][0] = n->bb.u[0];
-c[4][1] = n->bb.l[1];
-c[4][2] = n->bb.l[2];
-c[5][0] = n->bb.u[0];
-c[5][1] = n->bb.l[1];
-c[5][2] = n->bb.u[2];
-c[6][0] = n->bb.u[0];
-c[6][1] = n->bb.u[1];
-c[6][2] = n->bb.l[2];
-c[7][0] = n->bb.u[0];
-c[7][1] = n->bb.u[1];
-c[7][2] = n->bb.u[2];
-
-@ Function to apply affine transformation matrix.
-@<Global functions@>=
-void apply_affine(Matrix m, Vector v, Vector r)
-{
-    r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
-    r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
-    r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
-    r[3] = 1.0;
-}
-
-@ @<Apply inverse of the affine transformation to the corners@>=
-for (i = 0; i < 8; ++i) {
-        c[i][3] = 1.0; /* homogenise the corner vector */
-        apply_affine(n->inverse, &c[i][0], temp);
-        vector_copy(&c[i][0], temp);
-}
-
-@ After applying an affine transformation, a bounding box may no
-longer be axis-aligned. Since we require axis-aligned bounding boxes,
-we must re-calculate an axis-aligned bounding box of the transformed 
-bounding box by using its corners. 
-@<Calculate axis aligned bounding box of the transformed bounding box@>=
-for (j = 0; j < 3; ++j) {
-        n->bb.l[j] = c[0][j];
-        n->bb.u[j] = c[0][j];
-        for (i = 1; i < 8; ++i) {
-                if (c[i][j] < n->bb.l[j]) n->bb.l[j] = c[i][j]; /*
-		find minimum */
-                if (c[i][j] > n->bb.u[j]) n->bb.u[j] = c[i][j]; /*
-		find maximum */
-	}
-}
-for (i = 0; i < 8; ++i) n->bb.l[3] = n->bb.u[3] = 1.0; /* homogenise bound vectors*/
-
-@ @<Find bounding box for the node using left and right subtrees@>=
-l = n->internal.left;
-r = n->internal.right;
-switch(n->op) {
-case UNION: @<Calculate bounding box of union@>; break;
-case INTERSECTION: @<Calculate bounding box of intersection@>; break;
-case DIFFERENCE: @<Calculate bounding box of difference@>; break;
-default: return false;
-}
-
-@ In each of the axes, the lowest of the values stored in the left and
-right subtree nodes becomes the lower bound for the node. Similarly,
-the highest value becomes the upper bound. The resulting bounding box
-must enclose both solids on the left and right subtrees.
-
-@<Calculate bounding box of union@>=
-n->bb.l[0] = (l->bb.l[0] < r->bb.l[0]) ? l->bb.l[0] : r->bb.l[0];
-n->bb.l[1] = (l->bb.l[1] < r->bb.l[1]) ? l->bb.l[1] : r->bb.l[1];
-n->bb.l[2] = (l->bb.l[2] < r->bb.l[2]) ? l->bb.l[2] : r->bb.l[2];
-n->bb.u[0] = (l->bb.u[0] > r->bb.u[0]) ? l->bb.u[0] : r->bb.u[0];
-n->bb.u[1] = (l->bb.u[1] > r->bb.u[1]) ? l->bb.u[1] : r->bb.u[1];
-n->bb.u[2] = (l->bb.u[2] > r->bb.u[2]) ? l->bb.u[2] : r->bb.u[2];
-
-@ The function |intersection_bb(n, l, r, a)| calculates the bounding
+@ Function |intersection_bb(n, l, r, a)| calculates the bounding
 box |n| of the intersection node along the supplied axis |a| using the
 bounding boxes of the left and right nodes, |l| and |r|
 respectively. The parameter |a| must only take values 0, 1, and 2,
@@ -1693,35 +1587,26 @@ bool intersection_bb(BoundingBox *n, BoundingBox *l, BoundingBox *r, int a)
     return true;
 }
 
-@ When the left and right subtrees do not intersect, a bounding box
-must not be defined for the node. This is represented simply by making
-the upper bound smaller than the lower bound---we only need to do this
-for only one axis; here, we choose the $x$-axis.
+@ Function |apply_affine_matrix(m,v,r)| applies the affine
+transformation matrix |m| to the vector |v| and stores the transformed
+vector in |r|. The original vector |v| is left unmodified. The two
+macros |affine_forward()| and |affine_reverse()| use this function to
+respectively apply the affine matrix for forward transformations, or
+the reverse transformations ({\sl matrix inverse} of the forward
+affine matrix).
 
-@d no_intersection_bb(left,right) ((left).u[0] < (right).l[0] ||
-    (left).u[1] < (right).l[1] ||
-    (left).u[2] < (right).l[2] ||
-    (right).u[0] < (left).l[0] ||
-    (right).u[1] < (left).l[1] ||
-    (right).u[2] < (left).l[2])
-@<Calculate bounding box of intersection@>=
-if (no_intersection_bb(l->bb,r->bb)) {
-        n->bb.l[0] = 1;
-        n->bb.u[0] = -1;
-} else {
-    intersection_bb(&n->bb, &l->bb, &r->bb, X_AXIS);
-    intersection_bb(&n->bb, &l->bb, &r->bb, Y_AXIS);
-    intersection_bb(&n->bb, &l->bb, &r->bb, Z_AXIS);
+@d affine_forward(n,v,r) apply_affine_matrix((n)->affine, (v), (r))
+@d affine_reverse(n,v,r) apply_affine_matrix((n)->inverse, (v), (r))
+@<Global functions@>=
+void apply_affine_matrix(Matrix m, Vector v, Vector r)
+{
+    r[0] = m[0][0]*v[0] + m[0][1]*v[1] + m[0][2]*v[2] + m[0][3];
+    r[1] = m[1][0]*v[0] + m[1][1]*v[1] + m[1][2]*v[2] + m[1][3];
+    r[2] = m[2][0]*v[0] + m[2][1]*v[1] + m[2][2]*v[2] + m[2][3];
+    r[3] = 1.0;
 }
 
-@ For a solid defined by a boolean difference, the bounding box of the
-node should be the bounding box of the left subtree before we subtract
-the right subtree.
-
-@<Calculate bounding box of difference@>=
-n->bb = l->bb;
-
-@ The function |calculate_bounding_box(n)| calculates the bounding box
+@ Function |calculate_bounding_box(n)| calculates the bounding box
 of the solid represented by the supplied root of a CSG tree. To
 calculate the bounding box at a given node, the function uses the
 bounding boxes of the left and right subtrees. Only at the leaves,
@@ -1747,6 +1632,112 @@ bool calculate_bounding_box(CSG_Node *n)
 	@<Find bounding box for the node using left and right subtrees@>;
 	return true;
 }
+
+@ The bounding box of a primitive solid must be defined using the
+actual location and orientation of the primitive in the world
+coordinate frame. This means that, after the bounding box for the
+primitive has been calculated under the assumption that the center of
+the primitive coincides with the origin of the world coordinate frame,
+we must apply the affine transformation for that primitive to the
+calculated bounding box, to obtain the actual bounds.
+
+@<Calculate affine transformed bounding box@>=
+@<Calculate the eight corners of the bounding box@>;
+@<Apply inverse of the affine transformation to the corners@>;
+@<Calculate axis aligned bounding box of the transformed bounding box@>;
+
+@ @<Calculate the eight corners of the bounding box@>=
+c[0][0] = c[1][0] = c[2][0] = c[3][0] = n->bb.l[0];
+c[0][1] = c[1][1] = c[4][1] = c[5][1] = n->bb.l[1];
+c[0][2] = c[2][2] = c[4][2] = c[6][2] = n->bb.l[2];
+c[4][0] = c[5][0] = c[6][0] = c[7][0] = n->bb.u[0];
+c[2][1] = c[3][1] = c[6][1] = c[7][1] = n->bb.u[1];
+c[1][2] = c[3][2] = c[5][2] = c[7][2] = n->bb.u[2];
+
+@ @<Apply inverse of the affine transformation to the corners@>=
+for (i = 0; i < 8; ++i) {
+        c[i][3] = 1.0; /* homogenise the corner vector */
+        affine_reverse(n, &c[i][0], temp);
+        vector_copy(&c[i][0], temp);
+}
+
+@ After applying an affine transformation, a bounding box may no
+longer be axis-aligned. Since we require axis-aligned bounding boxes,
+we must re-calculate an axis-aligned bounding box of the transformed 
+bounding box by using its corners. 
+@<Calculate axis aligned bounding box of the transformed bounding box@>=
+for (j = 0; j < 3; ++j) {
+        n->bb.l[j] = c[0][j];
+        n->bb.u[j] = c[0][j];
+        for (i = 1; i < 8; ++i) {
+                if (c[i][j] < n->bb.l[j]) n->bb.l[j] = c[i][j]; /*
+		find minimum */
+                if (c[i][j] > n->bb.u[j]) n->bb.u[j] = c[i][j]; /*
+		find maximum */
+	}
+}
+for (i = 0; i < 8; ++i) n->bb.l[3] = n->bb.u[3] = 1.0; /* homogenise bound vectors*/
+
+@ @<Find bounding box for the node using left and right subtrees@>=
+l = n->internal.left;
+r = n->internal.right;
+switch(n->op) {
+case UNION: @<Calculate bounding box of union@>;
+case INTERSECTION: @<Calculate bounding box of intersection@>;
+case DIFFERENCE: @<Calculate bounding box of difference@>;
+default: return false;
+}
+
+@ In each of the axes, the lowest of the values stored in the left and
+right subtree nodes becomes the lower bound for the node. Similarly,
+the highest value becomes the upper bound. The resulting bounding box
+must enclose both solids on the left and right subtrees.
+
+@<Calculate bounding box of union@>=
+n->bb.l[0] = (l->bb.l[0] < r->bb.l[0]) ? l->bb.l[0] : r->bb.l[0];
+n->bb.l[1] = (l->bb.l[1] < r->bb.l[1]) ? l->bb.l[1] : r->bb.l[1];
+n->bb.l[2] = (l->bb.l[2] < r->bb.l[2]) ? l->bb.l[2] : r->bb.l[2];
+n->bb.u[0] = (l->bb.u[0] > r->bb.u[0]) ? l->bb.u[0] : r->bb.u[0];
+n->bb.u[1] = (l->bb.u[1] > r->bb.u[1]) ? l->bb.u[1] : r->bb.u[1];
+n->bb.u[2] = (l->bb.u[2] > r->bb.u[2]) ? l->bb.u[2] : r->bb.u[2];
+break;
+
+@ When the left and right subtrees do not intersect, a bounding box
+must not be defined for the node. This is represented simply by making
+the upper bound smaller than the lower bound---we only need to do this
+for only one axis; here, we choose the $x$-axis.
+
+@d no_intersection_bb(left,right) ((left).u[0] < (right).l[0] ||
+    (left).u[1] < (right).l[1] ||
+    (left).u[2] < (right).l[2] ||
+    (right).u[0] < (left).l[0] ||
+    (right).u[1] < (left).l[1] ||
+    (right).u[2] < (left).l[2])
+@<Calculate bounding box of intersection@>=
+if (no_intersection_bb(l->bb,r->bb)) {
+        n->bb.l[0] = 1;
+        n->bb.u[0] = -1;
+} else {
+    intersection_bb(&n->bb, &l->bb, &r->bb, X_AXIS);
+    intersection_bb(&n->bb, &l->bb, &r->bb, Y_AXIS);
+    intersection_bb(&n->bb, &l->bb, &r->bb, Z_AXIS);
+}
+break;
+
+@ For a solid defined by a boolean difference, the bounding box of the
+node should be the bounding box of the left subtree before we subtract
+the right subtree.
+
+@<Calculate bounding box of difference@>=
+n->bb = l->bb;
+break;
+
+@*1 Pre-processing the simulation world.
+To improve efficiency, the original CSG tree as defined by the input
+file must be pre-processed before starting the simulation. This
+processing takes place as new solids are registered with the
+system.
+
 
 @*2 Merge and move affine transformations.
 Every node has an affine transformation matrix, which is initialised
@@ -2386,7 +2377,7 @@ course, these initial orientations are primitive specific, as
 discussed in the following sections.
 
 @<Test containment inside primitive solid@>=
-apply_affine(root->affine, v, r);
+affine_forward(root, v, r);
 p = root->leaf.p;
 switch(p->type) {
 case BLOCK: return is_inside_block(r, p);
@@ -2500,13 +2491,13 @@ containment testing is easier with $s$ than it is with $s'$.
 @<Test containment after transformation or translation@>=
 switch(root->op) {
 case TRANSLATE:
-        apply_affine(root->internal.right->affine, v, r);
+        affine_forward(root->internal.right, v, r);
         break;
 case ROTATE:
-        apply_affine(root->internal.right->affine, v, r);
+        affine_forward(root->internal.right, v, r);
         break;
 case SCALE:
-        apply_affine(root->internal.right->affine, v, r);
+        affine_forward(root->internal.right, v, r);
         break;
 default: return INVALID;
 }
