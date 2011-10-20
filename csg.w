@@ -1769,7 +1769,7 @@ accumulated affine transformation matrix in each of the nodes.
 
 \bigskip
 
-\centerline{\epsfig{file=figures/affine-merge,scale=1}}
+\centerline{\epsfig{file=figures/affine-merge,scale=1.2}}
 
 \bigskip
 
