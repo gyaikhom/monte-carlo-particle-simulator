@@ -513,7 +513,9 @@ $$\vcenter{\halign{\hfil {\tt #} & # \hfil \cr
 B, S, C, T & Create a primitive block, sphere, cylinder, or torus.\cr
 u, i, d & Carry out a union, intersection, or difference.\cr
 t, r, s & Translate, rotate, or scale the solid.\cr
-\%\ & Begin comment line. Stop at the first newline character.\cr 
++ & Registers the current CSG tree as solid.\cr
+* & Defines the simulation world as an axis-aligned bounding box.\cr
+\%\ & Begin comment line. Stop at the first newline character.\cr
 }}$$
 
 \smallskip
@@ -644,7 +646,10 @@ case 's':
         @<Read scaling operation@>;
         break;
 case '+':
-        @<Read registration operation@>;
+        @<Read solid registration@>;
+	break;
+case '*':
+        @<Read simulation world specification@>;
 	break;
 default:
 	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
@@ -1438,7 +1443,7 @@ root. Hence, if we define $n$ solids in the simulation world,
 each of these solids must be represented by $n$ CSG trees. We maintain
 a list of CSG solids using a table of pointers to CSG root nodes.
 
-@ @<Read registration operation@>=
+@ @<Read solid registration@>=
 @<Read target solid for registration@>;
 @<Find the target solid for the operation@>;
 @<Register the target solid@>; 
@@ -1463,6 +1468,48 @@ if (EOF == read_count || 1 != read_count)
 
 @ @<Register the target solid@>=
 process_and_register_solid(op_solid, target_solid);
+
+
+@*2 Defining the simulation world.
+The simulation world defines the volume of space that we are
+interested in. Only particles that are inside this volume are tracked
+during the simulation. Logically, the simulation world is represented
+by a bounding box, which is axis-aligned with the world coordinate frame.
+
+@<Global variables@>=
+BoundingBox sim_world = {ZERO_VECTOR, ZERO_VECTOR};
+
+@ In the geometry input file, the specification of the simulation
+world uses the following format:
+
+\smallskip
+
+(lx ly lz ux uy uz)
+
+\smallskip
+
+\noindent where, the coordinates $(lx, ly, lz)$ and
+$(ux, uy, uz)$ respectively give the lower and upper bounds. If there
+are multiple specifications of the simulation world, the last one read
+will set the effective bounds.
+
+@<Read simulation world specification@>=
+read_count = fscanf(f, "(%lf %lf %lf %lf %lf %lf)",
+    &sim_world.l[0], &sim_world.l[1], &sim_world.l[2],
+    &sim_world.u[0], &sim_world.u[1], &sim_world.u[2]);
+++input_file_current_line;
+if (EOF == read_count || 6 != read_count)
+        @<Exit after cleanup: failed to read from file@>;
+
+@ Function |print_sim_world(f)| prints the lower and upper bounds of
+the simulation world to the I/O stream pointed to by |f|.
+@<Global functions@>=
+void print_sim_world(FILE *f)
+{
+    fprintf(f, "Simulation world: [%lf, %lf, %lf : %lf, %lf, %lf]\n",
+    sim_world.l[0], sim_world.l[1], sim_world.l[2],
+    sim_world.u[0], sim_world.u[1], sim_world.u[2]);
+}
 
 @*1 Pre-processing the simulation world.
 To improve efficiency, the original CSG tree as defined by the input
@@ -2799,6 +2846,7 @@ exit_error:
 	bool t;
 
         if (false == read_geometry("input.dat")) exit(1);
+	print_sim_world(stdout);
 	print_all_solids();
 	if ((f = fopen("points.dat", "r")) == NULL)
                exit(1);
