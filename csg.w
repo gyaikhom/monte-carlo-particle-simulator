@@ -1732,19 +1732,14 @@ the right subtree.
 n->bb = l->bb;
 break;
 
-@*1 Pre-processing the simulation world.
-To improve efficiency, the original CSG tree as defined by the input
-file must be pre-processed before starting the simulation. This
-processing takes place as new solids are registered with the
-system.
-
-
 @*2 Merge and move affine transformations.
 Every node has an affine transformation matrix, which is initialised
 to the identity matrix. When an affine transformation $T$ is applied
-to a node, the affine matrix for the node is updated. This affine
-matrix gives the accumulated inverse transformations from the root to
-that node.
+to a node, the affine matrix for that node is updated. This affine
+matrix |affine| gives the accumulated transformations starting at the
+node to the root of the CSG tree. We also sometimes required the
+affine matrix |inverse| for applying the transformations in the
+reverse order, starting at the root until we reach the node.
 
 @<Information common to all CSG nodes@>=
 Matrix affine; /* inverse affine transformations matrix */
@@ -1754,65 +1749,77 @@ Matrix inverse; /* inverse of |affine| matrix */
 matrix_copy(slot->affine, identity_matrix);
 matrix_copy(slot->inverse, identity_matrix);
 
-@ After pre-processing, all of the affine transformations are merged,
-so that the affine matrix in a node gives the required composite
-transformation. After this merger, we remove the affine transformation
-nodes from the CSG tree, and is retain as auxilliary information
-inside the effective node to which the transformations have been
-applied.
+@ While the solids are built bottom-up, CSG nodes are added to the
+nodes repository. When an affine transformation node is added to this
+repository, the transformation is only applied to one target node,
+which is an existing node in the nodes repository. However, once the
+CSG tree has been built, we want each node to store the accumulated
+affine transformations starting at the root of the CSG tree. Hence, we
+pre-process the CSG tree so that all of the affine transformations are
+merged. Furthermore, after the affine transformations have been
+merged, we do not require the affine transformation nodes and its
+parameters. Hence, these nodes are then remove from the CSG tree.
 
 @<Information common to all CSG nodes@>=
-CSG_Node *affine_list; /* the list of affine transformations */
+CSG_Node *affine_list; /* a record of the affine transformations */
 
-@ Function to merge affine transformations
+@ Function |merge_affine(r)| merges the affine transformations on all
+the paths starting at the root of the CSG tree |r| and stores the
+accumulated affine transformation matrix in each of the nodes.
+
+The merge begins by first merging transformations starting at the
+current node. As long as the left-hand child node is an affine
+transformation node, we accumulate the affine transformation into |t|,
+and continue until we have reached a node that is not an affine
+transformation node. At this node, we store the accumulated
+affine transformation matrix from |t|, and detach the list of affine
+transformation nodes that was merged. Then, we merge the node's
+subtrees, if they are not leaf nodes. Finally, we the return the last
+node found so that the parent can update its child pointers after the
+merge (some nodes may have been removed).
+
 @<Global functions@>=
-CSG_Node *merge_affine_transformations(CSG_Node *root)
+CSG_Node *merge_affine(CSG_Node *r)
 {
-	CSG_Node *temp, *parent, *affine_list;
-	Matrix result, m = IDENTITY_MATRIX;
-	if (SOLID == root->op || PARAMETER == root->op) return NULL;
-	if (TRANSLATE == root->op ||
-	    ROTATE == root->op ||
-	    SCALE == root->op) {
-	    @<Merge sequence of affine transformations@>;
+	CSG_Node *t, *p, *al; /* temporary node, parent node, detached affine list */
+	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
+	if (SOLID == r->op || PARAMETER == r->op) return NULL;
+	if (TRANSLATE == r->op ||
+	    ROTATE == r->op ||
+	    SCALE == r->op) {
+	    @<Merge sequence of affine transformation nodes@>;
 	    @<Detach affine transformations@>;
 	}
-	if (SOLID != root->op) {
+	if (SOLID != r->op) { /* |r| now points to the non-affine node */
 	    @<Merge affine transformations on subtrees@>;
 	}
-	return root;
+	return r;
 }
 
-@ @<Merge sequence of affine transformations@>=
-parent = root->parent;
-affine_list = NULL;
+@ @<Merge sequence of affine transformation nodes@>=
+p = r->parent;
+al = NULL;
 do {
-        temp = root;
-	@<Update composite affine transformation matrix@>;
-	@<Prepare affine list for later detachment@>;
-} while (TRANSLATE == root->op || ROTATE == root->op || SCALE == root->op);
-
-@ @<Update composite affine transformation matrix@>=
-matrix_multiply(temp->internal.right->affine, m, result);
-matrix_copy(m, result);
-
-@ @<Prepare affine list for later detachment@>=
-root = temp->internal.left;
-temp->internal.left = affine_list;
-affine_list = temp;
+        t = r;
+	matrix_multiply(t->internal.right->affine, m, mm); /* accumulate */
+	matrix_copy(m, mm);
+	r = t->internal.left;
+	t->internal.left = al;
+	al = t;
+} while (TRANSLATE == r->op || ROTATE == r->op || SCALE == r->op);
 
 @ @<Detach affine transformations@>=
-matrix_copy(root->affine, m);
-matrix_inverse(root->affine, m);
-matrix_copy(root->inverse, m);
-root->affine_list = affine_list;
-root->parent = parent;
+matrix_copy(r->affine, m);
+matrix_inverse(r->affine, m);
+matrix_copy(r->inverse, m);
+r->affine_list = al;
+r->parent = p;
 
 @ @<Merge affine transformations on subtrees@>=
-temp = merge_affine_transformations(root->internal.left);
-if (NULL != temp) root->internal.left = temp;
-temp = merge_affine_transformations(root->internal.right);
-if (NULL != temp) root->internal.right = temp;
+t = merge_affine(r->internal.left);
+if (NULL != t) r->internal.left = t;
+t = merge_affine(r->internal.right);
+if (NULL != t) r->internal.right = t;
 
 @ Function to move affine transformation matrix to the primitives
 @<Global functions@>=
@@ -1845,7 +1852,7 @@ void process_and_register_solid(const char *name, CSG_Node *root)
 	long h;
 	CSG_Node *temp;
 	if (NULL == root || NULL == name) return;
-	temp = merge_affine_transformations(root);
+	temp = merge_affine(root);
 	if (NULL == temp) temp = root;
 	h = hash(name, MAX_CSG_SOLIDS);
 	strcpy(csg_solids.table[h].name, name);
