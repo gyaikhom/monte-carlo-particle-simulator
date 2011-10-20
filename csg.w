@@ -1760,13 +1760,6 @@ merged. Furthermore, after the affine transformations have been
 merged, we do not require the affine transformation nodes and its
 parameters. Hence, these nodes are then remove from the CSG tree.
 
-@<Information common to all CSG nodes@>=
-CSG_Node *affine_list; /* a record of the affine transformations */
-
-@ Function |merge_affine(r)| merges the affine transformations on all
-the paths starting at the root of the CSG tree |r| and stores the
-accumulated affine transformation matrix in each of the nodes.
-
 \bigskip
 
 \centerline{\epsfig{file=figures/affine-merge,scale=1.2}}
@@ -1784,10 +1777,14 @@ subtrees, if they are not leaf nodes. Finally, we the return the last
 node found so that the parent can update its child pointers after the
 merge (some nodes may have been removed).
 
+@ Function |merge_affine(r)| merges the affine transformations on all
+the paths starting at the root of the CSG tree |r| and stores the
+accumulated affine transformation matrix in each of the nodes.
+
 @<Global functions@>=
 CSG_Node *merge_affine(CSG_Node *r)
 {
-	CSG_Node *t, *p, *al; /* temporary node, parent node, detached affine list */
+	CSG_Node *t, *p; /* temporary node and parent node */
 	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
 	if (SOLID == r->op || PARAMETER == r->op) return NULL;
 	if (TRANSLATE == r->op ||
@@ -1796,54 +1793,36 @@ CSG_Node *merge_affine(CSG_Node *r)
 	    @<Merge sequence of affine transformation nodes@>;
 	    @<Detach affine transformations@>;
 	}
-        @<Merge affine transformations on subtrees@>;
+	@<Finalise affine on primitive, or merge affine on subtrees@>;
 	return r; /* return the first non-affine transformation node */
 }
 
 @ @<Merge sequence of affine transformation nodes@>=
-p = r->parent;
-al = NULL;
+p = r->parent; /* parent of first affine transformation node */
 do {
         t = r;
 	matrix_multiply(t->internal.right->affine, m, mm); /* accumulate */
 	matrix_copy(m, mm);
 	r = t->internal.left;
-	t->internal.left = al;
-	al = t;
 } while (TRANSLATE == r->op || ROTATE == r->op || SCALE == r->op);
 
 @ @<Detach affine transformations@>=
 matrix_copy(r->affine, m);
 matrix_inverse(r->affine, m);
 matrix_copy(r->inverse, m);
-r->affine_list = al;
 r->parent = p;
 
-@ @<Merge affine transformations on subtrees@>=
-if (SOLID != r->op) {
-    t = merge_affine(r->internal.left);
-    if (NULL != t) r->internal.left = t;
-    t = merge_affine(r->internal.right);
-    if (NULL != t) r->internal.right = t;
-}
-
-@ Function to move affine transformation matrix to the primitives
-@<Global functions@>=
-void move_affine_transformation_matrix(CSG_Node *node)
-{
-	Matrix temp;
-	if (NULL == node) return;
-	if (SOLID == node->op) {
-	    if (NULL != node->parent) {
-	        matrix_multiply(node->parent->affine, node->affine, temp);
-	        matrix_copy(node->affine, temp);
-		matrix_inverse(node->affine, temp);
-		matrix_copy(node->inverse, temp);
-            }
-	    return;
-	}
-	move_affine_transformation_matrix(node->internal.left);
-	move_affine_transformation_matrix(node->internal.right);
+@ @<Finalise affine on primitive, or merge affine on subtrees@>=
+if (SOLID == r->op) {
+    if (r->parent) {
+        matrix_multiply(r->parent->affine, r->affine, mm);
+        matrix_copy(r->affine, mm);
+	matrix_inverse(r->affine, mm);
+	matrix_copy(r->inverse, mm);
+    }
+} else {
+    if ((t = merge_affine(r->internal.left))) r->internal.left = t;
+    if ((t = merge_affine(r->internal.right))) r->internal.right = t;
 }
 
 @ @<Global functions@>=
@@ -1863,7 +1842,6 @@ void process_and_register_solid(const char *name, CSG_Node *root)
 	h = hash(name, MAX_CSG_SOLIDS);
 	strcpy(csg_solids.table[h].name, name);
 	csg_solids.table[h].solid = temp;
- 	move_affine_transformation_matrix(temp);
 	calculate_bounding_box(temp);
 }
 
