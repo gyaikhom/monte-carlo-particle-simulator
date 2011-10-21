@@ -2510,23 +2510,16 @@ $T^{-1} = \left(\matrix{1.0 & 0.0 & 0.0 & -x\cr
 The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
 using {\sl row-major}@^row-major@> form.
 
+NOTE: In the following initialisations of the affine matrices, we only
+set the nonzero elements. All of the node fields have already been
+initialised to zero during |create_csg_node()|, since it uses
+|mem_typed_alloc()| which in turn uses the |calloc()| system call.
+
 @<Set up the matrix for inverse translation@>=
-leaf_node->affine[0][0] = 1.0;
-leaf_node->affine[0][1] = 0.0;
-leaf_node->affine[0][2] = 0.0;
+leaf_node->affine[0][0] = leaf_node->affine[1][1] = leaf_node->affine[2][2] = leaf_node->affine[3][3] = 1.0;
 leaf_node->affine[0][3] = -op_x; /* inverse $x$-axis translation */
-leaf_node->affine[1][0] = 0.0;
-leaf_node->affine[1][1] = 1.0;
-leaf_node->affine[1][2] = 0.0;
 leaf_node->affine[1][3] = -op_y; /* inverse $y$-axis translation */
-leaf_node->affine[2][0] = 0.0;
-leaf_node->affine[2][1] = 0.0;
-leaf_node->affine[2][2] = 1.0;
 leaf_node->affine[2][3] = -op_z; /* inverse $z$-axis translation */
-leaf_node->affine[3][0] = 0.0;
-leaf_node->affine[3][1] = 0.0;
-leaf_node->affine[3][2] = 0.0;
-leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
 
 @  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
 radians about the axis specified by a unit vector@^unit vector@> $u
@@ -2570,19 +2563,13 @@ sz = sine * op_z;
 leaf_node->affine[0][0] = tx * op_x + cosine;
 leaf_node->affine[0][1] = txy + sz;
 leaf_node->affine[0][2] = txz - sy;
-leaf_node->affine[0][3] = 0.0;
 leaf_node->affine[1][0] = txy - sz;
 leaf_node->affine[1][1] = ty * op_y + cosine;
 leaf_node->affine[1][2] = tyz + sx;
-leaf_node->affine[1][3] = 0.0;
 leaf_node->affine[2][0] = txz + sy;
 leaf_node->affine[2][1] = tyz - sx;
 leaf_node->affine[2][2] = tz * op_z + cosine;
-leaf_node->affine[2][3] = 0.0;
-leaf_node->affine[3][0] = 0.0;
-leaf_node->affine[3][1] = 0.0;
-leaf_node->affine[3][2] = 0.0;
-leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
+leaf_node->affine[3][3] = 1.0;
 
 @ The inverse scaling matrix $S^{-1}$ for a scaling with
 scaling factors $(x, y, z)$ is given by:
@@ -2602,21 +2589,9 @@ using {\sl row-major}@^row-major@> form.
 
 @<Set up the matrix for inverse scaling@>=
 leaf_node->affine[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
-leaf_node->affine[0][1] = 0.0;
-leaf_node->affine[0][2] = 0.0;
-leaf_node->affine[0][3] = 0.0;
-leaf_node->affine[1][0] = 0.0;
 leaf_node->affine[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
-leaf_node->affine[1][2] = 0.0;
-leaf_node->affine[1][3] = 0.0;
-leaf_node->affine[2][0] = 0.0;
-leaf_node->affine[2][1] = 0.0;
 leaf_node->affine[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
-leaf_node->affine[2][3] = 0.0;
-leaf_node->affine[3][0] = 0.0;
-leaf_node->affine[3][1] = 0.0;
-leaf_node->affine[3][2] = 0.0;
-leaf_node->affine[3][3] = 1.0; /* homogeneous coordinate */
+leaf_node->affine[3][3] = 1.0;
 
 
 @*1 Evaluation of CSG boolean expression.
