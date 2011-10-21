@@ -1732,7 +1732,7 @@ the right subtree.
 n->bb = l->bb;
 break;
 
-@*2 Merge and move affine transformations.
+@*2 Merge affine transformations.
 Every node has an affine transformation matrix, which is initialised
 to the identity matrix. When an affine transformation $T$ is applied
 to a node, the affine matrix for that node is updated. This affine
