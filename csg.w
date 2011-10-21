@@ -1647,7 +1647,7 @@ calculated bounding box, to obtain the actual bounds.
 
 @<Calculate affine transformed bounding box@>=
 @<Calculate the eight corners of the bounding box@>;
-@<Apply inverse of the affine transformation to the corners@>;
+@<Apply affine transformations to the corners@>;
 @<Calculate axis aligned bounding box of the transformed bounding box@>;
 
 @ @<Calculate the eight corners of the bounding box@>=
@@ -1658,7 +1658,7 @@ c[4][0] = c[5][0] = c[6][0] = c[7][0] = n->bb.u[0];
 c[2][1] = c[3][1] = c[6][1] = c[7][1] = n->bb.u[1];
 c[1][2] = c[3][2] = c[5][2] = c[7][2] = n->bb.u[2];
 
-@ @<Apply inverse of the affine transformation to the corners@>=
+@ @<Apply affine transformations to the corners@>=
 for (i = 0; i < 8; ++i) {
         c[i][3] = 1.0; /* homogenise the corner vector */
         affine_normal(n, &c[i][0], temp);
