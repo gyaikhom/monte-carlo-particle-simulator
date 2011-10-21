@@ -547,6 +547,10 @@ bool read_geometry(const char *n)
 	return false;
 }
 
+@ @<Local variables: |read_geometry()|@>=
+FILE *f;
+char c;
+
 @ We use the temporary variable |input_file_name| to store the name of
 the file that is currently being processed, so that if we wish, we
 might generate the name of the file at runtime (e.g., by appending
@@ -1208,7 +1212,7 @@ if (NULL == leaf_node) {
 	leaf_node->leaf.t.displacement[0] = op_x;
 	leaf_node->leaf.t.displacement[1] = op_y;
 	leaf_node->leaf.t.displacement[2] = op_z;
-        @<Set up the matrix for inverse translation@>;
+        @<Set up the matrix for translation@>;
 }
 
 @ @<Exit after cleanup: failed to create leaf node@>=
@@ -1309,7 +1313,7 @@ if (NULL == leaf_node) {
 	leaf_node->leaf.r.axis[0] = op_x;
 	leaf_node->leaf.r.axis[1] = op_y;
 	leaf_node->leaf.r.axis[2] = op_z;
-        @<Set up the matrix for inverse rotation@>;
+        @<Set up the matrix for rotation@>;
 }
 
 @ Finally, create the rotation operator node, and attach the target
@@ -1394,7 +1398,7 @@ if (NULL == leaf_node) {
 	leaf_node->leaf.s.scale[0] = op_x;
 	leaf_node->leaf.s.scale[1] = op_y;
 	leaf_node->leaf.s.scale[2] = op_z;
-	@<Set up the matrix for inverse scaling@>;
+	@<Set up the matrix for scaling@>;
 }
 
 @ Finally, create the scaling operator node, and attach the target
@@ -1590,13 +1594,13 @@ bool intersection_bb(BoundingBox *n, BoundingBox *l, BoundingBox *r, int a)
 @ Function |apply_affine_matrix(m,v,r)| applies the affine
 transformation matrix |m| to the vector |v| and stores the transformed
 vector in |r|. The original vector |v| is left unmodified. The two
-macros |affine_forward()| and |affine_reverse()| use this function to
-respectively apply the affine matrix for forward transformations, or
-the reverse transformations ({\sl matrix inverse} of the forward
+macros |affine_normal()| and |affine_inverse()| use this function to
+respectively apply the affine matrix for normal transformations, or
+the inverse transformations ({\sl matrix inverse} of the normal
 affine matrix).
 
-@d affine_forward(n,v,r) apply_affine_matrix((n)->affine, (v), (r))
-@d affine_reverse(n,v,r) apply_affine_matrix((n)->inverse, (v), (r))
+@d affine_normal(n,v,r) apply_affine_matrix((n)->affine, (v), (r))
+@d affine_inverse(n,v,r) apply_affine_matrix((n)->inverse, (v), (r))
 @<Global functions@>=
 void apply_affine_matrix(Matrix m, Vector v, Vector r)
 {
@@ -1657,7 +1661,7 @@ c[1][2] = c[3][2] = c[5][2] = c[7][2] = n->bb.u[2];
 @ @<Apply inverse of the affine transformation to the corners@>=
 for (i = 0; i < 8; ++i) {
         c[i][3] = 1.0; /* homogenise the corner vector */
-        affine_reverse(n, &c[i][0], temp);
+        affine_normal(n, &c[i][0], temp);
         vector_copy(&c[i][0], temp);
 }
 
@@ -1801,7 +1805,7 @@ CSG_Node *merge_affine(CSG_Node *r)
 p = r->parent; /* parent of first affine transformation node */
 do {
         t = r;
-	matrix_multiply(t->internal.right->affine, m, mm); /* accumulate */
+	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate */
 	matrix_copy(m, mm);
 	r = t->internal.left;
 } while (TRANSLATE == r->op || ROTATE == r->op || SCALE == r->op);
@@ -1815,7 +1819,7 @@ r->parent = p;
 @ @<Finalise affine on primitive, or merge affine on subtrees@>=
 if (SOLID == r->op) {
     if (r->parent) {
-        matrix_multiply(r->parent->affine, r->affine, mm);
+        matrix_multiply(r->affine, r->parent->affine, mm);
         matrix_copy(r->affine, mm);
 	matrix_inverse(r->affine, mm);
 	matrix_copy(r->inverse, mm);
@@ -2353,7 +2357,7 @@ Solid primitives are created internally so that their origin coincides
 with the origin of the world coordinate frame. Any translation or
 transformation applied henceforth is then stored as operators in the
 CSG tree. Thus, while carrying out
-|@<Test containment after transformation or translation@>|, we apply 
+|@<Test containment after affine transformations@>|, we apply 
 the inverse of the transformations or translations directly to the
 point being tested, instead of testing the point against the
 transformed solid. This will become clearer in the following
@@ -2368,7 +2372,7 @@ course, these initial orientations are primitive specific, as
 discussed in the following sections.
 
 @<Test containment inside primitive solid@>=
-affine_forward(root, v, r);
+affine_inverse(root, v, r);
 p = root->leaf.p;
 switch(p->type) {
 case BLOCK: return is_inside_block(r, p);
@@ -2410,7 +2414,7 @@ Containment recursively_test_containment(CSG_Node *root, Vector v)
                 if (UNION <= root->op && DIFFERENCE >= root->op) {
                         @<Test containment in subtrees using boolean operators@>;
                 } else {
-                        @<Test containment after transformation or translation@>;
+                        @<Test containment after affine transformations@>;
                 }
         }
 	return INVALID;
@@ -2463,51 +2467,62 @@ case DIFFERENCE:
 default: return INVALID;
 }
 
-@*3 Containment inside transformed or translated solids.
-Let $T_i$ represent a solid transformation (translation, rotation, or
-scaling), and let $T^{-1}_i$ represent its inverse. Furthermore, let
-$T = \{T_0, \ldots, T_{n-1}\}$ represent an ordered sequence of $n$
-transformations. If $s$ represents a solid, and $s'$ represents the
-solid after applying $T$ to $s$, in ascending order starting with
-$T_0$, and if $r$ represents the result of applying to a homogeneous
-vector $v$ the inverse of the transformations in $T$ in descending
-order starting with $T^{-1}_{n-1}$, then: Checking if $v$ lies inside
-the volume defined by $s'$, is equivalent to checking if $r$ lies
-inside $s$.
+@*3 Containment after affine transformations.
+Let $T_i$ represent an {\sl affine transformation} matrix, which
+expresses one of translation, rotation or scaling, and let $T^{-1}_i$
+represent its inverse. Furthermore, let $T = \{T_0, \ldots, T_{n-1}\}$
+represent an ordered sequence of $n$ transformations. If $s$
+represents a solid, and $s'$ represents the solid after applying $T$
+to $s$, in ascending order starting with $T_0$, and if $r$ represents
+the result of applying to a homogeneous vector $v$ the inverse of the
+transformations in $T$ in descending order starting with
+$T^{-1}_{n-1}$, i.e. $s' = T_{n-1} \times T_{n-2} \times \ldots \times
+T_1 \times T_0 \times s$ and $r = T_0^{-1} \times T_1^{-1} \times
+\ldots \times T_{n-2}^{-1} \times T_{n-1}^{-1} \times v$, then
+checking if $v$ lies inside $s'$, is equivalent to checking if $r$
+lies inside $s$. This is because of the matrix property:
+
+\medskip
+
+\centerline{$(T_{n-1} \times T_{n-2} \times \ldots \times
+T_1 \times T_0)^{-1} = T_0^{-1} \times T_1^{-1} \times
+\ldots \times T_{n-2}^{-1} \times T_{n-1}^{-1}$}
+
+\medskip
 
 This significantly simplifies the testing of points using the CSG
 tree: 1) it is easier to calculate $r$ from $v$, and 2)
 containment testing is easier with $s$ than it is with $s'$.
 
-@<Test containment after transformation or translation@>=
+@<Test containment after affine transformations@>=
 switch(root->op) {
 case TRANSLATE:
-        affine_forward(root->internal.right, v, r);
+        affine_inverse(root->internal.right, v, r);
         break;
 case ROTATE:
-        affine_forward(root->internal.right, v, r);
+        affine_inverse(root->internal.right, v, r);
         break;
 case SCALE:
-        affine_forward(root->internal.right, v, r);
+        affine_inverse(root->internal.right, v, r);
         break;
 default: return INVALID;
 }
 return recursively_test_containment(root->internal.left, r);
 
-@ The inverse translation matrix $T^{-1}$ for a translation with
-displacement vector $(x, y, z)$ is given by:
+@ The affine matrix $T$ for a translation with displacement vector
+$(x, y, z)$ is given by:
 
 \medskip
 
-$T^{-1} = \left(\matrix{1.0 & 0.0 & 0.0 & -x\cr
-0.0 & 1.0 & 0.0 & -y\cr
-0.0 & 0.0 & 1.0 & -z\cr
-0.0 & 0.0 & 0.0 & 1\cr
+$T = \left(\matrix{1.0 & 0.0 & 0.0 & x\cr
+0.0 & 1.0 & 0.0 & y\cr
+0.0 & 0.0 & 1.0 & z\cr
+0.0 & 0.0 & 0.0 & 1.0\cr
 }\right)$
 
 \medskip
 
-The matrix $T^{-1}$ is stored in the two dimensional array |matrix|
+This affine matrix $T$ is stored in the two dimensional array |affine|
 using {\sl row-major}@^row-major@> form.
 
 NOTE: In the following initialisations of the affine matrices, we only
@@ -2515,38 +2530,38 @@ set the nonzero elements. All of the node fields have already been
 initialised to zero during |create_csg_node()|, since it uses
 |mem_typed_alloc()| which in turn uses the |calloc()| system call.
 
-@<Set up the matrix for inverse translation@>=
+@<Set up the matrix for translation@>=
 leaf_node->affine[0][0] = leaf_node->affine[1][1] = leaf_node->affine[2][2] = leaf_node->affine[3][3] = 1.0;
-leaf_node->affine[0][3] = -op_x; /* inverse $x$-axis translation */
-leaf_node->affine[1][3] = -op_y; /* inverse $y$-axis translation */
-leaf_node->affine[2][3] = -op_z; /* inverse $z$-axis translation */
+leaf_node->affine[0][3] = op_x; /* $x$-axis translation */
+leaf_node->affine[1][3] = op_y; /* $y$-axis translation */
+leaf_node->affine[2][3] = op_z; /* $z$-axis translation */
 
-@  The inverse rotation matrix $R^{-1}$ for a rotation of $\theta$
-radians about the axis specified by a unit vector@^unit vector@> $u
-= (x, y, z)$ in the world coordinate frame is given by:
+@  The affine matrix $R$ for a rotation of $\theta$ radians about the
+axis specified by a unit vector $u = (x, y, z)$ in the world
+coordinate frame is given by:
 
 \medskip
 
-$R^{-1} = \left(\matrix{tx^2 + c & txy + sz & txz - sy & 0.0\cr
-txy - sz & ty^2 + c & tyz + sx & 0.0\cr
-txz + sy & tyz - sx & tz^2 + c & 0.0\cr
+$R = \left(\matrix{tx^2 + c & txy - sz & txz + sy & 0.0\cr
+txy + sz & ty^2 + c & tyz - sx & 0.0\cr
+txz - sy & tyz + sx & tz^2 + c & 0.0\cr
 0.0 & 0.0 & 0.0 & 1.0\cr
 }\right)$
 
 \medskip
 
 \noindent where, $c = \cos(\theta)$, $s = \sin(\theta)$, and $t = 1 -
-\cos(\theta)$.
+\cos(\theta)$. This representation is taken from the article {\sl The
+Mathematics of the 3D Rotation Matrix} by Diana Gruber
+(http://www.fastgraph.com/makegames/3drotation/).
 
 @<Local variables: |read_geometry()|@>=
-FILE *f;
-char c;
 double sine, cosine, t, tx, ty, tz, txy, txz, tyz, sx, sy, sz;
 
-@ The matrix $R^{-1}$ is stored in the two dimensional
-array |matrix| using {\sl row-major}@^row-major@> form.
+@ The matrix $R$ is stored in the two dimensional
+array |affine| using {\sl row-major}@^row-major@> form.
 
-@<Set up the matrix for inverse rotation@>=
+@<Set up the matrix for rotation@>=
 op_theta *= DEGREE_TO_RADIAN;
 sine = -sin(op_theta);
 cosine = cos(op_theta);
@@ -2561,36 +2576,36 @@ sx = sine * op_x;
 sy = sine * op_y;
 sz = sine * op_z;
 leaf_node->affine[0][0] = tx * op_x + cosine;
-leaf_node->affine[0][1] = txy + sz;
-leaf_node->affine[0][2] = txz - sy;
-leaf_node->affine[1][0] = txy - sz;
+leaf_node->affine[0][1] = txy - sz;
+leaf_node->affine[0][2] = txz + sy;
+leaf_node->affine[1][0] = txy + sz;
 leaf_node->affine[1][1] = ty * op_y + cosine;
-leaf_node->affine[1][2] = tyz + sx;
-leaf_node->affine[2][0] = txz + sy;
-leaf_node->affine[2][1] = tyz - sx;
+leaf_node->affine[1][2] = tyz - sx;
+leaf_node->affine[2][0] = txz - sy;
+leaf_node->affine[2][1] = tyz + sx;
 leaf_node->affine[2][2] = tz * op_z + cosine;
 leaf_node->affine[3][3] = 1.0;
 
-@ The inverse scaling matrix $S^{-1}$ for a scaling with
+@ The affine matrix $S$ for a scaling with
 scaling factors $(x, y, z)$ is given by:
 
 \medskip
 
-$S^{-1} = \left(\matrix{1/x & 0.0 & 0.0 & 0.0\cr
-0.0 & 1/y & 0.0 & 0.0\cr
-0.0 & 0.0 & 1/z & 0.0\cr
-0.0 & 0.0 & 0.0 & 1\cr
+$S = \left(\matrix{x & 0.0 & 0.0 & 0.0\cr
+0.0 & y & 0.0 & 0.0\cr
+0.0 & 0.0 & z & 0.0\cr
+0.0 & 0.0 & 0.0 & 1.0\cr
 }\right)$
 
 \medskip
 
-The matrix $S^{-1}$ is stored in the two dimensional array |matrix|
+The matrix $S$ is stored in the two dimensional array |affine|
 using {\sl row-major}@^row-major@> form.
 
-@<Set up the matrix for inverse scaling@>=
-leaf_node->affine[0][0] = 1.0 / op_x; /* inverse $x$-axis scaling */
-leaf_node->affine[1][1] = 1.0 / op_y; /* inverse $y$-axis scaling */
-leaf_node->affine[2][2] = 1.0 / op_z; /* inverse $z$-axis scaling */
+@<Set up the matrix for scaling@>=
+leaf_node->affine[0][0] = op_x; /* $x$-axis scaling */
+leaf_node->affine[1][1] = op_y; /* $y$-axis scaling */
+leaf_node->affine[2][2] = op_z; /* $z$-axis scaling */
 leaf_node->affine[3][3] = 1.0;
 
 
