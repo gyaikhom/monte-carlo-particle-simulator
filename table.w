@@ -10,18 +10,15 @@
 
 @<Type definitions@>=
 typedef struct {
+    @<Sizes of the geometry table components@>;
     @<Counters used during geometry table generation@>;
-    @<Define shared primitives table@>;
-    @<Define shared solids table@>;
-    @<Define shared subcuboids table@>;
+    struct primitives_table_item *p;
+    struct solids_table_item *s;
+    struct subcuboids_table_item *c;
+    int32_t *pb; /* pointer to the postfix expression buffer */
+    int32_t *sb; /* pointer to the solid indices buffer */
 } GeometryTable;
 GeometryTable geotab;
-
-@ @<Counters used during geometry table generation@>=
-uint32_t ip; /* index within primitive table */
-uint32_t is; /* index within solid table */
-uint32_t ic; /* index within subcuboid table */
-uint32_t ipf; /* index within postfix expression buffer */
 
 @
 
@@ -31,12 +28,11 @@ uint32_t ipf; /* index within postfix expression buffer */
 
 \bigskip
 
-@d primitives_table_size 1024 /* maximum number of primitives */
-@<Define shared primitives table@>=
-struct {
-    Matrix a, i; /* affine and inverse */
+@<Type definitions@>=
+struct primitives_table_item {
+    Matrix a, i; /* accumulated affine and inverse transformations */
     Primitive p; /* primtive data */
-} p[primitives_table_size]; /* primitives table */
+};
 
 @
 
@@ -46,13 +42,10 @@ struct {
 
 \bigskip
 
-@d solids_table_size 512 /* maximum number of CSG solids */
-@d postfix_buffer_size 4096 /* size of the postfix buffer */
-@<Define shared solids table@>=
-struct {
-    uint32_t s, e; /* postfix expression start and end indices */
-} s[solids_table_size]; /* solids table */
-int32_t pf[postfix_buffer_size]; /* postfix expression buffer */
+@<Type definitions@>=
+struct solids_table_item {
+    uint32_t s, c; /* start index and item count in postfix expression buffer */
+};
 
 @
 
@@ -62,65 +55,112 @@ int32_t pf[postfix_buffer_size]; /* postfix expression buffer */
 
 \bigskip
 
-@d subcuboids_table_size 256
-@d max_solids_per_subcuboid 100
-@<Define shared subcuboids table@>=
-struct {
-    uint32_t n; /* number of solids inside subcuboid */
-    uint32_t s[max_solids_per_subcuboid]; /* indices of solids */
-} c[subcuboids_table_size]; /* subcuboids table */
+@<Shared subcuboids table@>=
+struct subcuboids_table_item {
+    uint32_t s, c;  /* start index and item count in solid indices buffer */
+};
+
+@ @<Sizes of the geometry table components@>=
+uint32_t np; /* number of entries in primitives table */
+uint32_t ns; /* number of entries in solids table */
+uint32_t nc; /* number of entries in subcuboids table */
+uint32_t npb; /* number of entries in postfix expression buffer */
+uint32_t nsb; /* number of entries in solid indices buffer */
+
+@ @<Counters used during geometry table generation@>=
+uint32_t ip; /* index within primitives table */
+uint32_t is; /* index within solids table */
+uint32_t ic; /* index within subcuboids table */
+uint32_t ipb; /* index within postfix expression buffer */
+uint32_t isb; /* index within solid indics buffer */
 
 @ @<Global functions@>=
 void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
-    if (NULL == n) return;
+    if (NULL == g || NULL == n) return;
     if (PRIMITIVE == n->op) {
         matrix_copy(g->p[g->ip].a, n->affine);
 	matrix_copy(g->p[g->ip].i, n->inverse);
 	g->p[g->ip].p = *(n->leaf.p);
-	g->pf[g->ipf++] = g->ip++;
+	g->pb[(g->ipb)++] = (g->ip)++;
         return;
     }
     fill_geotab_with_csg(g, n->internal.left);
+    fill_geotab_with_csg(g, n->internal.right);
     switch(n->op) {
     case UNION:
-        g->pf[g->ipf++] = BOOLEAN_UNION;
+        g->pb[g->ipb++] = BOOLEAN_UNION;
         break;
     case INTERSECTION:
-        g->pf[g->ipf++] = BOOLEAN_INTERSECTION;
+        g->pb[g->ipb++] = BOOLEAN_INTERSECTION;
         break;
     case DIFFERENCE:
-        g->pf[g->ipf++] = BOOLEAN_DIFFERENCE;
+        g->pb[g->ipb++] = BOOLEAN_DIFFERENCE;
         break;
     default: ;
     }
-    fill_geotab_with_csg(g, n->internal.right);
 }
 
 @ @<Global functions@>=
 void create_geotab(GeometryTable *g)
 {
-    int i, j;
+    int i;
     CSG_Node *s;
     @<Initialise the geometry table@>;
-    for (i = 0; i < MAX_CSG_SOLIDS; ++i) {
+    for (i = 0; i < forest_of_solids.n; ++i) {
         s = forest_of_solids.s[i];
         @<Fill table entries for this solid@>;
-	@<Add solid to subcuboid if contained by subcuboid@>;
     }
 }
 
 @ @<Initialise the geometry table@>=
-g->ip = g->is = g->ic = g->ipf = 0;
-for (i = 0; i < subcuboids_table_size; ++i) g->c[i].n = 0;
+g->ip = g->is = g->ic = g->ipb = g->isb = g->nc = g->nsb = 0;
+g->np = nodes_repo->stat[PRIMITIVE];
+g->npb = nodes_repo->stat[PRIMITIVE] +
+       nodes_repo->stat[UNION] +
+       nodes_repo->stat[INTERSECTION] +
+       nodes_repo->stat[DIFFERENCE];
+g->ns = forest_of_solids.n;
+g->p = mem_typed_alloc(g->np, struct primitives_table_item, mem_phase_two);
+g->pb = mem_typed_alloc(g->npb, int32_t, mem_phase_two); 
+g->s = mem_typed_alloc(g->ns, struct solids_table_item, mem_phase_two);
 
 @ @<Fill table entries for this solid@>=
 if (NULL == s) continue;
-g->s[g->is].s = g->ipf;
+g->s[g->is].s = g->ipb;
 fill_geotab_with_csg(g, s);
-g->s[g->is].e = g->ipf;
+g->s[g->is].c = g->ipb - g->s[g->is].s;
+++(g->is);
 
 @ @<Add solid to subcuboid if contained by subcuboid@>=
 for (j = 0; j < MAX_SUBCUBOIDS; ++j) {
     if (no_intersection_bb(subcuboids[j].bb, s->bb)) continue;
     g->c[j].s[g->c[j].n++] = g->is++;
+}
+
+@ @<Global functions@>=
+void print_geotab(FILE *f, GeometryTable *g)
+{
+	uint32_t i, j;
+	fprintf(f, "G E O M E T R Y  T A B L E\nPrimitives table:\n");
+	for (i = 0; i < g->np; ++i) {
+	    fprintf(f, "Affine:\n");
+	    matrix_print(f, g->p[i].a, 4, 4, 0);
+	    fprintf(f, "\nInverse:\n");
+	    matrix_print(f, g->p[i].i, 4, 4, 0);
+	    for (j = 0; j < 80; ++j) fprintf(f, "-");
+	    fprintf(f, "\n");
+	}
+	fprintf(f, "Solids table:\n");
+	for (i = 0; i < g->ns; ++i) fprintf(f, "%u %u\n", g->s[i].s, g->s[i].c);
+	fprintf(f, "Postfix buffer:\n");
+	for (i = 0; i < g->npb; ++i) fprintf(f, "%d ", g->pb[i]);
+	fprintf(f, "\n");
+}
+
+@ @<Test geometry table generation@>=
+{
+        if (false == read_geometry("input.dat")) exit(1);
+	print_geom_statistics(stdout);
+	create_geotab(&geotab);
+	print_geotab(stdout, &geotab);
 }

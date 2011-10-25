@@ -371,7 +371,7 @@ typedef struct {
        CSG_Node *root; /* pointer to the CSG root */
        CSG_Node *table[MAX_CSG_NODES]; /* hash table of nodes */
 } NodesRepository;
-NodesRepository *nodes_repository = NULL;
+NodesRepository *nodes_repo = NULL;
 
 @ The nodes repository is only used in phase one, when the data from
 the input files are processed at the beginning. In phase two, this
@@ -389,8 +389,8 @@ memory. Hence, we do not need to initiliase the fields separately.
 @<Global functions@>=
 bool create_nodes_repository()
 {
-    nodes_repository = mem_typed_alloc(1, NodesRepository, mem_phase_one);
-    if (NULL == nodes_repository) return false;
+    nodes_repo = mem_typed_alloc(1, NodesRepository, mem_phase_one);
+    if (NULL == nodes_repo) return false;
     return true;
 }
 
@@ -406,12 +406,12 @@ intersections, differences, translations, rotations and scalings.
 @<Global functions@>=
 void print_geom_statistics(FILE *f)
 {
-    if (NULL == nodes_repository) return;
+    if (NULL == nodes_repo) return;
     fprintf(f, "Geometry statistics\n\tprimitive: %u\n\tunion: %u\n\tintersection: %u\n\tdifference: %u\n\ttranslation: %u\n\trotation: %u\n\tscaling: %u\n",
-    nodes_repository->stat[0], nodes_repository->stat[1],
-    nodes_repository->stat[2], nodes_repository->stat[3],
-    nodes_repository->stat[4], nodes_repository->stat[5],
-    nodes_repository->stat[6]);
+    nodes_repo->stat[0], nodes_repo->stat[1],
+    nodes_repo->stat[2], nodes_repo->stat[3],
+    nodes_repo->stat[4], nodes_repo->stat[5],
+    nodes_repo->stat[6]);
 }
 
 @ The hash code for a string $c_1 c_2 \ldots c_l$ of length $l$ is a
@@ -446,10 +446,10 @@ bool register_csg_node(CSG_Node *n, char *s) {
 	 long h;
 	 if (NULL == n || NULL == s) return false;
 	 h = hash(s, MAX_CSG_NODES);
-	 if (NULL == nodes_repository->table[h]) {
+	 if (NULL == nodes_repo->table[h]) {
                  strcpy(n->name, s);
-	         nodes_repository->table[h] = n;
-		 nodes_repository->root = n; /* set as current root */
+	         nodes_repo->table[h] = n;
+		 nodes_repo->root = n; /* set as current root */
 		 return true;
 	 }
 	 return false;
@@ -461,7 +461,7 @@ NULL is returned; otherwise, a pointer to the node is returned.
 @<Global functions@>=
 CSG_Node *find_csg_node(char *s) {
 	 if (NULL == s) return NULL;
-	 return nodes_repository->table[hash(s, MAX_CSG_NODES)];
+	 return nodes_repo->table[hash(s, MAX_CSG_NODES)];
 }
 
 @*2 The geometry input file.
@@ -770,7 +770,7 @@ if (EOF == read_count || 4 != read_count) {
 }
 p->type = BLOCK;
 @<Prepare block for containment testing@>;
-++(nodes_repository->stat[PRIMITIVE]);
+++(nodes_repo->stat[PRIMITIVE]);
 
 @ To improve containment testing, we precalculate some of the values
 that are used frequently. We first half the dimensions, and then
@@ -831,7 +831,7 @@ if (EOF == read_count || 2 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = SPHERE;
-++(nodes_repository->stat[PRIMITIVE]);
+++(nodes_repo->stat[PRIMITIVE]);
 
 
 @ The parameters for the cylinder geometry are supplied in the following
@@ -862,7 +862,7 @@ if (EOF == read_count || 3 != read_count) {
 }
 p->type = CYLINDER;
 @<Prepare cylinder for containment testing@>;
-++(nodes_repository->stat[PRIMITIVE]);
+++(nodes_repo->stat[PRIMITIVE]);
 
 @ @<Prepare cylinder for containment testing@>=
 @<Half the height the cylinder@>;
@@ -918,7 +918,7 @@ if (EOF == read_count || 7 != read_count) {
 }
 p->type = TORUS;
 @<Prepare torus for containment testing@>;
-++(nodes_repository->stat[PRIMITIVE]);
+++(nodes_repo->stat[PRIMITIVE]);
 
 @ @<Prepare torus for containment testing@>=
 @<Calculate radial containment range for the torus@>;
@@ -1009,7 +1009,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[UNION]);
+	++(nodes_repo->stat[UNION]);
 }
 
 @ @<Set parents, and pointers to intermediate solids@>=
@@ -1076,7 +1076,7 @@ if (NULL == internal_node) {
         @<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[INTERSECTION]);
+	++(nodes_repo->stat[INTERSECTION]);
 }
 
 @*2 Difference.
@@ -1135,7 +1135,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[DIFFERENCE]);
+	++(nodes_repo->stat[DIFFERENCE]);
 }
 
 @*2 Translation.
@@ -1229,7 +1229,7 @@ if (NULL == internal_node) {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[TRANSLATE]);
+	++(nodes_repo->stat[TRANSLATE]);
 }
 
 @ @<Set target, parameters and parent pointers@>=
@@ -1327,7 +1327,7 @@ if (NULL == internal_node) {
         internal_node->op = ROTATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[ROTATE]);
+	++(nodes_repo->stat[ROTATE]);
 }
 
 
@@ -1413,7 +1413,7 @@ if (NULL == internal_node) {
 	node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[SCALE]);
+	++(nodes_repo->stat[SCALE]);
 }
 
 @*2 Registering a solid.

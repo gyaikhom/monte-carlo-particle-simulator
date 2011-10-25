@@ -5,7 +5,7 @@
 @<Include preamble for applications@>@/
 int main(int argc, char *argv[])
 {
-	@<Test geometry input@>;
+	@<Test geometry table generation@>
 	@<Clean up the system@>;
 	return 0;
 }
