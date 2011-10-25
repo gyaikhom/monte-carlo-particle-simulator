@@ -1919,12 +1919,13 @@ default: printf("unknown");
 @<Print affine transformation matrices@>;
 
 @*2 Forest of solids. We record all of the solids by recording the
-root of their CSG tree using the solid's unique name. This is no a
-practical requirement since all we require for the actually processing
-are the geometry tables, which can be created directly when each of the
-solids are registered. Nonetheless, recording the forest of trees is
+root of their CSG tree using the solid's unique name. While this is no
+an absolute requirement, since all we require for the actually
+processing are the geometry tables, which can be created directly when
+each of the solids are registered, recording the forest of trees is
 useful for debugging purposes, and also, while printing out verbose
-information.
+information. Furthermore, generation of the geometry tables are
+significantly simplified, as we shall see in later sections.
 
 @d MAX_CSG_SOLIDS 512
 @<Global variables@>=
