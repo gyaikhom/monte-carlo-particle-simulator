@@ -19,6 +19,6 @@ easily reshuffle the sections for easy exposition, while avoiding
 compiler error.
 
 @<Forward declare functions@>=
-void process_and_register_solid(const char *name, CSG_Node *root);
+void process_and_register_solid(CSG_Node *root);
 Containment recursively_test_containment(CSG_Node *root, Vector v);
 

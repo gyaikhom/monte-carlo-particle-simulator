@@ -103,7 +103,7 @@ void create_geotab(GeometryTable *g)
     CSG_Node *s;
     @<Initialise the geometry table@>;
     for (i = 0; i < MAX_CSG_SOLIDS; ++i) {
-        s = forest_of_solids.t[i].s;
+        s = forest_of_solids.s[i];
         @<Fill table entries for this solid@>;
 	@<Add solid to subcuboid if contained by subcuboid@>;
     }

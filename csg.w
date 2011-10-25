@@ -1449,7 +1449,7 @@ if (EOF == read_count || 1 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 @ @<Register the target solid@>=
-process_and_register_solid(op_solid, target_solid);
+process_and_register_solid(target_solid);
 
 
 @*2 Defining the simulation world.
@@ -1919,74 +1919,51 @@ default: printf("unknown");
 @<Print affine transformation matrices@>;
 
 @*2 Forest of solids. We record all of the solids by recording the
-root of their CSG tree using the solid's unique name. While this is no
-an absolute requirement, since all we require for the actually
-processing are the geometry tables, which can be created directly when
-each of the solids are registered, recording the forest of trees is
-useful for debugging purposes, and also, while printing out verbose
+root of their CSG tree. Recording the forest of trees is useful for
+debugging purposes, and also, while printing out verbose
 information. Furthermore, generation of the geometry tables are
-significantly simplified, as we shall see in later sections.
+significantly simplified, as we shall see in later sections. We do not
+use a hash table because all of the solids will be processed
+sequentially, and there will be no searching.
 
 @d MAX_CSG_SOLIDS 512
+@d reset_forest() memset(&forest_of_solids, 0, sizeof(forest_of_solids))
 @<Global variables@>=
 struct {
     uint32_t n; /* number of solids in forest */
-    struct {
-       	char nm[MAX_LEN_NODE_NAME]; /* unique solid name */
-        CSG_Node *s; /* root of CSG tree */
-    } t[MAX_CSG_SOLIDS]; /* hash table of solids */
+    CSG_Node *s[MAX_CSG_SOLIDS]; /* root of CSG tree */
 } forest_of_solids;
-
-@ Function |reset_forest()| resets the forest of solids by resetting
-the hash table.
-@<Global functions@>=
-void reset_forest()
-{
-	uint32_t i;
-	forest_of_solids.n = 0;
-	for (i = 0; i < MAX_CSG_SOLIDS; ++i) forest_of_solids.t[i].s = NULL;
-}
 
 @ Function |print_forest()| prints all of the solids in the forest.
 @<Global functions@>=
 void print_forest()
 {
-	uint32_t i, j, k;
-	for (i = 0, k = forest_of_solids.n; k && i < MAX_CSG_SOLIDS; ++i) {
-	        if (NULL == forest_of_solids.t[i].s) continue;
-		printf("Solid %s:\n\n", forest_of_solids.t[i].nm);
-	        print_csg_tree(forest_of_solids.t[i].s, 0);
+	uint32_t i, j;
+	for (i = 0; i < forest_of_solids.n; ++i) {
+	        if (NULL == forest_of_solids.s[i]) continue;
+		printf("Solid %s:\n\n", forest_of_solids.s[i]->name);
+	        print_csg_tree(forest_of_solids.s[i], 0);
 		printf("\n");
 		for (j = 0; j < 80; j++) printf("-");
 		printf("\n");
-		--k;
 	}
 }
 
-@ Function |process_and_register_solid(n,r)| registers the solid
-pointed to by the CSG tree root |r| using the unique name |n|. Before
-registering the solid, the CSG tree is processed to the required form
-by merging the affine transformations, and by finding the bounding
-box.
+@ Function |process_and_register_solid(r)| registers the solid
+pointed to by the CSG tree root |r|. Before registering the solid, the
+CSG tree is processed to the required form by merging the affine
+transformations, and by finding the bounding box.
 
-The macro |find_solid(n)| is used to locate a solid with the name
-|n| in the forest of solids.
-
-@d find_solid(n) (forest_of_solids.t[hash((n), MAX_CSG_SOLIDS)].s)
 @<Global functions@>=
-void process_and_register_solid(const char *n, CSG_Node *r)
+void process_and_register_solid(CSG_Node *r)
 {
-	long h;
 	CSG_Node *t;
-	if (NULL == r || NULL == n) return;
+	if (NULL == r) return;
 	t = merge_affine(r); /* returns a non-affine node;
 	otherwise returns |NULL| */
 	if (NULL == t) t = r; /* in case |r| was a primitive solid */
 	calculate_bounding_box(t);
-	h = hash(n, MAX_CSG_SOLIDS);
-	strcpy(forest_of_solids.t[h].nm, n);
-	forest_of_solids.t[h].s = t;
-	++(forest_of_solids.n);
+	forest_of_solids.s[(forest_of_solids.n)++] = t;
 }
 
 @*1 Particles inside solids.
@@ -2781,7 +2758,7 @@ if (EOF == n || 4 != n) {
 }
 
 @ @<Validate the test-case@>=
-temp_node = find_solid(op_solid);
+temp_node = find_csg_node(op_solid);
 if (NULL == temp_node) {
         printf("[%d] Solid '%s' not found\n",
 	input_file_current_line, op_solid);
