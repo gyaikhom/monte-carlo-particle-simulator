@@ -229,8 +229,8 @@ operators are unary, whereas boolean operators are binary.
 
 @<Type definitions@>=
 typedef enum {
-	SOLID = 0, PARAMETER, UNION, INTERSECTION, DIFFERENCE,
-	TRANSLATE, SCALE, ROTATE
+	PRIMITIVE = 0, UNION, INTERSECTION, DIFFERENCE,
+	TRANSLATE, ROTATE, SCALE, PARAMETER
 } csg_node_type;
 
 @ A CSG solid is represented by a binary tree where the root
@@ -770,7 +770,7 @@ if (EOF == read_count || 4 != read_count) {
 }
 p->type = BLOCK;
 @<Prepare block for containment testing@>;
-++(nodes_repository->stat[0]);
+++(nodes_repository->stat[PRIMITIVE]);
 
 @ To improve containment testing, we precalculate some of the values
 that are used frequently. We first half the dimensions, and then
@@ -797,7 +797,7 @@ leaf_node = create_csg_node();
 if (NULL == leaf_node) {
         @<Exit after cleanup: failed to create leaf node@>;
 } else {
-        leaf_node->op = SOLID; /* this is a primitive solid leaf node */
+        leaf_node->op = PRIMITIVE; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
 	leaf_node->parent = NULL;
 	register_csg_node(leaf_node, op_solid);
@@ -831,7 +831,7 @@ if (EOF == read_count || 2 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
 p->type = SPHERE;
-++(nodes_repository->stat[0]);
+++(nodes_repository->stat[PRIMITIVE]);
 
 
 @ The parameters for the cylinder geometry are supplied in the following
@@ -862,7 +862,7 @@ if (EOF == read_count || 3 != read_count) {
 }
 p->type = CYLINDER;
 @<Prepare cylinder for containment testing@>;
-++(nodes_repository->stat[0]);
+++(nodes_repository->stat[PRIMITIVE]);
 
 @ @<Prepare cylinder for containment testing@>=
 @<Half the height the cylinder@>;
@@ -918,7 +918,7 @@ if (EOF == read_count || 7 != read_count) {
 }
 p->type = TORUS;
 @<Prepare torus for containment testing@>;
-++(nodes_repository->stat[0]);
+++(nodes_repository->stat[PRIMITIVE]);
 
 @ @<Prepare torus for containment testing@>=
 @<Calculate radial containment range for the torus@>;
@@ -1009,7 +1009,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[1]);
+	++(nodes_repository->stat[UNION]);
 }
 
 @ @<Set parents, and pointers to intermediate solids@>=
@@ -1076,7 +1076,7 @@ if (NULL == internal_node) {
         @<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[2]);
+	++(nodes_repository->stat[INTERSECTION]);
 }
 
 @*2 Difference.
@@ -1135,7 +1135,7 @@ if (NULL == internal_node) {
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
-	++(nodes_repository->stat[3]);
+	++(nodes_repository->stat[DIFFERENCE]);
 }
 
 @*2 Translation.
@@ -1229,7 +1229,7 @@ if (NULL == internal_node) {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[4]);
+	++(nodes_repository->stat[TRANSLATE]);
 }
 
 @ @<Set target, parameters and parent pointers@>=
@@ -1327,7 +1327,7 @@ if (NULL == internal_node) {
         internal_node->op = ROTATE; /* this is an operator internal node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[5]);
+	++(nodes_repository->stat[ROTATE]);
 }
 
 
@@ -1413,7 +1413,7 @@ if (NULL == internal_node) {
 	node */
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
-	++(nodes_repository->stat[6]);
+	++(nodes_repository->stat[SCALE]);
 }
 
 @*2 Registering a solid.
@@ -1625,7 +1625,7 @@ bool calculate_bounding_box(CSG_Node *n)
 	CSG_Node *l, *r; /* left and right subtrees */
 	Vector temp, c[8]; /* for affine transformation */
 	int i, j;
-	if (SOLID == n->op) {
+	if (PRIMITIVE == n->op) {
 	    if (primitive_bb(n->leaf.p, &n->bb)) {
 	        @<Calculate affine transformed bounding box@>;
 	        return true;
@@ -1790,7 +1790,7 @@ CSG_Node *merge_affine(CSG_Node *r)
 {
 	CSG_Node *t, *p; /* temporary node and parent node */
 	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
-	if (SOLID == r->op || PARAMETER == r->op) return NULL;
+	if (PRIMITIVE == r->op || PARAMETER == r->op) return NULL;
 	if (TRANSLATE == r->op ||
 	    ROTATE == r->op ||
 	    SCALE == r->op) {
@@ -1817,7 +1817,7 @@ matrix_copy(r->inverse, m);
 r->parent = p;
 
 @ @<Finalise affine on primitive, or merge affine on subtrees@>=
-if (SOLID == r->op) {
+if (PRIMITIVE == r->op) {
     if (r->parent) {
         matrix_multiply(r->affine, r->parent->affine, mm);
         matrix_copy(r->affine, mm);
@@ -1837,7 +1837,7 @@ to print the node in the current recursive call.
 void print_csg_tree(CSG_Node *t, uint32_t l) {
         int i;
         if (NULL == t) return;
-        if (SOLID == t->op) {
+        if (PRIMITIVE == t->op) {
                 @<Print primitive solid information@>;
                 return;
         }
@@ -2357,7 +2357,7 @@ Containment recursively_test_containment(CSG_Node *root, Vector v)
 {
         Containment left, right;
         Vector r; /* used during inverse transformation */
-        if (SOLID == root->op) {
+        if (PRIMITIVE == root->op) {
                 @<Test containment inside primitive solid@>;
 	} else {
                 if (UNION <= root->op && DIFFERENCE >= root->op) {

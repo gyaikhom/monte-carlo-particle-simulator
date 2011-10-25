@@ -73,7 +73,7 @@ struct {
 @ @<Global functions@>=
 void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
     if (NULL == n) return;
-    if (SOLID == n->op) {
+    if (PRIMITIVE == n->op) {
         matrix_copy(g->p[g->ip].a, n->affine);
 	matrix_copy(g->p[g->ip].i, n->inverse);
 	g->p[g->ip].p = *(n->leaf.p);
