@@ -2,6 +2,12 @@
 
 @** Preparing the shared tables.
 
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-solids,scale=1}}
+
+\bigskip
+
 @<Type definitions@>=
 typedef struct {
     @<Counters used during geometry table generation@>;
@@ -18,6 +24,13 @@ uint32_t ic; /* index within subcuboid table */
 uint32_t ipf; /* index within postfix expression buffer */
 
 @
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-primitives-table,scale=1}}
+
+\bigskip
+
 @d primitives_table_size 1024 /* maximum number of primitives */
 @<Define shared primitives table@>=
 struct {
@@ -26,6 +39,13 @@ struct {
 } p[primitives_table_size]; /* primitives table */
 
 @
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-solids-table,scale=1}}
+
+\bigskip
+
 @d solids_table_size 512 /* maximum number of CSG solids */
 @d postfix_buffer_size 4096 /* size of the postfix buffer */
 @<Define shared solids table@>=
@@ -35,6 +55,13 @@ struct {
 int32_t pf[postfix_buffer_size]; /* postfix expression buffer */
 
 @
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-subcuboids-table,scale=1}}
+
+\bigskip
+
 @d subcuboids_table_size 256
 @d max_solids_per_subcuboid 100
 @<Define shared subcuboids table@>=

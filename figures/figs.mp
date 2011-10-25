@@ -1,12 +1,4 @@
 \input boxes
-vardef arrowhead expr p =
-save A,u,a,b; pair A,u; path a,b;
-A := point length(p) of p;
-u := unitvector(direction length(p) of p);
-a := A{-u}..(A - ahlength*u rotated 20);
-b := A{-u}..(A - ahlength*u rotated -20);
-( a & reverse(a) & b & reverse(b) ) --cycle
-enddef;
 
 outputtemplate := "neighbour-direct.mps";
 beginfig(1);
@@ -223,6 +215,266 @@ beginfig(1);
   
   drawarrow u1.c{left}..i1.c cutbefore bpath.u1 cutafter bpath.i1 dashed evenly;
   drawarrow u1.c{down}..{down}u2.c cutbefore bpath.u1 cutafter bpath.u2 dashed evenly;
+endfig;
+
+outputtemplate := "geometry-solids.mps";
+beginfig(1);
+  numeric q;
+  q := 0.75cm;
+  circleit.u1(btex $\cup$ etex);
+  circleit.u2(btex $\cup$ etex);
+  circleit.u3(btex $\cup$ etex);
+  circleit.i1(btex $\cap$ etex);
+  circleit.i2(btex $\cap$ etex);
+  circleit.d1(btex $\setminus$ etex);
+  circleit.d2(btex $\setminus$ etex);
+
+  boxit.p0(btex 0 etex);
+  boxit.p1(btex 1 etex);
+  boxit.p2(btex 2 etex);
+  boxit.p3(btex 3 etex);
+  boxit.p4(btex 4 etex);
+  boxit.p5(btex 5 etex);
+  boxit.p6(btex 6 etex);
+  boxit.p7(btex 7 etex);
+  boxit.p8(btex 8 etex);
+  boxit.p9(btex 9 etex);
+
+  p0.c = (1*q, q);
+  p1.c = (2*q, q);
+  p2.c = (3*q, q);
+  p3.c = (4*q, q);
+  u1.c = (1.5*q, 2*q);
+  u2.c = (3.5*q, 2*q);
+  i1.c = (2.5*q, 3*q);
+  label.urt(btex $A$ etex, i1.c+(0.15*q,0.15*q));
+  
+  p4.c = (5*q, 2*q);
+  p5.c = (6*q, 2*q);
+  d1.c = (5.5*q, 3*q);
+  label.urt(btex $B$ etex, d1.c+(0.2*q,0.2*q));
+
+  p6.c = (7*q, q);
+  p7.c = (8*q, q);
+  p8.c = (9*q, q);
+  p9.c = (10*q, q);
+  u3.c = (7.5*q, 2*q);
+  d2.c = (9.5*q, 2*q);
+  i2.c = (8.5*q, 3*q);
+  label.urt(btex $C$ etex, i2.c+(0.15*q,0.15*q));
+
+  drawboxed(u1, u2, u3, i1, i2, d1, d2);
+  drawboxed(p0, p1, p2, p3, p4, p5, p6, p7, p8, p9);
+
+  draw i1.c--u1.c cutbefore bpath.i1 cutafter bpath.u1;
+  draw i1.c--u2.c cutbefore bpath.i1 cutafter bpath.u2;
+  draw u1.c--p0.c cutbefore bpath.u1 cutafter bpath.p0;
+  draw u1.c--p1.c cutbefore bpath.u1 cutafter bpath.p1;
+  draw u2.c--p2.c cutbefore bpath.u2 cutafter bpath.p2;
+  draw u2.c--p3.c cutbefore bpath.u2 cutafter bpath.p3;
+
+  draw d1.c--p4.c cutbefore bpath.d1 cutafter bpath.p4;
+  draw d1.c--p5.c cutbefore bpath.d1 cutafter bpath.p5;
+
+  draw i2.c--u3.c cutbefore bpath.i2 cutafter bpath.u3;
+  draw i2.c--d2.c cutbefore bpath.i2 cutafter bpath.d2;
+  draw u3.c--p6.c cutbefore bpath.u3 cutafter bpath.p6;
+  draw u3.c--p7.c cutbefore bpath.u3 cutafter bpath.p7;
+  draw d2.c--p8.c cutbefore bpath.d2 cutafter bpath.p8;
+  draw d2.c--p9.c cutbefore bpath.d2 cutafter bpath.p9;
+
+  draw (12,0)*q--(16,0)*q--(16,4)*q--(12,4)*q--cycle;
+  draw (12,2)*q--(16,2)*q dashed evenly;
+  draw (14,0)*q--(14,4)*q dashed evenly;
+
+  path c[];
+  c1 = fullcircle scaled 1q;
+  c2 = fullcircle scaled 3q;
+  c3 = fullcircle scaled 1q;
+  draw c1 shifted (12.5*q,0.5*q);
+  draw c2 shifted (14*q,2*q);
+  draw c3 shifted (15.5*q,3.5*q);
+  label(btex $A$ etex, (12.5*q,0.5*q));
+  label(btex $B$ etex, (13.5*q,2.5*q));
+  label(btex $C$ etex, (15.5*q,3.5*q));
+
+  label.lrt("0", (12*q,4*q));
+  label.lrt("1", (14*q,4*q));
+  label.lrt("2", (12*q,2*q));
+  label.lrt("3", (14*q,2*q));
+endfig;
+
+outputtemplate := "geometry-primitives-table.mps";
+beginfig(1);
+  numeric q;
+  q := 0.75cm;
+  label(btex Primitives Table etex, (2,5.75)*q);
+  draw (0,0)*q--(4,0)*q--(4,6)*q--(0,6)*q--cycle;
+  draw (0,5.5)*q--(4,5.5)*q;
+  draw (1.25,5.5)*q--(1.25,0)*q;
+  draw (2.75,5.5)*q--(2.75,0)*q;
+  label(btex $a$ etex, (0.5[0,1.25],5.25)*q);
+  label(btex $i$ etex, (0.5[1.25,2.75],5.25)*q);
+  label(btex $p$ etex, (0.5[2.75,4],5.25)*q);
+  numeric j, p[];
+  j := 0.5;
+  for i=0 upto 9:
+    draw (0,j)*q--(4,j)*q;
+    p[i] := j-0.25;
+    label.lft(decimal(9-i), (0,p[i])*q);
+    j := j + 0.5;
+  endfor
+  draw (21.25,5.5)*q--(5,5.5)*q--(5,5)*q--(21.25,5)*q--cycle;
+  numeric v[];
+  j := 8.5;
+  for i=0 upto 16:
+    draw (j,5.5)*q--(j,5)*q;
+    v[i] := j + 0.375;
+    label(decimal(i), (v[i],5.75)*q);
+    j := j + 0.75;
+  endfor
+  label(btex Postfix Buffer etex, (0.5[5,8.5],5.25)*q);
+  label("0", (v[0],5.25)*q);
+  label("1", (v[1],5.25)*q);
+  label("-3", (v[2],5.25)*q);
+  label("2", (v[3],5.25)*q);
+  label("3", (v[4],5.25)*q);
+  label("-3", (v[5],5.25)*q);
+  label("-2", (v[6],5.25)*q);
+  label("4", (v[7],5.25)*q);
+  label("5", (v[8],5.25)*q);
+  label("-1", (v[9],5.25)*q);
+  label("6", (v[10],5.25)*q);
+  label("7", (v[11],5.25)*q);
+  label("-3", (v[12],5.25)*q);
+  label("8", (v[13],5.25)*q);
+  label("9", (v[14],5.25)*q);
+  label("-1", (v[15],5.25)*q);
+  label("-2", (v[16],5.25)*q);
+  label(btex $\cup$ etex, (v[2],4.75)*q);
+  label(btex $\cup$ etex, (v[5],4.75)*q);
+  label(btex $\cap$ etex, (v[6],4.75)*q);
+  label(btex $\setminus$ etex, (v[9],4.7)*q);
+  label(btex $\cup$ etex, (v[12],4.75)*q);
+  label(btex $\setminus$ etex, (v[15],4.7)*q);
+  label(btex $\cap$ etex, (v[16],4.75)*q);
+  drawarrow (v[0],5)*q{down}..tension 2.5..{left}(4,p[9])*q;
+  drawarrow (v[1],5)*q{down}..tension 2.5..{left}(4,p[8])*q;
+  drawarrow (v[3],5)*q{down}..tension 2.5..{left}(4,p[7])*q;
+  drawarrow (v[4],5)*q{down}..tension 2.5..{left}(4,p[6])*q;
+  drawarrow (v[7],5)*q{down}..tension 2.5..{left}(4,p[5])*q;
+  drawarrow (v[8],5)*q{down}..tension 2.5..{left}(4,p[4])*q;
+  drawarrow (v[10],5)*q{down}..tension 2.5..{left}(4,p[3])*q;
+  drawarrow (v[11],5)*q{down}..tension 2.5..{left}(4,p[2])*q;
+  drawarrow (v[13],5)*q{down}..tension 2.5..{left}(4,p[1])*q;
+  drawarrow (v[14],5)*q{down}..tension 2.5..{left}(4,p[0])*q;
+endfig;
+
+outputtemplate := "geometry-solids-table.mps";
+beginfig(1);
+  numeric q;
+  q := 0.75cm;
+  label(btex Solids Table etex, (2,5.75)*q);
+  draw (0,3.5)*q--(4,3.5)*q--(4,6)*q--(0,6)*q--cycle;
+  draw (0,5.5)*q--(4,5.5)*q;
+  draw (2,5.5)*q--(2,3.5)*q;
+  label(btex $start$ etex, (1,5.25)*q);
+  label(btex $count$ etex, (3,5.25)*q);
+  numeric j, p[];
+  j := 4;
+  for i=0 upto 2:
+    draw (0,j)*q--(4,j)*q;
+    p[i] := j-0.25;
+    label.lft(decimal(2-i), (0,p[i])*q);
+    j := j + 0.5;
+  endfor
+  draw (21.25,5.5)*q--(5,5.5)*q--(5,5)*q--(21.25,5)*q--cycle;
+  numeric v[];
+  j := 8.5;
+  for i=0 upto 16:
+    draw (j,5.5)*q--(j,5)*q;
+    v[i] := j + 0.375;
+    label(decimal(i), (v[i],5.75)*q);
+    j := j + 0.75;
+  endfor
+  label(btex Postfix Buffer etex, (0.5[5,8.5],5.25)*q);
+  label("0", (v[0],5.25)*q);
+  label("1", (v[1],5.25)*q);
+  label("-3", (v[2],5.25)*q);
+  label("2", (v[3],5.25)*q);
+  label("3", (v[4],5.25)*q);
+  label("-3", (v[5],5.25)*q);
+  label("-2", (v[6],5.25)*q);
+  label("4", (v[7],5.25)*q);
+  label("5", (v[8],5.25)*q);
+  label("-1", (v[9],5.25)*q);
+  label("6", (v[10],5.25)*q);
+  label("7", (v[11],5.25)*q);
+  label("-3", (v[12],5.25)*q);
+  label("8", (v[13],5.25)*q);
+  label("9", (v[14],5.25)*q);
+  label("-1", (v[15],5.25)*q);
+  label("-2", (v[16],5.25)*q);
+  drawarrow (4,p[2])*q{right}..tension 3..{up}(v[0],5)*q;
+  drawarrow (4,p[1])*q{right}..tension 3..{up}(v[7],5)*q;
+  drawarrow (4,p[0])*q{right}..tension 3..{up}(v[10],5)*q;
+  label("0", (1,p[2])*q);
+  label("7", (3,p[2])*q);
+  label("7", (1,p[1])*q);
+  label("3", (3,p[1])*q);
+  label("10", (1,p[0])*q);
+  label("7", (3,p[0])*q);
+  label(btex $A$ etex, (0.5[v[0],v[7]],4.7)*q);
+  label(btex $B$ etex, (0.5[v[7],v[10]],4.7)*q);
+  label(btex $C$ etex, (0.5[v[10],v[16]],4.7)*q);
+endfig;
+
+outputtemplate := "geometry-subcuboids-table.mps";
+beginfig(1);
+  numeric q;
+  q := 0.75cm;
+  label(btex Subcuboids Table etex, (2,5.75)*q);
+  draw (0,3)*q--(4,3)*q--(4,6)*q--(0,6)*q--cycle;
+  draw (0,5.5)*q--(4,5.5)*q;
+  draw (2,5.5)*q--(2,3)*q;
+  label(btex $start$ etex, (1,5.25)*q);
+  label(btex $count$ etex, (3,5.25)*q);
+  numeric j, p[];
+  j := 3.5;
+  for i=0 upto 3:
+    draw (0,j)*q--(4,j)*q;
+    p[i] := j-0.25;
+    label.lft(decimal(3-i), (0,p[i])*q);
+    j := j + 0.5;
+  endfor
+  draw (13,5.5)*q--(5,5.5)*q--(5,5)*q--(13,5)*q--cycle;
+  numeric v[];
+  j := 8.5;
+  for i=0 upto 5:
+    draw (j,5.5)*q--(j,5)*q;
+    v[i] := j + 0.375;
+    label(decimal(i), (v[i],5.75)*q);
+    j := j + 0.75;
+  endfor
+  label(btex Solid Indices etex, (0.5[5,8.5],5.25)*q);
+  label("1", (v[0],5.25)*q);
+  label("1", (v[1],5.25)*q);
+  label("2", (v[2],5.25)*q);
+  label("0", (v[3],5.25)*q);
+  label("1", (v[4],5.25)*q);
+  label("1", (v[5],5.25)*q);
+  drawarrow (4,p[3])*q{right}..tension 3..{up}(v[0],5)*q;
+  drawarrow (4,p[2])*q{right}..tension 3..{up}(v[1],5)*q;
+  drawarrow (4,p[1])*q{right}..tension 3..{up}(v[3],5)*q;
+  drawarrow (4,p[0])*q{right}..tension 3..{up}(v[5],5)*q;
+  label("0", (1,p[3])*q);
+  label("1", (3,p[3])*q);
+  label("1", (1,p[2])*q);
+  label("2", (3,p[2])*q);
+  label("3", (1,p[1])*q);
+  label("2", (3,p[1])*q);
+  label("5", (1,p[0])*q);
+  label("1", (3,p[0])*q);
 endfig;
 
 end
