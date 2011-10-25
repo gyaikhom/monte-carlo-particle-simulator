@@ -1829,215 +1829,163 @@ if (SOLID == r->op) {
     if ((t = merge_affine(r->internal.right))) r->internal.right = t;
 }
 
-@ @<Global functions@>=
-CSG_Node *find_solid(const char *name)
-{
-	return csg_solids.table[hash(name, MAX_CSG_SOLIDS)].solid;
-}
-
-@ @<Global functions@>=
-void process_and_register_solid(const char *name, CSG_Node *root)
-{
-	long h;
-	CSG_Node *temp;
-	if (NULL == root || NULL == name) return;
-	temp = merge_affine(root);
-	if (NULL == temp) temp = root;
-	h = hash(name, MAX_CSG_SOLIDS);
-	strcpy(csg_solids.table[h].name, name);
-	csg_solids.table[h].solid = temp;
-	calculate_bounding_box(temp);
-}
-
-
-@*2 Miscellaneous functions.
-
-@d MAX_CSG_SOLIDS 32
-@<Global variables@>=
-struct solid_table_entry {
-       char name[MAX_LEN_NODE_NAME];
-       CSG_Node *solid;
-};
-
-struct processed_csg_solids_struct {
-        uint32_t nsolids;
-	struct solid_table_entry table[MAX_CSG_SOLIDS];
-} csg_solids;
-
-@ Function to reset list of solids.
-@<Global functions@>=
-void reset_list_of_solids()
-{
-	int i;
-	csg_solids.nsolids = 0;
-	for (i = 0; i < MAX_CSG_SOLIDS; ++i)
-	        csg_solids.table[i].solid = NULL;
-}
-
-@ Function to print all of the solids.
-@<Global functions@>=
-void print_all_solids()
-{
-	int i, j;
-	for (i = 0; i < MAX_CSG_SOLIDS; i++) {
-	        if (csg_solids.table[i].solid == NULL) continue;
-		printf("Solid %s:\n", csg_solids.table[i].name);
-		printf("\n");
-	        print_csg_tree(csg_solids.table[i].solid, 0);
-		printf("\n");
-		for (j = 0; j < 80; j++) printf("-");
-		printf("\n");
-	}
-}
-
-@ We recursively travel the left and right subtrees. Function to count
-number of primitive solids in a CSG tree
+@ Function |print_csg_tree(t,l)| prints the CSG tree |t| using inorder
+tree traversal. The value of |l| gives the level-of-indentation to use
+to print the node in the current recursive call.
 
 @<Global functions@>=
-uint32_t count_primitive_solids(CSG_Node *temp) {
-         if (NULL == temp) return 0;
-	 if (SOLID == temp->op) return 1; /* a primitive solid */
-	 if (PARAMETER == temp->op) return 0; /* a parameter node */
-	 return (count_primitive_solids(temp->internal.left) + 
-	        count_primitive_solids(temp->internal.right));
-}
-
-@ Print the CSG tree using {\sl preorder tree traversal}.
-@^preorder tree traversal@>
-
-@<Global functions@>=
-void print_csg_tree(CSG_Node *temp, uint32_t indent) {
+void print_csg_tree(CSG_Node *t, uint32_t l) {
         int i;
-        if (NULL == temp) return;
-        if (SOLID == temp->op) {
+        if (NULL == t) return;
+        if (SOLID == t->op) {
                 @<Print primitive solid information@>;
                 return;
         }
-        if (PARAMETER == temp->op) {
-                @<Print operator parameters@>;
+        if (PARAMETER == t->op) {
+                @<Print affine transformation parameters@>;
                 return;
         }
-	print_csg_tree(temp->internal.left, indent + 1);
+	print_csg_tree(t->internal.left, l + 1);
 	@<Print intermediate node information@>;
-        print_csg_tree(temp->internal.right, indent + 1);
+        print_csg_tree(t->internal.right, l + 1);
 }
 
 @ @<Print primitive solid information@>=
-for (i = 0; i < indent; ++i) printf("\t");
-p = temp->leaf.p;
+@<Print indentation@>;
+p = t->leaf.p;
 switch(p->type) {
 case BLOCK: printf("BLOCK: \"%s\" %lf %lf %lf",
-        temp->name, p->b.length, p->b.width, p->b.height);
+        t->name, p->b.length, p->b.width, p->b.height);
         break;
-case SPHERE: printf("SPHERE: \"%s\" %lf",
-        temp->name, p->s.radius);
+case SPHERE: printf("SPHERE: \"%s\" %lf", t->name, p->s.radius);
         break;
 case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf",
-        temp->name, p->c.radius, p->c.height);
+        t->name, p->c.radius, p->c.height);
         break;
 case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf",
-        temp->name, p->t.phi, p->t.phi_start,
+        t->name, p->t.phi, p->t.phi_start,
         p->t.theta, p->t.theta_start, p->t.major, p->t.minor);
         break;
-default:
-        printf("unknown");
+default: printf("unknown");
 }
 @<Print bounding box information@>;
-matrix_print(stdout, temp->affine, 4, 4, indent + 1);
-printf("\n");
-matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
+@<Print affine transformation matrices@>;
+
+@ @<Print indentation@>=
+for (i = 0; i < l; ++i) printf("\t");
 
 @ @<Print bounding box information@>=
 printf(" [%lf, %lf, %lf : %lf, %lf, %lf]\n",
-        temp->bb.l[0], temp->bb.l[1], temp->bb.l[2],
-        temp->bb.u[0], temp->bb.u[1], temp->bb.u[2]);
+        t->bb.l[0], t->bb.l[1], t->bb.l[2],
+        t->bb.u[0], t->bb.u[1], t->bb.u[2]);
 
-@ Print the parameters for transformation or translation.
+@ @<Print affine transformation matrices@>=
+matrix_print(stdout, t->affine, 4, 4, l + 1);
+printf("\n");
+matrix_print(stdout, t->inverse, 4, 4, l + 1);
 
-@<Print operator parameters@>=
-for (i = 0; i < indent; ++i) printf("\t");
-switch(temp->parent->op) {
+@ @<Print affine transformation parameters@>=
+@<Print indentation@>;
+switch(t->parent->op) {
 case TRANSLATE:
         printf("displacement: (%lf, %lf, %lf)",
-        temp->leaf.t.displacement[0],
-	temp->leaf.t.displacement[1],
-	temp->leaf.t.displacement[2]);
-	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
-	printf("\n");
+	t->leaf.t.displacement[0], t->leaf.t.displacement[1],
+	t->leaf.t.displacement[2]);
         break;
 case ROTATE:
-        printf("angle: %lf, axis: (%lf, %lf, %lf)",
-        temp->leaf.r.theta,
-        temp->leaf.r.axis[0],
-	temp->leaf.r.axis[1],
-	temp->leaf.r.axis[2]);
-	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
+        printf("angle: %lf, axis: (%lf, %lf, %lf)", t->leaf.r.theta,
+	t->leaf.r.axis[0], t->leaf.r.axis[1], t->leaf.r.axis[2]);
         break;
 case SCALE:
-        printf("scaling factor: (%lf, %lf, %lf)",
-        temp->leaf.s.scale[0],
-	temp->leaf.s.scale[1],
-	temp->leaf.s.scale[2]);
-	matrix_print(stdout, temp->affine, 4, 4, indent + 1);
+        printf("scaling factor: (%lf, %lf, %lf)", t->leaf.s.scale[0],
+	t->leaf.s.scale[1], t->leaf.s.scale[2]);
         break;
-default:
-        printf("unknown");
+default: printf("unknown");
 }
 printf("\n");
 
 @ @<Print intermediate node information@>=
-for (i = 0; i < indent; ++i) printf("\t");
-switch(temp->op) {
-case UNION:
-        printf("union: %s", temp->name);
-        break;
-case INTERSECTION:
-        printf("intersection: %s", temp->name);
-        break;
-case DIFFERENCE:
-        printf("difference: %s", temp->name);
-        break;
-case TRANSLATE:
-        printf("translate: %s", temp->name);
-        break;
-case ROTATE:
-        printf("rotate: %s", temp->name);
-        break;
-case SCALE:
-        printf("scale: %s", temp->name);
-        break;
-default:
-        printf("unknown");
+@<Print indentation@>;
+switch(t->op) {
+case UNION: printf("union: %s", t->name); break;
+case INTERSECTION: printf("intersection: %s", t->name); break;
+case DIFFERENCE: printf("difference: %s", t->name); break;
+case TRANSLATE: printf("translate: %s", t->name); break;
+case ROTATE: printf("rotate: %s", t->name); break;
+case SCALE: printf("scale: %s", t->name); break;
+default: printf("unknown");
 }
 @<Print bounding box information@>;
-matrix_print(stdout, temp->affine, 4, 4, indent + 1);
-printf("\n");
-matrix_print(stdout, temp->inverse, 4, 4, indent + 1);
+@<Print affine transformation matrices@>;
 
-@ @<Global functions@>=
-void pp(CSG_Node *n)
+@*2 Forest of solids. We record all of the solids by recording the
+root of their CSG tree using the solid's unique name. This is no a
+practical requirement since all we require for the actually processing
+are the geometry tables, which can be created directly when each of the
+solids are registered. Nonetheless, recording the forest of trees is
+useful for debugging purposes, and also, while printing out verbose
+information.
+
+@d MAX_CSG_SOLIDS 512
+@<Global variables@>=
+struct {
+    uint32_t n; /* number of solids in forest */
+    struct {
+       	char nm[MAX_LEN_NODE_NAME]; /* unique solid name */
+        CSG_Node *s; /* root of CSG tree */
+    } t[MAX_CSG_SOLIDS]; /* hash table of solids */
+} forest_of_solids;
+
+@ Function |reset_forest()| resets the forest of solids by resetting
+the hash table.
+@<Global functions@>=
+void reset_forest()
 {
-	if (NULL == n) return;
-	printf("[%x] ", (uint32_t) n);
-	if (PARAMETER == n->op) {
-	    printf("Parameter: %d %x\n", n->op, (uint32_t)n->parent);
-	    return;
-        }
-	if (SOLID == n->op) {
-	    printf("Solid: %d %s %x\n", n->op, n->name, (uint32_t)n->parent);
-	    return;
-        }
-	else if (TRANSLATE == n->op ||
-	    ROTATE == n->op ||
-	    SCALE == n->op) {
-	    printf("Affine: %d %s %x %x %x\n", n->op, n->name, (uint32_t)n->parent, (uint32_t)n->internal.left, (uint32_t)n->internal.right);
-	} else {
-	    printf("Boolean: %d %s %x %x %x\n",
-	    n->op, n->name, (uint32_t)n->parent,
-	    (uint32_t)n->internal.left, (uint32_t)n->internal.right);
+	uint32_t i;
+	forest_of_solids.n = 0;
+	for (i = 0; i < MAX_CSG_SOLIDS; ++i) forest_of_solids.t[i].s = NULL;
+}
+
+@ Function |print_forest()| prints all of the solids in the forest.
+@<Global functions@>=
+void print_forest()
+{
+	uint32_t i, j, k;
+	for (i = 0, k = forest_of_solids.n; k && i < MAX_CSG_SOLIDS; ++i) {
+	        if (NULL == forest_of_solids.t[i].s) continue;
+		printf("Solid %s:\n\n", forest_of_solids.t[i].nm);
+	        print_csg_tree(forest_of_solids.t[i].s, 0);
+		printf("\n");
+		for (j = 0; j < 80; j++) printf("-");
+		printf("\n");
+		--k;
 	}
-	pp(n->internal.left);
-	pp(n->internal.right);
+}
+
+@ Function |process_and_register_solid(n,r)| registers the solid
+pointed to by the CSG tree root |r| using the unique name |n|. Before
+registering the solid, the CSG tree is processed to the required form
+by merging the affine transformations, and by finding the bounding
+box.
+
+The macro |find_solid(n)| is used to locate a solid with the name
+|n| in the forest of solids.
+
+@d find_solid(n) (forest_of_solids.t[hash((n), MAX_CSG_SOLIDS)].s)
+@<Global functions@>=
+void process_and_register_solid(const char *n, CSG_Node *r)
+{
+	long h;
+	CSG_Node *t;
+	if (NULL == r || NULL == n) return;
+	t = merge_affine(r); /* returns a non-affine node;
+	otherwise returns |NULL| */
+	if (NULL == t) t = r; /* in case |r| was a primitive solid */
+	calculate_bounding_box(t);
+	h = hash(n, MAX_CSG_SOLIDS);
+	strcpy(forest_of_solids.t[h].nm, n);
+	forest_of_solids.t[h].s = t;
+	++(forest_of_solids.n);
 }
 
 @*1 Particles inside solids.
@@ -2798,7 +2746,7 @@ exit_error:
 
         if (false == read_geometry("input.dat")) exit(1);
 	print_sim_world(stdout);
-	print_all_solids();
+	print_forest();
 	if ((f = fopen("points.dat", "r")) == NULL)
                exit(1);
 	input_file_current_line = 1;

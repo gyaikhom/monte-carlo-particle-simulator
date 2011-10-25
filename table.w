@@ -76,7 +76,7 @@ void create_geotab(GeometryTable *g)
     CSG_Node *s;
     @<Initialise the geometry table@>;
     for (i = 0; i < MAX_CSG_SOLIDS; ++i) {
-        s = csg_solids.table[i].solid;
+        s = forest_of_solids.t[i].s;
         @<Fill table entries for this solid@>;
 	@<Add solid to subcuboid if contained by subcuboid@>;
     }
