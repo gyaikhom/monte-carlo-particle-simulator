@@ -407,7 +407,7 @@ intersections, differences, translations, rotations and scalings.
 void print_geom_statistics(FILE *f)
 {
     if (NULL == nodes_repository) return;
-    fprintf(f, "Geometry statistics\n\tprimitive: %u\tunion: %u\tintersection: %u\tdifference: %u\ttranslation: %u\trotation: %u\tscaling: %u\n",
+    fprintf(f, "Geometry statistics\n\tprimitive: %u\n\tunion: %u\n\tintersection: %u\n\tdifference: %u\n\ttranslation: %u\n\trotation: %u\n\tscaling: %u\n",
     nodes_repository->stat[0], nodes_repository->stat[1],
     nodes_repository->stat[2], nodes_repository->stat[3],
     nodes_repository->stat[4], nodes_repository->stat[5],
@@ -2746,6 +2746,7 @@ exit_error:
 	bool t;
 
         if (false == read_geometry("input.dat")) exit(1);
+	print_geom_statistics(stdout);
 	print_sim_world(stdout);
 	print_forest();
 	if ((f = fopen("points.dat", "r")) == NULL)
