@@ -686,6 +686,7 @@ points and the corresponding error messages.
 @<Alert failure to create parameter node@>;
 @<Alert solid already exists@>;
 @<Alert solid does not exists@>;
+@<Alert invalid division of simulation world@>;
 error_invalid_file:@/
 @<Cleanup resources allocated to invalid geometry@>;
 fclose(f);
@@ -727,6 +728,14 @@ no_solid_exists_exit_after_cleanup:@/
 fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
 	"Solid named '%s' does not exists\n", input_file_name,
 	input_file_current_line, solid_name);
+goto error_invalid_file;
+
+@ @<Alert invalid division of simulation world@>=
+invalid_subcuboid_division_exit_after_cleanup:@/
+fprintf(stderr, "%s[%u] Invalid geometry specification... "@/
+	"Number of subcuboids %u exceeds allowed %u\n",
+	input_file_name, input_file_current_line,
+	num_subcuboids, MAX_SUBCUBOIDS);
 goto error_invalid_file;
 
 @ @<Cleanup resources allocated to invalid geometry@>=
@@ -1504,21 +1513,31 @@ world uses the following format:
 
 \smallskip
 
-($lx$ $ly$ $lz$ $ux$ $uy$ $uz$)
+($lx$ $ly$ $lz$ $ux$ $uy$ $uz$ $l$ $m$ $n$)
 
 \smallskip
 
 \noindent where, the coordinates $(lx, ly, lz)$ and
-$(ux, uy, uz)$ respectively give the lower and upper bounds. If there
-are multiple specifications of the simulation world, the last one read
-will set the effective bounds.
+$(ux, uy, uz)$ respectively give the lower and upper bounds. The
+values $l$, $m$ and $n$ gives the number of divisions along the
+$x$, $y$ and $z$ axes, so that the simulation world is divided into $l
+\times m \times n$ subcuboids. If there are multiple specifications of
+the simulation world, the last one read will set the effective bounds.
 
 @<Read simulation world specification@>=
-read_count = fscanf(f, "(%lf %lf %lf %lf %lf %lf)",
+read_count = fscanf(f, "(%lf %lf %lf %lf %lf %lf %u %u %u)",
     &sim_world.l[0], &sim_world.l[1], &sim_world.l[2],
-    &sim_world.u[0], &sim_world.u[1], &sim_world.u[2]);
-if (EOF == read_count || 6 != read_count)
-        @<Exit after cleanup: failed to read from file@>;
+    &sim_world.u[0], &sim_world.u[1], &sim_world.u[2],
+    &div_subcuboids[0], &div_subcuboids[1], &div_subcuboids[2]);
+if (EOF == read_count || 9 != read_count)
+    @<Exit after cleanup: failed to read from file@>;
+num_subcuboids = div_subcuboids[0] * div_subcuboids[1] * div_subcuboids[2];
+if (num_subcuboids > MAX_SUBCUBOIDS)
+    @<Exit after cleanup: invalid division of simulation world@>;
+@<Build tables and search trees for managing the subcuboids@>;
+
+@ @<Exit after cleanup: invalid division of simulation world@>=
+goto invalid_subcuboid_division_exit_after_cleanup;
 
 @ Function |print_sim_world(f)| prints the lower and upper bounds of
 the simulation world to the I/O stream pointed to by |f|.

@@ -65,12 +65,14 @@ struct {
     BoundingBox bb;
 } subcuboids[MAX_SUBCUBOIDS]; /* subcuboids table */
 uint32_t num_subcuboids = 0;
+uint32_t div_subcuboids[3] = {1, 1, 1}; /* division along $x$, $y$ and $z$ */
 
 @ Function |build_subcuboids_table(bb,l,m,n)| builds the subcuboids
 table by filling in the bounding box information for each of the
 subcuboids. The dimension of each subcuboid is determined from the
-size of the original cuboid, and the number of equal divisions carried
-out in each of the dimensions.
+size of the original cuboid |bb|, and the number of equal divisions
+in each of the dimensions $x$, $y$ and $z$ is given respectively by
+|l|, |m| and |n|.
 @<Global functions@>=
 void build_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
 {
@@ -100,7 +102,6 @@ void build_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
             }
             x[0] += dx;
      	}
-	num_subcuboids = t * l;
 }
 
 @ Function |print_subcuboids_table(f)| prints the subcuboids table to
@@ -489,6 +490,11 @@ world are given the same subcuboid index |OUTSIDE_WORLD|.
     continue;
 }
 
+@ @<Build tables and search trees for managing the subcuboids@>=
+build_subcuboid_trees(&sim_world, div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
+build_neighbour_table(div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
+build_subcuboids_table(&sim_world, div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
+
 @ Function |print_neighbour_table(f)| prints the subcuboid
 neighbourhood table to the I/O stream pointed to by |f|.
 @<Global functions@>=
@@ -515,7 +521,6 @@ cases, we must fall-back to finding the subcuboid using
 |find_subcuboid(t,v)|. In most cases, the subcuboid dimensions will be
 larger than the distance travelled, however, it is important to note
 the exception. After every step, we must check this distance.
-
 
 @ The following code segment tests the functionalities provided by
 this sections.

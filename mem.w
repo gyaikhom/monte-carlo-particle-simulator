@@ -101,5 +101,5 @@ if (block) {
 
 @ We shall use only one memory area for the entire application.
 @<Global variables@>=
-Area mem_phase_one; /* initialisation */
-Area mem_phase_two; /* persistent */
+Area mem_phase_one = {NULL}; /* initialisation */
+Area mem_phase_two = {NULL}; /* persistent */

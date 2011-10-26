@@ -21,4 +21,7 @@ compiler error.
 @<Forward declare functions@>=
 void process_and_register_solid(CSG_Node *root);
 Containment recursively_test_containment(CSG_Node *root, Vector v);
+bool build_subcuboid_trees(BoundingBox *bb, unsigned long l, unsigned long m, unsigned long n);
+void build_neighbour_table(uint32_t, uint32_t, uint32_t);
+void build_subcuboids_table(BoundingBox*, uint32_t, uint32_t, uint32_t);
 
