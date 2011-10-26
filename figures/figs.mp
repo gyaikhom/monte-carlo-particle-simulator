@@ -477,4 +477,21 @@ beginfig(1);
   label("1", (3,p[0])*q);
 endfig;
 
+outputtemplate := "node-type-bit-field.mps";
+beginfig(1);
+  numeric q;
+  q := 0.45cm;
+  draw (0,3)*q--(32,3)*q--(32,4)*q--(0,4)*q--cycle;
+  draw (28,3)*q--(28,4)*q;
+  draw (29,3)*q--(29,4)*q;
+  label(btex Line number in geometry file which generated the node etex, (14,3.5)*q);
+  label(btex Usage bit etex, (26.5,4.75)*q);
+  label(btex Node type etex, (30.5,4.75)*q);
+  drawarrow (26.5,4.25)*q--(28.5,3.5)*q;
+  drawarrow (30.5,4.25)*q--(30.5,3.5)*q;
+  label("31", (0.5,2.5)*q);
+  label("3", (28.5,2.5)*q);
+  label("0", (31.5,2.5)*q);
+endfig;
+
 end

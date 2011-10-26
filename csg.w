@@ -246,19 +246,14 @@ enclosed inside an axis-aligned parallelipiped, commonly referred to
 as the solid's {\sl bounding box}. This is defined by a pair of three
 dimensional coordinates $(\lambda, \tau)$, where $\lambda$ and $\tau$
 are respectively the lower and upper bounds of all the points that are
-inside the solid. Thus, the bounding box must fully encloses the
-solid.@^bounding box@>
+inside the solid.
 
 @<Type definitions@>=
 typedef struct {
 	Vector l, u; /* lower and upper bounds */
 } BoundingBox;
 
-@ A CSG node is represented using the |CSG_Node| data type. Variables
-of this type can store data that are required to store a leaf or an
-internal node.
-
-@<Type definitions@>=
+@ @<Type definitions@>=
 typedef struct csg_node_struct CSG_Node;
 struct csg_node_struct {
        @<Information common to all CSG nodes@>;
@@ -268,22 +263,60 @@ struct csg_node_struct {
        };
 };
 
-@ To differentiate between node types, each node stores a
-CSG node type. This field determines if a node is a primitive
-solid node, a parameter node, or an intermediate solid node.
-
-@<Information common to all CSG nodes@>=
-csg_node_type op; /* solid if |op| $=0$; parameter if |op|
-       $=1$; operator if |op| $> 1$ */
-
-@ Each node also stores a node name, that uniquely identifies the
+@ Each node stores a node name, that uniquely identifies the
 node in the CSG tree. They are supplied by the user through the
 geometry input file. Node names are used during registration of
 solids.
 
-@d MAX_LEN_NODE_NAME 140
+@d MAX_LEN_NODE_NAME 64
 @<Information common to all CSG nodes@>=
 char name[MAX_LEN_NODE_NAME];
+
+@ To differentiate between node types, each node stores a
+CSG node type. This field determines if a node is a primitive
+solid node, a parameter node, or an intermediate solid node. Since we
+only require eight values (i.e., |csg_node_type|), it will be a waste
+to use more than three bits. Instead, we will use a bit field:
+
+\medskip
+
+\centerline{\epsfig{file=figures/node-type-bit-field,scale=1}}
+
+\medskip
+
+We make the three least significant bits to represent the node type. We
+are choosing the least significant bits because it will be used more
+often than the rest of the bit fields, which only come into effect
+during error diagnosis. We then use the fourth least significant bit
+to mark if the node is currently used in a solid CSG tree. Because the
+CSG tree is built bottom-up, these is a possibility that the user has
+made a mistake and added stray CSG nodes. Finally, the rest of the 28
+bits are used to record the line number in the geometry file which
+gave the command to create the node. This will be displayed to the
+user during error diagnostics (e.g., to display a warning to the user
+where in the geomtry file an unused CSG node was created).
+
+@<Information common to all CSG nodes@>=
+uint32_t op;
+
+@ The following macros set the bit fields.
+@d BIT_MASK_NODE 0x7
+@d BIT_MASK_UBIT 0x8
+@d BIT_MASK_LINE 0xfffffff0
+@d set_ubit(n) ((n)->op |= BIT_MASK_UBIT)
+@d set_line(n) ((n)->op |= (input_file_current_line << 4))
+@d get_line(n) ((n)->op >> 4)
+
+@ The following macros check the bit fields.
+@d is_used(n) (BIT_MASK_UBIT & (n)->op)
+@d is_primitive(n) (!(BIT_MASK_NODE & (n))) /* special because |PRIMITIVE == 0x0| */
+@d is_parameter(n) (PARAMETER == (BIT_MASK_NODE & (n)))
+@d is_union(n) (UNION == (BIT_MASK_NODE & (n)))
+@d is_intersection(n) (INTERSECTION == (BIT_MASK_NODE & (n)))
+@d is_difference(n) (DIFFERENCE == (BIT_MASK_NODE & (n)))
+@d is_translate(n) (TRANSLATE == (BIT_MASK_NODE & (n)))
+@d is_rotate(n) (ROTATE == (BIT_MASK_NODE & (n)))
+@d is_scale(n) (SCALE == (BIT_MASK_NODE & (n)))
 
 @ All nodes store a pointer to its parent node. This is used for
 backtracking during tree traversal.
@@ -557,7 +590,7 @@ might generate the name of the file at runtime (e.g., by appending
 prefix and suffix strings to a base filename).
 
 @<Open input geometry file and initialise nodes repository@>=
-input_file_current_line = 0;
+input_file_current_line = 1;
 strcpy(input_file_name, n); /* generate filename */
 f = fopen(input_file_name, "r");
 if (NULL == f) {
@@ -764,7 +797,6 @@ CSG_Node *internal_node, *leaf_node, *temp_node;
 @ @<Initialise primitive block with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf)",
        op_solid, &p->b.length, &p->b.width, &p->b.height);
-++input_file_current_line;
 if (EOF == read_count || 4 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -800,6 +832,7 @@ if (NULL == leaf_node) {
         leaf_node->op = PRIMITIVE; /* this is a primitive solid leaf node */
 	leaf_node->leaf.p = p;
 	leaf_node->parent = NULL;
+	set_line(leaf_node);
 	register_csg_node(leaf_node, op_solid);
 }
 
@@ -826,7 +859,6 @@ discussed.
 @ @<Initialise primitive sphere with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf)",
        op_solid, &p->s.radius);
-++input_file_current_line;
 if (EOF == read_count || 2 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -856,7 +888,6 @@ base radius 10.0 and height 20.0.
 @ @<Initialise primitive cylinder with relevant data@>=
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf)",
        op_solid, &p->c.radius, &p->c.height);
-++input_file_current_line;
 if (EOF == read_count || 3 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -912,7 +943,6 @@ values of $360^{\circ}$, which signifie complete rotations.
 read_count = fscanf(f, "(\"%[^\"]\" %lf %lf %lf %lf %lf %lf)",
        op_solid, &p->t.phi, &p->t.phi_start, &p->t.theta,
        &p->t.theta_start, &p->t.major, &p->t.minor);
-++input_file_current_line;
 if (EOF == read_count || 7 != read_count) {
         @<Exit after cleanup: failed to read from file@>;
 }
@@ -952,7 +982,6 @@ and stores the result using the name ``U1".
 @ @<Read union operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
-++input_file_current_line;
 if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1006,11 +1035,17 @@ if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = UNION; /* this is an internal node */
+	@<Set line number of node and usage bits of children@>;
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
 	++(nodes_repo->stat[UNION]);
 }
+
+@ @<Set line number of node and usage bits of children@>=
+set_line(internal_node);
+set_ubit(left_solid);
+set_ubit(right_solid);
 
 @ @<Set parents, and pointers to intermediate solids@>=
 internal_node->internal.left = left_solid;
@@ -1046,7 +1081,6 @@ and stores the result using the name ``I1".
 @ @<Read intersection operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
-++input_file_current_line;
 if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1073,6 +1107,7 @@ if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = INTERSECTION; /* this is an internal node */
+	@<Set line number of node and usage bits of children@>;
         @<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
@@ -1105,7 +1140,6 @@ For instance, the difference specification {\tt ("D1" "Cylinder A"
 @ @<Read difference operation@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" \"%[^\"]\")",
 	   op_target, op_left, op_right);
-++input_file_current_line;
 if (EOF == read_count || 3 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 @<Check that the target does not already exists@>;
@@ -1132,6 +1166,7 @@ if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = DIFFERENCE; /* this is an internal node */
+	@<Set line number of node and usage bits of children@>;
 	@<Set parents, and pointers to intermediate solids@>;
 	register_csg_node(internal_node, op_target); /* register operator
 	node using the target name */
@@ -1182,7 +1217,6 @@ units along the $z$ axis, and register this intermediate solid as
 @<Read translation parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
-++input_file_current_line;
 if (EOF == read_count || 5 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1227,10 +1261,15 @@ if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = TRANSLATE; /* this is an operator internal node */
+	@<Set line number of node and usage bit of transformed node@>;
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
 	++(nodes_repo->stat[TRANSLATE]);
 }
+
+@ @<Set line number of node and usage bit of transformed node@>=
+set_line(internal_node);
+set_ubit(target_solid);
 
 @ @<Set target, parameters and parent pointers@>=
 internal_node->internal.left = target_solid;
@@ -1285,7 +1324,6 @@ register this intermediate solid as ``R1''.
 @<Read rotation parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf %lf)",
 	   op_target, op_solid, &op_theta, &op_x, &op_y, &op_z);
-++input_file_current_line;
 if (EOF == read_count || 6 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1325,6 +1363,7 @@ if (NULL == internal_node) {
         @<Exit after cleanup: failed to create internal node@>;
 } else {
         internal_node->op = ROTATE; /* this is an operator internal node */
+	@<Set line number of node and usage bit of transformed node@>;
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
 	++(nodes_repo->stat[ROTATE]);
@@ -1371,7 +1410,6 @@ coordinate frame and register this intermediate solid as ``S1''.
 @<Read scaling parameters@>=
 read_count = fscanf(f, "(\"%[^\"]\" \"%[^\"]\" %lf %lf %lf)",
 	   op_target, op_solid, &op_x, &op_y, &op_z);
-++input_file_current_line;
 if (EOF == read_count || 5 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1411,6 +1449,7 @@ if (NULL == internal_node) {
 } else {
         internal_node->op = SCALE; /* this is an operator internal
 	node */
+	@<Set line number of node and usage bit of transformed node@>;
         @<Set target, parameters and parent pointers@>;
 	register_csg_node(internal_node, op_target);
 	++(nodes_repo->stat[SCALE]);
@@ -1444,13 +1483,12 @@ CSG tree) using the following format:
 
 @<Read target solid for registration@>=
 read_count = fscanf(f, "(\"%[^\"]\")", op_solid);
-++input_file_current_line;
 if (EOF == read_count || 1 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
 @ @<Register the target solid@>=
 process_and_register_solid(target_solid);
-
+set_ubit(target_solid);
 
 @*2 Defining the simulation world.
 The simulation world defines the volume of space that we are
@@ -1479,7 +1517,6 @@ will set the effective bounds.
 read_count = fscanf(f, "(%lf %lf %lf %lf %lf %lf)",
     &sim_world.l[0], &sim_world.l[1], &sim_world.l[2],
     &sim_world.u[0], &sim_world.u[1], &sim_world.u[2]);
-++input_file_current_line;
 if (EOF == read_count || 6 != read_count)
         @<Exit after cleanup: failed to read from file@>;
 
@@ -1625,7 +1662,7 @@ bool calculate_bounding_box(CSG_Node *n)
 	CSG_Node *l, *r; /* left and right subtrees */
 	Vector temp, c[8]; /* for affine transformation */
 	int i, j;
-	if (PRIMITIVE == n->op) {
+	if (is_primitive(n->op)) {
 	    if (primitive_bb(n->leaf.p, &n->bb)) {
 	        @<Calculate affine transformed bounding box@>;
 	        return true;
@@ -1685,7 +1722,7 @@ for (i = 0; i < 8; ++i) n->bb.l[3] = n->bb.u[3] = 1.0; /* homogenise bound vecto
 @ @<Find bounding box for the node using left and right subtrees@>=
 l = n->internal.left;
 r = n->internal.right;
-switch(n->op) {
+switch(BIT_MASK_NODE & n->op) {
 case UNION: @<Calculate bounding box of union@>;
 case INTERSECTION: @<Calculate bounding box of intersection@>;
 case DIFFERENCE: @<Calculate bounding box of difference@>;
@@ -1790,10 +1827,8 @@ CSG_Node *merge_affine(CSG_Node *r)
 {
 	CSG_Node *t, *p; /* temporary node and parent node */
 	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
-	if (PRIMITIVE == r->op || PARAMETER == r->op) return NULL;
-	if (TRANSLATE == r->op ||
-	    ROTATE == r->op ||
-	    SCALE == r->op) {
+	if (is_primitive(r->op) || is_parameter(r->op)) return NULL;
+	if (is_translate(r->op) || is_rotate(r->op) || is_scale(r->op)) {
 	    @<Merge sequence of affine transformation nodes@>;
 	    @<Detach affine transformations@>;
 	}
@@ -1808,7 +1843,7 @@ do {
 	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate */
 	matrix_copy(m, mm);
 	r = t->internal.left;
-} while (TRANSLATE == r->op || ROTATE == r->op || SCALE == r->op);
+} while (is_translate(r->op) || is_rotate(r->op) || is_scale(r->op));
 
 @ @<Detach affine transformations@>=
 matrix_copy(r->affine, m);
@@ -1817,7 +1852,7 @@ matrix_copy(r->inverse, m);
 r->parent = p;
 
 @ @<Finalise affine on primitive, or merge affine on subtrees@>=
-if (PRIMITIVE == r->op) {
+if (is_primitive(r->op)) {
     if (r->parent) {
         matrix_multiply(r->affine, r->parent->affine, mm);
         matrix_copy(r->affine, mm);
@@ -1837,11 +1872,11 @@ to print the node in the current recursive call.
 void print_csg_tree(CSG_Node *t, uint32_t l) {
         int i;
         if (NULL == t) return;
-        if (PRIMITIVE == t->op) {
+        if (is_primitive(t->op)) {
                 @<Print primitive solid information@>;
                 return;
         }
-        if (PARAMETER == t->op) {
+        if (is_parameter(t->op)) {
                 @<Print affine transformation parameters@>;
                 return;
         }
@@ -1854,16 +1889,17 @@ void print_csg_tree(CSG_Node *t, uint32_t l) {
 @<Print indentation@>;
 p = t->leaf.p;
 switch(p->type) {
-case BLOCK: printf("BLOCK: \"%s\" %lf %lf %lf",
+case BLOCK: printf("BLOCK (%u): \"%s\" %lf %lf %lf", get_line(t),
         t->name, p->b.length, p->b.width, p->b.height);
         break;
-case SPHERE: printf("SPHERE: \"%s\" %lf", t->name, p->s.radius);
+case SPHERE: printf("SPHERE (%u): \"%s\" %lf", get_line(t),
+        t->name, p->s.radius);
         break;
-case CYLINDER: printf("CYLINDER: \"%s\" %lf %lf",
+case CYLINDER: printf("CYLINDER (%u): \"%s\" %lf %lf", get_line(t),
         t->name, p->c.radius, p->c.height);
         break;
-case TORUS: printf("TORUS: \"%s\" %lf %lf %lf %lf %lf %lf",
-        t->name, p->t.phi, p->t.phi_start,
+case TORUS: printf("TORUS (%u): \"%s\" %lf %lf %lf %lf %lf %lf",
+        get_line(t), t->name, p->t.phi, p->t.phi_start,
         p->t.theta, p->t.theta_start, p->t.major, p->t.minor);
         break;
 default: printf("unknown");
@@ -1886,7 +1922,7 @@ matrix_print(stdout, t->inverse, 4, 4, l + 1);
 
 @ @<Print affine transformation parameters@>=
 @<Print indentation@>;
-switch(t->parent->op) {
+switch(BIT_MASK_NODE & t->parent->op) {
 case TRANSLATE:
         printf("displacement: (%lf, %lf, %lf)",
 	t->leaf.t.displacement[0], t->leaf.t.displacement[1],
@@ -1906,13 +1942,13 @@ printf("\n");
 
 @ @<Print intermediate node information@>=
 @<Print indentation@>;
-switch(t->op) {
-case UNION: printf("union: %s", t->name); break;
-case INTERSECTION: printf("intersection: %s", t->name); break;
-case DIFFERENCE: printf("difference: %s", t->name); break;
-case TRANSLATE: printf("translate: %s", t->name); break;
-case ROTATE: printf("rotate: %s", t->name); break;
-case SCALE: printf("scale: %s", t->name); break;
+switch(BIT_MASK_NODE & t->op) {
+case UNION: printf("UNION (%u): %s", get_line(t), t->name); break;
+case INTERSECTION: printf("INTERSECTION (%u): %s", get_line(t), t->name); break;
+case DIFFERENCE: printf("DIFFERENCE (%u): %s", get_line(t), t->name); break;
+case TRANSLATE: printf("TRANSLATE (%u): %s", get_line(t), t->name); break;
+case ROTATE: printf("ROTATE (%u): %s", get_line(t), t->name); break;
+case SCALE: printf("SCALE (%u): %s", get_line(t), t->name); break;
 default: printf("unknown");
 }
 @<Print bounding box information@>;
@@ -2334,10 +2370,10 @@ Containment recursively_test_containment(CSG_Node *root, Vector v)
 {
         Containment left, right;
         Vector r; /* used during inverse transformation */
-        if (PRIMITIVE == root->op) {
+        if (is_primitive(root->op)) {
                 @<Test containment inside primitive solid@>;
 	} else {
-                if (UNION <= root->op && DIFFERENCE >= root->op) {
+                if (is_union(root->op) || is_intersection(root->op) || is_difference(root->op)) {
                         @<Test containment in subtrees using boolean operators@>;
                 } else {
                         @<Test containment after affine transformations@>;
@@ -2363,7 +2399,7 @@ they were on the surface of the left solid.
 @<Test containment in subtrees using boolean operators@>=
 left = recursively_test_containment(root->internal.left, v);
 right = recursively_test_containment(root->internal.right, v);
-switch(root->op) {
+switch(BIT_MASK_NODE & root->op) {
 case UNION:
 	if (INVALID == left || INVALID == right)
                 return INVALID; /* handle error */
@@ -2421,7 +2457,7 @@ tree: 1) it is easier to calculate $r$ from $v$, and 2)
 containment testing is easier with $s$ than it is with $s'$.
 
 @<Test containment after affine transformations@>=
-switch(root->op) {
+switch(BIT_MASK_NODE & root->op) {
 case TRANSLATE:
         affine_inverse(root->internal.right, v, r);
         break;

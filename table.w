@@ -77,7 +77,7 @@ uint32_t isb; /* index within solid indics buffer */
 @ @<Global functions@>=
 void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
     if (NULL == g || NULL == n) return;
-    if (PRIMITIVE == n->op) {
+    if (is_primitive(n->op)) {
         matrix_copy(g->p[g->ip].a, n->affine);
 	matrix_copy(g->p[g->ip].i, n->inverse);
 	g->p[g->ip].p = *(n->leaf.p);
@@ -86,7 +86,7 @@ void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
     }
     fill_geotab_with_csg(g, n->internal.left);
     fill_geotab_with_csg(g, n->internal.right);
-    switch(n->op) {
+    switch(BIT_MASK_NODE & n->op) {
     case UNION:
         g->pb[g->ipb++] = BOOLEAN_UNION;
         break;
