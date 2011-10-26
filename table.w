@@ -103,13 +103,14 @@ void fill_geotab_with_csg(GeometryTable *g, CSG_Node *n) {
 @ @<Global functions@>=
 void create_geotab(GeometryTable *g)
 {
-    int i;
+    uint32_t i;
     CSG_Node *s;
     @<Initialise the geometry table@>;
     for (i = 0; i < forest_of_solids.n; ++i) {
         s = forest_of_solids.s[i];
         @<Fill table entries for this solid@>;
     }
+    @<Check if there are stray node@>;
 }
 
 @ @<Initialise the geometry table@>=
@@ -130,6 +131,17 @@ g->s[g->is].s = g->ipb;
 fill_geotab_with_csg(g, s);
 g->s[g->is].c = g->ipb - g->s[g->is].s;
 ++(g->is);
+
+@ @<Check if there are stray node@>=
+i = g->npb - g->ipb;
+if (i) {
+   fprintf(stderr, "! There are %u stray nodes that are not in any of the solids:\n", i);
+   for (i = 0; i < MAX_CSG_NODES; ++i) {
+       s = nodes_repo->table[i];
+       if (NULL == s || is_used(s)) continue;
+       fprintf(stderr, "\t\"%s\" at line %u\n", s->name, get_line(s));
+   }
+}
 
 @ @<Add solid to subcuboid if contained by subcuboid@>=
 for (j = 0; j < MAX_SUBCUBOIDS; ++j) {
