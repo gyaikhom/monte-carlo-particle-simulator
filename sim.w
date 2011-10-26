@@ -195,7 +195,7 @@ p.id = p.pi = p.si = 0;
 p.active = true; /* only active particles inside heap */
 p.s = 0x0; /* renew: $s$-field are changed by physics processes */
 p.nd = 0; /* no daughters yet */
-p.subcuboid = find_subcuboid(subcuboid_search_tree, p.v);
+p.subcuboid = find_subcuboid(geotab.ctree, p.v);
 
 @*1 Batch simulation.
 
@@ -427,8 +427,8 @@ subcuboid that will now contain the particle. Once this is done,
 we reset the $s$-field for the next simulation batch.
 
 @<Prepare particle for further processing@>=
-update_sfield(&(p.s), &(subcuboids[p.subcuboid].bb), p.v);
-p.subcuboid = get_neighbour(p.subcuboid, p.s);
+update_sfield(&(p.s), &(geotab.ctab[p.subcuboid].bb), p.v);
+p.subcuboid = get_neighbour(&geotab, p.subcuboid, p.s);
 p.s = 0x0; /* renew particle */
 p.id = 0; /* get a new identifier from particle repository */
 

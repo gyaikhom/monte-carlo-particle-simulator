@@ -1507,6 +1507,8 @@ by a bounding box, which is axis-aligned with the world coordinate frame.
 
 @<Global variables@>=
 BoundingBox sim_world = {ZERO_VECTOR, ZERO_VECTOR};
+uint32_t num_subcuboids = 0;
+uint32_t div_subcuboids[3] = {1, 1, 1}; /* division along $x$, $y$ and $z$ */
 
 @ In the geometry input file, the specification of the simulation
 world uses the following format:
@@ -1534,7 +1536,6 @@ if (EOF == read_count || 9 != read_count)
 num_subcuboids = div_subcuboids[0] * div_subcuboids[1] * div_subcuboids[2];
 if (num_subcuboids > MAX_SUBCUBOIDS)
     @<Exit after cleanup: invalid division of simulation world@>;
-@<Build tables and search trees for managing the subcuboids@>;
 
 @ @<Exit after cleanup: invalid division of simulation world@>=
 goto invalid_subcuboid_division_exit_after_cleanup;

@@ -21,12 +21,12 @@ resulting from a division must all have the same size and shape
 (i.e., must be a cuboid themselves), must be disjointed, and their
 union must exactly produce the original cuboid.
 
-For instance, the following are valid divisions of
-the simulation world:
+For instance, in the following, the two divisions on the left are
+valid, whereas the right is invalid:
 
 \bigskip
 
-\centerline{\epsfig{file=figures/subdivision,scale=0.3}}
+\centerline{\epsfig{file=figures/subdivision,scale=0.3}\hfil \epsfig{file=figures/nonuniform,scale=0.3}}
 
 \bigskip
 
@@ -37,13 +37,8 @@ shape. With unequal partitions, we must carry out a lot more
 calculations in order to determine to which neighbouring subcuboid a
 particle has escaped. Even worse, this computational overhead is
 nonuniformly spread differing from one particle to the next, depending
-on their positions. The following figure demonstrates.
-
-\bigskip
-
-\centerline{\epsfig{file=figures/nonuniform,scale=0.3}}
-
-\bigskip
+on their positions. Note, however, that we could still use an octree or a
+$kd$-tree to accelerate the search for a solid inside a subcuboid.
 
 If we were simulating a few thousand particles, the computational
  overhead may be considered acceptable. However, since {\tt
@@ -53,19 +48,28 @@ unacceptable. By using subcuboids of the same size and shape, we can
 avoid all of this overhead by using an efficient lookup-table. We
 shall discuss this in the following sections.
 
-To accelerate particle tracking inside a subcuboid, however, we could
-still take advantage of an octree or a $kd$-tree to accelerate the
-search for a solid inside a subcuboid.
-
 @ After the simulation world has been divided, all of the subcuboids
-are stored in the array |subcuboids|. We shall refer to this as the
-{\sl subcuboids table}.
+are stored in a table, with entries as shown below. We shall refer to
+this as the {\sl subcuboids table}. The solid indices buffer stores
+indices of solids that are inside a given subcuboid. Hence, for a
+given subcuboid, the index |s| gives the starting location of the
+solids lists within this buffer, and |c| gives the number of items in
+that list. For instance, the subcuboid with index 2 contains two
+solids, whose solid indices are 0 and 1. What these solid indices mean
+will become clear when we discuss the solids table in later sections.
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-subcuboids-table,scale=1}}
+
 @<Type definitions@>=
-struct {
+struct subcuboids_table_item {
+    uint32_t s, c;  /* start index and item count in solid indices buffer */
     BoundingBox bb;
-} subcuboids[MAX_SUBCUBOIDS]; /* subcuboids table */
-uint32_t num_subcuboids = 0;
-uint32_t div_subcuboids[3] = {1, 1, 1}; /* division along $x$, $y$ and $z$ */
+};
+
+@ @<Subcuboids related data structures inside the geometry table@>=
+struct subcuboids_table_item *ctab;
 
 @ Function |build_subcuboids_table(bb,l,m,n)| builds the subcuboids
 table by filling in the bounding box information for each of the
@@ -74,48 +78,53 @@ size of the original cuboid |bb|, and the number of equal divisions
 in each of the dimensions $x$, $y$ and $z$ is given respectively by
 |l|, |m| and |n|.
 @<Global functions@>=
-void build_subcuboids_table(BoundingBox *bb, uint32_t l, uint32_t m, uint32_t n)
+bool build_subcuboids_table(GeometryTable *g)
 {
-	uint32_t i, j, k, c, t = m * n;
+	uint32_t i, j, k, c, t;
 	double dx, dy, dz, x[2], y[2], z;
-	dx = (bb->u[0] - bb->l[0]) / l;
-	dy = (bb->u[1] - bb->l[1]) / m;
-	dz = (bb->u[2] - bb->l[2]) / n;
-        x[0] = bb->l[0];
-	for (i = 0; i < l; ++i) {
+	g->ctab = mem_typed_alloc(g->nc, struct subcuboids_table_item,
+	mem_phase_two);
+	if (NULL == g->ctab) return false;
+	t = g->m * g->n;
+	dx = (g->sw.u[0] - g->sw.l[0]) / g->l;
+	dy = (g->sw.u[1] - g->sw.l[1]) / g->m;
+	dz = (g->sw.u[2] - g->sw.l[2]) / g->n;
+        x[0] = g->sw.l[0];
+	for (i = 0; i < g->l; ++i) {
             x[1] = x[0] + dx;
-            y[0] = bb->l[1];
-	    for (j = 0; j < m; ++j) {
+            y[0] = g->sw.l[1];
+	    for (j = 0; j < g->m; ++j) {
 	        y[1] = y[0] + dy;
-                z = bb->l[2];
-	        for (k = 0; k < n; ++k) {
-	            c = i * t + j * n + k;
-	            subcuboids[c].bb.l[0] = x[0];
-		    subcuboids[c].bb.l[1] = y[0];
-		    subcuboids[c].bb.l[2] = z;
+                z = g->sw.l[2];
+	        for (k = 0; k < g->n; ++k) {
+	            c = i * t + j * g->n + k;
+	            g->ctab[c].bb.l[0] = x[0];
+		    g->ctab[c].bb.l[1] = y[0];
+		    g->ctab[c].bb.l[2] = z;
 	            z += dz;
-	            subcuboids[c].bb.u[0] = x[1];
-	            subcuboids[c].bb.u[1] = y[1];
-                    subcuboids[c].bb.u[2] = z;
+	            g->ctab[c].bb.u[0] = x[1];
+	            g->ctab[c].bb.u[1] = y[1];
+                    g->ctab[c].bb.u[2] = z;
                 }
 	        y[0] += dy;
             }
             x[0] += dx;
      	}
+	return true;
 }
 
-@ Function |print_subcuboids_table(f)| prints the subcuboids table to
-the I/O stream pointed to by |f|.
+@ Function |print_subcuboids_table(f,g)| prints the subcuboids table
+from the geometry table |g| to the I/O stream pointed to by |f|.
 @<Global functions@>=
-void print_subcuboids_table(FILE *f)
+void print_subcuboids_table(FILE *f, GeometryTable *g)
 {
 	uint32_t i;
 	fprintf(f, "Subcuboids Table:\n");
-	for (i = 0; i < num_subcuboids; ++i)
-	    fprintf(f, "%3u [%8.3lf, %8.3lf, %8.3lf : %8.3lf, %8.3lf, %8.3lf]\n",
-	    i, subcuboids[i].bb.l[0], subcuboids[i].bb.l[1],
-	    subcuboids[i].bb.l[2], subcuboids[i].bb.u[0],
-	    subcuboids[i].bb.u[1], subcuboids[i].bb.u[2]);
+	for (i = 0; i < g->nc; ++i)
+	    fprintf(f, "%3u [%10.3lf, %10.3lf, %10.3lf : %10.3lf, %10.3lf, %10.3lf]\n",
+	    i, g->ctab[i].bb.l[0], g->ctab[i].bb.l[1],
+	    g->ctab[i].bb.l[2], g->ctab[i].bb.u[0],
+	    g->ctab[i].bb.u[1], g->ctab[i].bb.u[2]);
 }
 
 
@@ -145,8 +154,8 @@ three-dimensional space into three separate, but faster, searches in
 one-dimensional space. At the end of the three searches, we simply
 combine the results to give the index of the subcuboid.
 
-@<Global variables@>=
-double *subcuboid_search_tree; /* stores three binary search trees */
+@<Subcuboids related data structures inside the geometry table@>=
+double *ctree; /* stores three binary search trees */
 
 @ Every node in the binary search tree stores the upper bound of each
 subcuboid in the selected axis, except for the upper bound that
@@ -201,21 +210,21 @@ void build_subcuboid_search_tree(double *t, unsigned long n, double u, double l)
 	build_complete_tree(t, n, 1);
 }
 
-@ Function |build_subcuboid_trees(bb, l,m,n)| builds three complete
-binary search trees. The simulation world is bound by the bounding box
-|bb|, and is divided into |l|, |m| and |n| equal parts along the $x$,
-$y$ and $z$ axes. There will be a total of $|l| \times |m| \times |n|$
-subcuboids, which this function assumes is less than
-|MAX_SUBCUBOIDS|.
+@ Function |build_subcuboid_trees(g)| builds three complete binary
+search trees using the simulation world data inside the geometry table
+|g|. The simulation world is bound by the bounding box |bb|, and is
+divided into |l|, |m| and |n| equal parts along the $x$, $y$ and $z$
+axes. There will be a total of $|l| \times |m| \times |n|$ subcuboids,
+which this function assumes is less than |MAX_SUBCUBOIDS|.
 
 @<Global functions@>=
-bool build_subcuboid_trees(BoundingBox *bb, unsigned long l, unsigned long m, unsigned long n)
+bool build_subcuboid_trees(GeometryTable *g)
 {
 	double *x, *y, *z;
 	@<Allocate memory for the three cuboid search trees@>;
-	build_subcuboid_search_tree(x, l, bb->u[0], bb->l[0]);
-	build_subcuboid_search_tree(y, m, bb->u[1], bb->l[1]);
-	build_subcuboid_search_tree(z, n, bb->u[2], bb->l[2]);
+	build_subcuboid_search_tree(x, g->l, g->sw.u[0], g->sw.l[0]);
+	build_subcuboid_search_tree(y, g->m, g->sw.u[1], g->sw.l[1]);
+	build_subcuboid_search_tree(z, g->n, g->sw.u[2], g->sw.l[2]);
 	@<Finalise the subcuboid search trees@>;
 	return true;
 }
@@ -226,18 +235,18 @@ and |n| leaf nodes. However, we allocate one extra element per tree
 because the root only begins at the second element (index 1). Instead
 of wasting this first element, we use it to store the number of nodes.
 @<Allocate memory for the three cuboid search trees@>=
-subcuboid_search_tree = mem_typed_alloc(2 * (l + m + n), double, mem_phase_two);
-if (NULL == subcuboid_search_tree) return false;
-x = subcuboid_search_tree;
-y = x + 2 * l;
-z = y + 2 * m;
+g->ctree = mem_typed_alloc(2 * (g->l + g->m + g->n), double, mem_phase_two);
+if (NULL == g->ctree) return false;
+x = g->ctree;
+y = x + 2 * g->l;
+z = y + 2 * g->m;
 
 @ Don't forget to store the number of nodes as the first element of
 the tree array.
 @<Finalise the subcuboid search trees@>=
-*(unsigned long *)x = 2 * l;
-*(unsigned long *)y = 2 * m;
-*(unsigned long *)z = 2 * n;
+*(unsigned long *)x = 2 * g->l;
+*(unsigned long *)y = 2 * g->m;
+*(unsigned long *)z = 2 * g->n;
 
 @ Function |print_subcuboid_search_trees(f,t)| prints the three
 complete binary search trees in |t| to the I/O stream that is pointed
@@ -403,45 +412,51 @@ that points to one of the 26 valid neighbouring subcuboids.
 @d MAX_SUBCUBOIDS 1024
 @d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
-@<Global variables@>=
-int8_t neighbour_idx_table[MAX_SFIELD + 1] = {
--1,  0,  1, -1,  2,  3,  4, -1,  5,  6,
- 7, -1, -1, -1, -1, -1,  8,  9, 10, -1,
-11, 12, 13, -1, 14, 15, 16, -1, -1, -1,
--1, -1, 17, 18, 19, -1, 20, 21, 22, -1,
-23, 24, 25
-};
-uint32_t neighbour_table[MAX_SUBCUBOIDS][NUM_NEIGHBOURS];
+@d neighbour_idx_table {-1,  0,  1, -1,  2,  3,  4, -1,  5,  6,
+     7, -1, -1, -1, -1, -1,  8,  9, 10, -1,
+    11, 12, 13, -1, 14, 15, 16, -1, -1, -1,
+    -1, -1, 17, 18, 19, -1, 20, 21, 22, -1,
+    23, 24, 25}
+@<Subcuboids related data structures inside the geometry table@>=
+int8_t nitab[MAX_SFIELD + 1];
+uint32_t **ntab; /* each row containing |NUM_NEIGHBOURS| entries */
 
-@ Function |get_neighbour(s,i)| returns the next effective subcuboid
+@ Function |get_neighbour(g,s,i)| returns the next effective subcuboid
 for a particle, where it was previously in subcuboid |i| and the most
-recent application of a trajectory step updated the $s$-field to |s|.
+recent application of a trajectory step updated the $s$-field to
+|s|. It uses the neighbourhood table in |g|.
 
-@d cuboid_lookup(i,s) neighbour_table[(i)][neighbour_idx_table[s]]
+@d cuboid_lookup(g,i,s) ((g)->ntab[(i)][(g)->nitab[s]])
 @<Global functions@>=
-uint32_t get_neighbour(uint32_t i, uint8_t s)
+uint32_t get_neighbour(GeometryTable *g, uint32_t i, uint8_t s)
 {
-	if (s) return cuboid_lookup(i,s);
+	if (s) return cuboid_lookup(g,i,s);
 	return i; /* particle continues to exist in the same subcuboid */
 }
 
-@ Function |build_neighbour_table(l,m,n)| builds the subcuboid
-neighbourhood lookup-table when the cuboid representing the simulation
-world was divided into |l|, |m| and |n| equal parts along the $x$, $y$
-and $z$ axes. There will be a total of $|l| \times |m| \times |n|$
-subcuboids, which this function assumes is less than |MAX_SUBCUBOIDS|.
+@ Function |build_neighbour_table(g)| builds the subcuboid
+neighbourhood lookup-table inside the geometry table |g|. The cuboid
+which represents the simulation world has been divided into |l|, |m|
+and |n| equal parts along the $x$, $y$ and $z$ axes. There will be a
+total of $|l| \times |m| \times |n|$ subcuboids, which this function
+assumes is less than |MAX_SUBCUBOIDS|.
 
-@d cuboid_assign(r,s,v) neighbour_table[(r)][neighbour_idx_table[(int)(s)]] = (v)
+@d cuboid_assign(g,r,s,v) (g)->ntab[(r)][(g)->nitab[(int)(s)]] = (v)
 @<Global functions@>=
-void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
+bool build_neighbour_table(GeometryTable *g)
 {
-    uint32_t i, j, k, x, y, z, t = m * n;
+    uint32_t i, j, k, x, y, z, t = g->m * g->n;
     uint32_t r; /* row for subcuboid currently being filled in */
     uint8_t s, xb, yb, zb; /* $s$-field and extracted bit pairs */
-    for (i = 0; i < l; ++i)
-        for (j = 0; j < m; ++j)
-	    for (k = 0; k < n; ++k) { /* set neighbours */
-                r = i * t + j * n + k; /* row index for the current subcuboid */
+    int8_t nit[] = neighbour_idx_table;
+    g->ntab = mem_typed_alloc2d(g->nc, NUM_NEIGHBOURS, uint32_t,
+    mem_phase_two);
+    if (NULL == g->ntab) return false;
+    memcpy(g->nitab, nit, MAX_SFIELD + 1);
+    for (i = 0; i < g->l; ++i)
+        for (j = 0; j < g->m; ++j)
+	    for (k = 0; k < g->n; ++k) { /* set neighbours */
+                r = i * t + j * g->n + k; /* row index for the current subcuboid */
 		for (s = 1; s <= MAX_SFIELD; ++s) {
     		    x = i; y = j; z = k;
     		    if (((xb = s & 0x3) == 0x3) ||
@@ -450,6 +465,7 @@ void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
                     else @<Calculate the neighbour using the axes bit-pairs@>;
                 }
             }
+    return true;
 }
 
 @ @<Calculate the neighbour using the axes bit-pairs@>=
@@ -457,28 +473,28 @@ void build_neighbour_table(uint32_t l, uint32_t m, uint32_t n)
 @<Adjust index of the neighbour cuboid along the $x$-axis@>;
 @<Adjust index of the neighbour cuboid along the $y$-axis@>;
 @<Adjust index of the neighbour cuboid along the $z$-axis@>;
-cuboid_assign(r,s, x * t + y * n + z);
+cuboid_assign(g, r, s, x * t + y * g->n + z);
 }
 
 @ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
 if (xb == 0x1) {
    if (--x < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (xb == 0x2) {
-   if (++x == l) @<Neighbour subcuboid is outside the simulation world@>;
+   if (++x == g->l) @<Neighbour subcuboid is outside the simulation world@>;
 }
 
 @ @<Adjust index of the neighbour cuboid along the $y$-axis@>=
 if (yb == 0x4) {
    if (--y < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (yb == 0x8) {
-   if (++y == m) @<Neighbour subcuboid is outside the simulation world@>;
+   if (++y == g->m) @<Neighbour subcuboid is outside the simulation world@>;
 }
 
 @ @<Adjust index of the neighbour cuboid along the $z$-axis@>=
 if (zb == 0x10) {
    if (--z < 0) @<Neighbour subcuboid is outside the simulation world@>;
 } else if (zb == 0x20) {
-   if (++z == n) @<Neighbour subcuboid is outside the simulation world@>;
+   if (++z == g->n) @<Neighbour subcuboid is outside the simulation world@>;
 }
 
 @ All of the subcuboids that belong to the void outside the simulation
@@ -486,25 +502,25 @@ world are given the same subcuboid index |OUTSIDE_WORLD|.
 @d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
 @<Neighbour subcuboid is outside the simulation world@>=
 {
-    cuboid_assign(r,s, OUTSIDE_WORLD);
+    cuboid_assign(g,r,s, OUTSIDE_WORLD);
     continue;
 }
 
 @ @<Build tables and search trees for managing the subcuboids@>=
-build_subcuboid_trees(&sim_world, div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
-build_neighbour_table(div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
-build_subcuboids_table(&sim_world, div_subcuboids[0], div_subcuboids[1], div_subcuboids[2]);
+build_subcuboid_trees(g);
+build_neighbour_table(g);
+build_subcuboids_table(g);
 
-@ Function |print_neighbour_table(f)| prints the subcuboid
-neighbourhood table to the I/O stream pointed to by |f|.
+@ Function |print_neighbour_table(f,g)| prints the subcuboid
+neighbourhood table in |g| to the I/O stream pointed to by |f|.
 @<Global functions@>=
-void print_neighbour_table(FILE *f)
+void print_neighbour_table(FILE *f, GeometryTable *g)
 {
 	uint32_t i, j, c, k = MAX_SUBCUBOIDS + 1;
 	fprintf(f, "Subcuboid neighbourhood table:\n");
-	for (i = 0; i < num_subcuboids; ++i) {
+	for (i = 0; i < g->nc; ++i) {
 	    for (j = 0; j < NUM_NEIGHBOURS; ++j) {
-	        c = neighbour_table[i][j];
+	        c = g->ntab[i][j];
 	    	if (c < k) fprintf(f, "%3d ", c);
 		else fprintf(f, " .  ");
 	    }
@@ -527,44 +543,44 @@ this sections.
 
 @<Test subcuboid functionalities@>=
 {
-	unsigned long l, m, n, i, j, k, e, r;
+	uint32_t i, j, k, e, r;
 	double dx, dy, dz;
 	Vector v;
-	BoundingBox bb = {{0.0, 0.0, 0.0, 1.0},{0.0, 0.0, 0.0, 1.0}};
 	do {
 	       printf("Give upper bound (x, y, z) of the simulation world:\n");
-	       scanf("%lf %lf %lf", &bb.u[0], &bb.u[1], &bb.u[2]);
+	       scanf("%lf %lf %lf", &geotab.sw.u[0], &geotab.sw.u[1], &geotab.sw.u[2]);
 	       printf("Give lower bound (x, y, z) of the simulation world:\n");
-	       scanf("%lf %lf %lf", &bb.l[0], &bb.l[1], &bb.l[2]);
-	} while (bb.u[0] < bb.l[0] ||
-	         bb.u[1] < bb.l[1] ||
-	         bb.u[2] < bb.l[2]);
+	       scanf("%lf %lf %lf", &geotab.sw.l[0], &geotab.sw.l[1], &geotab.sw.l[2]);
+	} while (geotab.sw.u[0] < geotab.sw.l[0] ||
+	         geotab.sw.u[1] < geotab.sw.l[1] ||
+	         geotab.sw.u[2] < geotab.sw.l[2]);
         do {
 	       printf("Give number of divisions on the x, y, and z axes:\n");
-	       scanf("%lu %lu %lu", &l, &m, &n);
-	} while (l * m * n > MAX_SUBCUBOIDS);	
-	build_subcuboid_trees(&bb, l, m, n);
-	print_subcuboid_search_trees(stdout, subcuboid_search_tree);
+	       scanf("%u %u %u", &geotab.l, &geotab.m, &geotab.n);
+	       geotab.nc = geotab.l * geotab.m * geotab.n;
+	} while (geotab.nc > MAX_SUBCUBOIDS);	
+	build_subcuboid_trees(&geotab);
+	print_subcuboid_search_trees(stdout, geotab.ctree);
 	@<Search subcuboid for all points in each of the subcuboids@>;
 
-	build_neighbour_table(l, m, n);
-	build_subcuboids_table(&bb, l, m, n);
-	print_neighbour_table(stdout);
-	print_subcuboids_table(stdout);
+	build_neighbour_table(&geotab);
+	build_subcuboids_table(&geotab);
+	print_neighbour_table(stdout, &geotab);
+	print_subcuboids_table(stdout, &geotab);
 }
 
 @ @<Search subcuboid for all points in each of the subcuboids@>=
-dx = (bb.u[0] - bb.l[0]) / (double) l;
-dy = (bb.u[1] - bb.l[1]) / (double) m;
-dz = (bb.u[2] - bb.l[2]) / (double) n;
-v[0] = bb.l[0];
-for (i = 0; i < l; ++i, v[0] += dx) {
-    v[1] = bb.l[1];
-    for (j = 0; j < m; ++j, v[1] += dy) {
-        v[2] = bb.l[2];
-	for (k = 0; k < n; ++k, v[2] += dz) {
-	    e = i * m * n + j * n + k;
-	    r = find_subcuboid(subcuboid_search_tree, v);
+dx = (geotab.sw.u[0] - geotab.sw.l[0]) / (double) geotab.l;
+dy = (geotab.sw.u[1] - geotab.sw.l[1]) / (double) geotab.m;
+dz = (geotab.sw.u[2] - geotab.sw.l[2]) / (double) geotab.n;
+v[0] = geotab.sw.l[0];
+for (i = 0; i < geotab.l; ++i, v[0] += dx) {
+    v[1] = geotab.sw.l[1];
+    for (j = 0; j < geotab.m; ++j, v[1] += dy) {
+        v[2] = geotab.sw.l[2];
+	for (k = 0; k < geotab.n; ++k, v[2] += dz) {
+	    e = i * geotab.m * geotab.n + j * geotab.n + k;
+	    r = find_subcuboid(geotab.ctree, v);
 	    if (e != r) goto test_subcuboid_search_failed;
         }
     }
@@ -572,6 +588,6 @@ for (i = 0; i < l; ++i, v[0] += dx) {
 printf("Test was a success...\n");
 goto test_subcuboid_search_done;
 test_subcuboid_search_failed:
-       printf("Failure at (%lu, %lu, %lu): %lu instead of %lu for (%lf, %lf, %lf)\n",
+       printf("Failure at (%u, %u, %u): %u instead of %u for (%lf, %lf, %lf)\n",
        i, j, k, r, e, v[0], v[1], v[2]);
 test_subcuboid_search_done:

@@ -103,3 +103,22 @@ if (block) {
 @<Global variables@>=
 Area mem_phase_one = {NULL}; /* initialisation */
 Area mem_phase_two = {NULL}; /* persistent */
+
+@ To allocate a two-dimensional array which will fit $r \times c$
+elements of a given data type |t| under the memory area |s|, we use
+the \CEE/ macro |mem_typed_alloc2d(r,c,t,s)|.
+@d mem_typed_alloc2d(r,c,t,s) (t**)mem_alloc_2d((r),(c),sizeof(t),s)
+
+@ @<Global functions@>=
+char **mem_alloc_2d(uint32_t r, uint32_t c, size_t s, Area a)
+{
+    char **p = NULL;
+    uint32_t i;
+    p = (char **) mem_alloc(r * sizeof(char *), a);
+    if (NULL == p) return NULL;
+    for (i = 0; i < r; ++i) {
+	p[i] = mem_alloc(c * s, a);
+        if (NULL == p[i])  return NULL;
+    }
+    return p;
+}

@@ -9,16 +9,17 @@
 \bigskip
 
 @<Type definitions@>=
-typedef struct {
+struct geomtab_struct {
     @<Sizes of the geometry table components@>;
     @<Counters used during geometry table generation@>;
+    @<Subcuboids related data structures inside the geometry table@>;
     struct primitives_table_item *p;
     struct solids_table_item *s;
-    struct subcuboids_table_item *c;
     int32_t *pb; /* pointer to the postfix expression buffer */
     uint32_t *sb; /* pointer to the solid indices buffer */
-} GeometryTable;
-GeometryTable geotab;
+    BoundingBox sw; /* the simulation world cuboid */
+    uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes */
+} geotab;
 
 @
 
@@ -45,19 +46,6 @@ struct primitives_table_item {
 @<Type definitions@>=
 struct solids_table_item {
     uint32_t s, c; /* start index and item count in postfix expression buffer */
-};
-
-@
-
-\bigskip
-
-\centerline{\epsfig{file=figures/geometry-subcuboids-table,scale=1}}
-
-\bigskip
-
-@<Type definitions@>=
-struct subcuboids_table_item {
-    uint32_t s, c;  /* start index and item count in solid indices buffer */
 };
 
 @ @<Sizes of the geometry table components@>=
@@ -122,10 +110,10 @@ exit_error: mem_free(t);
 @ @<Fill in the subcuboids table and create a paged solid indices buffer@>=
 sb = mem_typed_alloc(m, uint32_t, t);
 for (i = 0; i < num_subcuboids; ++i) {
-    g->c[i].s = g->isb;
+    g->ctab[i].s = g->isb;
     for (j = 0; j < forest_of_solids.n; ++j) {
         s = forest_of_solids.s[j];
-        if (no_intersection_bb(subcuboids[i].bb, s->bb)) continue;
+        if (no_intersection_bb(g->ctab[i].bb, s->bb)) continue;
         if (c == m) {
            sb = mem_typed_alloc(m, uint32_t, t);
            if (NULL == sb) goto exit_error;
@@ -134,7 +122,7 @@ for (i = 0; i < num_subcuboids; ++i) {
     	sb[c++] = j;
 	++g->isb;
     }
-    g->c[i].c = g->isb - g->c[i].s;
+    g->ctab[i].c = g->isb - g->ctab[i].s;
 }
 
 @ @<Finalise solid indices buffer by moving paged data to contiguous memory@>=
@@ -172,24 +160,28 @@ void create_geotab(GeometryTable *g)
     uint32_t i;
     CSG_Node *s;
     @<Initialise the geometry table@>;
+    @<Build tables and search trees for managing the subcuboids@>;
     fill_geotab_subcuboids_table(g);
     @<Fill in the primitives table, the solids table and postfix buffer@>;
     @<Check if there are stray node@>;
 }
 
 @ @<Initialise the geometry table@>=
-g->ip = g->is = g->ic = g->ipb = g->isb = g->nc = g->nsb = 0;
+g->ip = g->is = g->ic = g->ipb = g->isb = g->nsb = 0;
+g->sw = sim_world;
+g->nc = num_subcuboids;
+g->l = div_subcuboids[0];
+g->m = div_subcuboids[1];
+g->n = div_subcuboids[2];
 g->np = nodes_repo->stat[PRIMITIVE];
 g->npb = nodes_repo->stat[PRIMITIVE] +
        nodes_repo->stat[UNION] +
        nodes_repo->stat[INTERSECTION] +
        nodes_repo->stat[DIFFERENCE];
 g->ns = forest_of_solids.n;
-g->nc = num_subcuboids;
 g->p = mem_typed_alloc(g->np, struct primitives_table_item, mem_phase_two);
 g->pb = mem_typed_alloc(g->npb, int32_t, mem_phase_two); 
 g->s = mem_typed_alloc(g->ns, struct solids_table_item, mem_phase_two);
-g->c = mem_typed_alloc(g->nc, struct subcuboids_table_item, mem_phase_two);
 
 @ @<Fill in the primitives table, the solids table and postfix buffer@>=
 for (i = 0; i < forest_of_solids.n; ++i) {
@@ -232,12 +224,14 @@ void print_geotab(FILE *f, GeometryTable *g)
 	for (i = 0; i < g->ns; ++i) fprintf(f, "%u %u\n", g->s[i].s, g->s[i].c);
 	fprintf(f, "Postfix buffer:\n");
 	for (i = 0; i < g->npb; ++i) fprintf(f, "%d ", g->pb[i]);
-	fprintf(f, "\n");
-	fprintf(f, "Subcuboids table:\n");
-	for (i = 0; i < g->nc; ++i) fprintf(f, "%u %u\n", g->c[i].s, g->c[i].c);
+	fprintf(f, "\nSubcuboids table:\n");
+	for (i = 0; i < g->nc; ++i) fprintf(f, "%u %u\n", g->ctab[i].s, g->ctab[i].c);
 	fprintf(f, "Solid indices buffer:\n");
 	for (i = 0; i < g->nsb; ++i) fprintf(f, "%u ", g->sb[i]);
 	fprintf(f, "\n");
+	print_subcuboid_search_trees(stdout, geotab.ctree);
+	print_neighbour_table(stdout, &geotab);
+	print_subcuboids_table(stdout, &geotab);
 }
 
 @ @<Test geometry table generation@>=
