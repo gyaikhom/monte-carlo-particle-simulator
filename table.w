@@ -65,7 +65,7 @@ uint32_t isb; /* index within solid indics buffer */
 @ @<Global functions@>=
 void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     if (NULL == g || NULL == n) return;
-    if (is_primitive(n->op)) {
+    if (is_primitive(n)) {
         matrix_copy(g->p[g->ip].a, n->affine);
 	matrix_copy(g->p[g->ip].i, n->inverse);
 	g->p[g->ip].p = *(n->leaf.p);
@@ -199,12 +199,21 @@ g->s[g->is].c = g->ipb - g->s[g->is].s;
 @ @<Check if there are stray node@>=
 i = g->npb - g->ipb;
 if (i) {
+   uint32_t j, p = 0;
    fprintf(stderr, "! There are %u stray nodes that are not in any of the solids:\n", i);
-   for (i = 0; i < MAX_CSG_NODES; ++i) {
-       s = nodes_repo->table[i];
-       if (NULL == s || is_used(s)) continue;
-       fprintf(stderr, "\t\"%s\" at line %u\n", s->name, get_line(s));
+   for (j = 0; i && j < MAX_CSG_NODES; ++j) {
+       s = nodes_repo->table[j];
+       if (NULL == s || is_inuse(s)) continue;
+       if (is_primitive(s)) {
+           ++p;
+       	   fprintf(stderr, "\tPrimitive \"%s\" at line %u\n", s->name, get_line(s));
+       } else {
+           fprintf(stderr, "\tOperator \"%s\" at line %u\n", s->name, get_line(s));
+       }
+       --i;
    }
+   g->np -= p; /* correct the number of active primitives */
+   g->npb = g->ipb; /* correct the number of items in postfix buffer */
 }
 
 @ @<Global functions@>=

@@ -308,15 +308,15 @@ uint32_t op;
 @d get_line(n) ((n)->op >> 4)
 
 @ The following macros check the bit fields.
-@d is_used(n) (BIT_MASK_UBIT & (n)->op)
-@d is_primitive(n) (!(BIT_MASK_NODE & (n))) /* special because |PRIMITIVE == 0x0| */
-@d is_parameter(n) (PARAMETER == (BIT_MASK_NODE & (n)))
-@d is_union(n) (UNION == (BIT_MASK_NODE & (n)))
-@d is_intersection(n) (INTERSECTION == (BIT_MASK_NODE & (n)))
-@d is_difference(n) (DIFFERENCE == (BIT_MASK_NODE & (n)))
-@d is_translate(n) (TRANSLATE == (BIT_MASK_NODE & (n)))
-@d is_rotate(n) (ROTATE == (BIT_MASK_NODE & (n)))
-@d is_scale(n) (SCALE == (BIT_MASK_NODE & (n)))
+@d is_inuse(n) (BIT_MASK_UBIT & (n)->op)
+@d is_primitive(n) (!(BIT_MASK_NODE & (n)->op)) /* special because |PRIMITIVE == 0x0| */
+@d is_parameter(n) (PARAMETER == (BIT_MASK_NODE & (n)->op))
+@d is_union(n) (UNION == (BIT_MASK_NODE & (n)->op))
+@d is_intersection(n) (INTERSECTION == (BIT_MASK_NODE & (n)->op))
+@d is_difference(n) (DIFFERENCE == (BIT_MASK_NODE & (n)->op))
+@d is_translate(n) (TRANSLATE == (BIT_MASK_NODE & (n)->op))
+@d is_rotate(n) (ROTATE == (BIT_MASK_NODE & (n)->op))
+@d is_scale(n) (SCALE == (BIT_MASK_NODE & (n)->op))
 
 @ All nodes store a pointer to its parent node. This is used for
 backtracking during tree traversal.
@@ -1682,7 +1682,7 @@ bool calculate_bounding_box(CSG_Node *n)
 	CSG_Node *l, *r; /* left and right subtrees */
 	Vector temp, c[8]; /* for affine transformation */
 	int i, j;
-	if (is_primitive(n->op)) {
+	if (is_primitive(n)) {
 	    if (primitive_bb(n->leaf.p, &n->bb)) {
 	        @<Calculate affine transformed bounding box@>;
 	        return true;
@@ -1847,8 +1847,8 @@ CSG_Node *merge_affine(CSG_Node *r)
 {
 	CSG_Node *t, *p; /* temporary node and parent node */
 	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
-	if (is_primitive(r->op) || is_parameter(r->op)) return NULL;
-	if (is_translate(r->op) || is_rotate(r->op) || is_scale(r->op)) {
+	if (is_primitive(r) || is_parameter(r)) return NULL;
+	if (is_translate(r) || is_rotate(r) || is_scale(r)) {
 	    @<Merge sequence of affine transformation nodes@>;
 	    @<Detach affine transformations@>;
 	}
@@ -1863,7 +1863,7 @@ do {
 	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate */
 	matrix_copy(m, mm);
 	r = t->internal.left;
-} while (is_translate(r->op) || is_rotate(r->op) || is_scale(r->op));
+} while (is_translate(r) || is_rotate(r) || is_scale(r));
 
 @ @<Detach affine transformations@>=
 matrix_copy(r->affine, m);
@@ -1872,7 +1872,7 @@ matrix_copy(r->inverse, m);
 r->parent = p;
 
 @ @<Finalise affine on primitive, or merge affine on subtrees@>=
-if (is_primitive(r->op)) {
+if (is_primitive(r)) {
     if (r->parent) {
         matrix_multiply(r->affine, r->parent->affine, mm);
         matrix_copy(r->affine, mm);
@@ -1892,11 +1892,11 @@ to print the node in the current recursive call.
 void print_csg_tree(CSG_Node *t, uint32_t l) {
         int i;
         if (NULL == t) return;
-        if (is_primitive(t->op)) {
+        if (is_primitive(t)) {
                 @<Print primitive solid information@>;
                 return;
         }
-        if (is_parameter(t->op)) {
+        if (is_parameter(t)) {
                 @<Print affine transformation parameters@>;
                 return;
         }
@@ -2390,10 +2390,10 @@ Containment recursively_test_containment(CSG_Node *root, Vector v)
 {
         Containment left, right;
         Vector r; /* used during inverse transformation */
-        if (is_primitive(root->op)) {
+        if (is_primitive(root)) {
                 @<Test containment inside primitive solid@>;
 	} else {
-                if (is_union(root->op) || is_intersection(root->op) || is_difference(root->op)) {
+                if (is_union(root) || is_intersection(root) || is_difference(root)) {
                         @<Test containment in subtrees using boolean operators@>;
                 } else {
                         @<Test containment after affine transformations@>;
