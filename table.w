@@ -46,6 +46,7 @@ struct primitives_table_item {
 @<Type definitions@>=
 struct solids_table_item {
     uint32_t s, c; /* start index and item count in postfix expression buffer */
+    BoundingBox bb; /* bounding box for the solid */
 };
 
 @ @<Sizes of the geometry table components@>=
@@ -65,7 +66,7 @@ uint32_t isb; /* index within solid indics buffer */
 @ @<Global functions@>=
 void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     if (NULL == g || NULL == n) return;
-    if (is_primitive(n->op)) {
+    if (is_primitive(n)) {
         matrix_copy(g->p[g->ip].a, n->affine);
 	matrix_copy(g->p[g->ip].i, n->inverse);
 	g->p[g->ip].p = *(n->leaf.p);
@@ -88,13 +89,24 @@ void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     }
 }
 
+@ A solid with a long postfix expression will take longer to evaluate,
+compared to shorter expressions. Hence, we use |compare_solids(a,b)|
+to sort the solids table in ascending order using the postfix expression
+length as the comparison key.
+@<Global functions@>=
+static int compare_solids(const void *a, const void *b)
+{
+	struct solids_table_item *ap = (struct solids_table_item *) a;
+	struct solids_table_item *bp = (struct solids_table_item *) b;
+	return (ap->c - bp->c);
+}
+
 @ @<Global functions@>=
 bool fill_geotab_subcuboids_table(GeometryTable *g)
 {
     Area t, r; /* temporary paged solids indices buffer */
     uint32_t m = 3; /* maximum number of items per page */
     uint32_t c = 0; /* number of items in current page */
-    CSG_Node *s = NULL;
     uint32_t *sb; /* current solid indices buffer page */
     uint32_t i, j;
     mem_init(t);
@@ -109,11 +121,12 @@ exit_error: mem_free(t);
 
 @ @<Fill in the subcuboids table and create a paged solid indices buffer@>=
 sb = mem_typed_alloc(m, uint32_t, t);
-for (i = 0; i < num_subcuboids; ++i) {
+if (NULL == sb) goto exit_error;
+qsort(g->s, g->ns, sizeof(struct solids_table_item), compare_solids);
+for (i = 0; i < g->nc; ++i) {
     g->ctab[i].s = g->isb;
-    for (j = 0; j < forest_of_solids.n; ++j) {
-        s = forest_of_solids.s[j];
-        if (no_intersection_bb(g->ctab[i].bb, s->bb)) continue;
+    for (j = 0; j < g->ns; ++j) {
+        if (no_intersection_bb(g->ctab[i].bb, g->s[j].bb)) continue;
         if (c == m) {
            sb = mem_typed_alloc(m, uint32_t, t);
            if (NULL == sb) goto exit_error;
@@ -161,9 +174,9 @@ void create_geotab(GeometryTable *g)
     CSG_Node *s;
     @<Initialise the geometry table@>;
     @<Build tables and search trees for managing the subcuboids@>;
-    fill_geotab_subcuboids_table(g);
     @<Fill in the primitives table, the solids table and postfix buffer@>;
     @<Check if there are stray node@>;
+    fill_geotab_subcuboids_table(g);
 }
 
 @ @<Initialise the geometry table@>=
@@ -191,6 +204,7 @@ for (i = 0; i < forest_of_solids.n; ++i) {
 
 @ @<Fill table entries for this solid@>=
 if (NULL == s) continue;
+g->s[g->is].bb = s->bb;
 g->s[g->is].s = g->ipb;
 fill_geotab_csg_table(g, s);
 g->s[g->is].c = g->ipb - g->s[g->is].s;
@@ -199,12 +213,21 @@ g->s[g->is].c = g->ipb - g->s[g->is].s;
 @ @<Check if there are stray node@>=
 i = g->npb - g->ipb;
 if (i) {
+   uint32_t j, p = 0;
    fprintf(stderr, "! There are %u stray nodes that are not in any of the solids:\n", i);
-   for (i = 0; i < MAX_CSG_NODES; ++i) {
-       s = nodes_repo->table[i];
-       if (NULL == s || is_used(s)) continue;
-       fprintf(stderr, "\t\"%s\" at line %u\n", s->name, get_line(s));
+   for (j = 0; i && j < MAX_CSG_NODES; ++j) {
+       s = nodes_repo->table[j];
+       if (NULL == s || is_inuse(s)) continue;
+       if (is_primitive(s)) {
+           ++p;
+       	   fprintf(stderr, "\tPrimitive \"%s\" at line %u\n", s->name, get_line(s));
+       } else {
+           fprintf(stderr, "\tOperator \"%s\" at line %u\n", s->name, get_line(s));
+       }
+       --i;
    }
+   g->np -= p; /* correct the number of active primitives */
+   g->npb = g->ipb; /* correct the number of items in postfix buffer */
 }
 
 @ @<Global functions@>=
