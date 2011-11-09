@@ -46,3 +46,4 @@ for (k = sizeof(unsigned) * 8 - 1; ((1 << k) & v) == 0; --k);
 @i vector.w
 @i matrix.w
 @i mem.w
+@i cuda.w

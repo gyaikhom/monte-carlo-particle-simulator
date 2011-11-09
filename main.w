@@ -35,6 +35,7 @@ mem_free(mem_phase_two);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "cuda_runtime_api.h"
 
 @ @<Global variables@>=
 Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };
