@@ -13,11 +13,16 @@ typedef struct gpu_table {
     uint32_t npb; /* number of entries in postfix expression buffer */
     uint32_t nsb; /* number of entries in solid indices buffer */
     uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes */
+    uint32_t nct; /* number of items in the subcuboids search tree */
     struct subcuboids_table_item *ctab;
     struct solids_table_item *s;
     struct primitives_table_item *p;
     int32_t *pb; /* pointer to the postfix expression buffer */
     uint32_t *sb; /* pointer to the solid indices buffer */
+    double *ctree; /* subcuboid search tree */
+    int8_t *nitab; /* neighbour index table */
+    uint32_t *ntab; /* neighbour table */
+    size_t pitch; /* width in bytes for the neighbour table */
     BoundingBox sw; /* the simulation world cuboid */
 } GPUTables;
 
@@ -39,6 +44,10 @@ GPUTables *transfer_tables_to_gpu(GeometryTable *g)
     k.p = cuda_mem_typed_alloc(k.np,struct primitives_table_item,mem_gpu);
     k.pb = cuda_mem_typed_alloc(k.npb,int32_t,mem_gpu);
     k.sb = cuda_mem_typed_alloc(k.nsb,uint32_t,mem_gpu);
+    k.ctree = cuda_mem_typed_alloc(2 * (k.l + k.m +
+        k.n),double,mem_gpu);
+    k.nitab = cuda_mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_gpu);
+    k.ntab = cuda_mem_typed_alloc2d(&k.pitch,k.nc,NUM_NEIGHBOURS,uint32_t,mem_gpu);
     t = cuda_mem_typed_alloc(1,GPUTables,mem_gpu);
     cudaMemcpy(k.ctab, g->ctab, k.nc * sizeof(struct
         subcuboids_table_item), cudaMemcpyHostToDevice);
@@ -46,8 +55,18 @@ GPUTables *transfer_tables_to_gpu(GeometryTable *g)
         cudaMemcpyHostToDevice);
     cudaMemcpy(k.p, g->p, k.np * sizeof(struct primitives_table_item),
         cudaMemcpyHostToDevice);
-    cudaMemcpy(k.pb, g->pb, k.npb * sizeof(int32_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(k.sb, g->sb, k.nsb * sizeof(uint32_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(k.pb, g->pb, k.npb * sizeof(int32_t),
+        cudaMemcpyHostToDevice);
+    cudaMemcpy(k.sb, g->sb, k.nsb * sizeof(uint32_t),
+        cudaMemcpyHostToDevice);
+    k.nct = 2 * (k.l + k.m + k.n);
+    cudaMemcpy(k.ctree, g->ctree, k.nct *
+        sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(k.nitab, g->nitab, (MAX_SFIELD + 1) *
+        sizeof(int8_t), cudaMemcpyHostToDevice);
+    cudaMemcpy2D(k.ntab, k.pitch, g->ntab, NUM_NEIGHBOURS *
+        sizeof(uint32_t), NUM_NEIGHBOURS * sizeof(uint32_t),
+        k.nc, cudaMemcpyHostToDevice);
     cudaMemcpy(t, &k, sizeof(k), cudaMemcpyHostToDevice);
     return t;
 }
@@ -75,11 +94,29 @@ void transfer_tables_from_gpu(GPUTables *g, GPUTables *h)
 
     t = h->pb;
     h->pb = mem_typed_alloc(h->npb,int32_t,mem_phase_two);
-    cudaMemcpy(h->pb, t, h->npb * sizeof(int32_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h->pb, t, h->npb * sizeof(int32_t),
+        cudaMemcpyDeviceToHost);
 
     t = h->sb;
     h->sb = mem_typed_alloc(h->nsb,uint32_t,mem_phase_two);
-    cudaMemcpy(h->sb, t, h->nsb * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(h->sb, t, h->nsb * sizeof(uint32_t),
+        cudaMemcpyDeviceToHost);
+
+    t = h->ctree;
+    h->ctree = mem_typed_alloc(h->nct,double,mem_phase_two);
+    cudaMemcpy(h->ctree, t, h->nct * sizeof(double),
+        cudaMemcpyDeviceToHost);
+
+    t = h->nitab;
+    h->nitab = mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_phase_two);
+    cudaMemcpy(h->nitab, t, (MAX_SFIELD + 1) * sizeof(double),
+        cudaMemcpyDeviceToHost);
+
+    t = h->ntab;
+    h->ntab = mem_typed_alloc(h->nc * NUM_NEIGHBOURS,uint32_t,mem_phase_two);
+    cudaMemcpy2D(h->ntab, NUM_NEIGHBOURS *
+        sizeof(uint32_t), t, h->pitch, NUM_NEIGHBOURS * sizeof(uint32_t),
+        h->nc, cudaMemcpyDeviceToHost);
 }
 
 @ @<Global functions@>=
