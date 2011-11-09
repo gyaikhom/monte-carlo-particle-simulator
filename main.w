@@ -5,9 +5,11 @@
 @<Include preamble for applications@>@/
 int main(int argc, char *argv[])
 {
+	size_t p;
 	@<Test geometry table generation@>;
 	cuda_mem_typed_alloc(10,uint32_t,mem_gpu);
 	cuda_mem_typed_alloc(10,float,mem_gpu);
+	cuda_mem_typed_alloc2d(&p,10,10,int,mem_gpu);
 	@<Clean up the system@>;
 	return 0;
 }
@@ -29,7 +31,7 @@ int main(int argc, char *argv[])
 
 @ @<Clean up the system@>=
 mem_free(mem_phase_one);
-cuda_mem_free(mem_gpu); /* must be done before freeing phase two memory */
+cuda_mem_free(mem_gpu);
 mem_free(mem_phase_two);
 
 @ @<Include system libraries@>=
