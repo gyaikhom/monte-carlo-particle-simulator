@@ -17,12 +17,30 @@ to the one when it was first initialised.
 @<Global functions@>=
 void cuda_mem_free(Area s)
 {
-	Area t;
-	while (*s) {
-	      *t = (*s)->next;
-	      cudaFree((*s)->first);
-	      *s = *t;
+	struct memory_area *t = *s;
+	while (t) {
+	      cudaFree(t->first);
+	      t = t->next;
 	}
+}
+
+@
+@d gpu_memblocks_per_hostblock 16 /* 512 bytes per block */
+@<Global functions@>=
+static struct memory_area *next_gpu_memblock = NULL;
+static struct memory_area *bad_gpu_memblock = NULL;
+struct memory_area *create_gpu_memblock() {
+        struct memory_area *slot = next_gpu_memblock;
+	if (slot == bad_gpu_memblock) {
+	   slot = mem_typed_alloc(gpu_memblocks_per_hostblock, struct
+	       memory_area, mem_phase_two);
+	   if (NULL == slot) return NULL;
+	   else {
+	   	next_gpu_memblock = slot + 1;
+		bad_gpu_memblock = slot + gpu_memblocks_per_hostblock;
+	   }
+	} else next_gpu_memblock++;
+        return slot;
 }
 
 @ To allocate storage space to fit |n| elements of a given data type
@@ -45,19 +63,20 @@ char *cuda_mem_alloc(size_t n, Area s)
 {
 	size_t m = sizeof(char *), q; /* size of a pointer variable */
 	char *block; /* address of the new block */
-	Area t;
-	if (1 > n || (0xffff00 - 2*m) < n) {
-   	    return NULL;
-	}
+	struct memory_area *t;
+	if (1 > n || (0xffff00 - 2*m) < n) return NULL;
 	n = round_up_mult(n,m); /* round up |n| to a multiple of |m| */
-	q = (size_t) ((n + 2*m + 255) / 256) * 256;
-	cudaMalloc(&block, q);
-	cudaMemset(block, 0, q); /* get the |calloc()| effect */
-	if (block) {
-   	    *t = (struct memory_area *) (block + n);
-   	    (*t)->first = block;
-   	    (*t)->next = *s;
-   	    *s = *t;
+	q = (size_t) ((n + 255) / 256) * 256;
+	if (cudaSuccess == cudaMalloc((void **)&block, q)) {
+	    t = create_gpu_memblock();
+	    if (NULL == t) {
+	        cudaFree(block);
+		return NULL;
+	    }
+	    cudaMemset(block, 0, q); /* get the |calloc()| effect */
+	    t->first = block;
+   	    t->next = *s;
+   	    *s = t;
 	}
 	return block;
 }
