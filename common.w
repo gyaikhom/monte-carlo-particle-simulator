@@ -25,7 +25,7 @@ double convert_radian_to_degree(double angle)
       return angle;
 }
 
-@(mcs.cu@>=
+@ @(mcs.cu@>=
 __device__ double cuda_convert_radian_to_degree(double angle)
 {
       angle *= RADIAN_TO_DEGREE;
