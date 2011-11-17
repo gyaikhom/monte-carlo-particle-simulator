@@ -2387,7 +2387,7 @@ temp[1] = 0.0; /* angle must be on the $xz$-plane */
 gamma = cuda_vector_angle_radian(positive_xaxis_unit_vector, temp);
 gamma_deg = cuda_convert_radian_to_degree(gamma);
 
-@<CUDA: Check if |v| is outside the tube@>=
+@ @<CUDA: Check if |v| is outside the tube@>=
 @<Calculate vector |tube_center| on the center of the tube at $\gamma$@>;
 @<CUDA: Calculate radial distance of |v| from |tube_center|@>;
 if (radial > p->t.minor) return OUTSIDE;
@@ -2737,7 +2737,7 @@ bool is_inside_primitive(Vector v, Primitive *p)
 	return false;
 }
 
-@(mcs.cu@>=
+@ @(mcs.cu@>=
 __device__ bool cuda_is_inside_primitive(Vector v, Primitive *p)
 {
 	Containment c;
