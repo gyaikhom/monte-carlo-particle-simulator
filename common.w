@@ -25,6 +25,14 @@ double convert_radian_to_degree(double angle)
       return angle;
 }
 
+@(mcs.cu@>=
+__device__ double cuda_convert_radian_to_degree(double angle)
+{
+      angle *= RADIAN_TO_DEGREE;
+      if (angle < 0.0) angle += 360.0; /* positive angle required */
+      return angle;
+}
+
 @ Function |roundup_pow2(v)| rounds up a positive number to the
 nearest power of two.
 
