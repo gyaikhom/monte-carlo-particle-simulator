@@ -20,8 +20,8 @@ typedef struct gpu_table {
     int32_t *pb; /* pointer to the postfix expression buffer */
     uint32_t *sb; /* pointer to the solid indices buffer */
     double *ctree; /* subcuboid search tree */
-    int8_t *nitab; /* neighbour index table */
-    uint32_t *ntab; /* neighbour table */
+    int8_t *iltab; /* index lookup table for two-tiered neighbour table */
+    uint32_t *ntab; /* subcuboid neighbour table */
     size_t pitch; /* width in bytes for the neighbour table */
     BoundingBox sw; /* the simulation world cuboid */
 } GPUTables;
@@ -46,7 +46,7 @@ GPUTables *transfer_tables_to_gpu(GeometryTable *g)
     k.sb = cuda_mem_typed_alloc(k.nsb,uint32_t,mem_gpu);
     k.ctree = cuda_mem_typed_alloc(2 * (k.l + k.m +
         k.n),double,mem_gpu);
-    k.nitab = cuda_mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_gpu);
+    k.iltab = cuda_mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_gpu);
     k.ntab = cuda_mem_typed_alloc2d(&k.pitch,k.nc,NUM_NEIGHBOURS,uint32_t,mem_gpu);
     t = cuda_mem_typed_alloc(1,GPUTables,mem_gpu);
     cudaMemcpy(k.ctab, g->ctab, k.nc * sizeof(struct
@@ -62,7 +62,7 @@ GPUTables *transfer_tables_to_gpu(GeometryTable *g)
     k.nct = 2 * (k.l + k.m + k.n);
     cudaMemcpy(k.ctree, g->ctree, k.nct *
         sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(k.nitab, g->nitab, (MAX_SFIELD + 1) *
+    cudaMemcpy(k.iltab, g->iltab, (MAX_SFIELD + 1) *
         sizeof(int8_t), cudaMemcpyHostToDevice);
     cudaMemcpy2D(k.ntab, k.pitch, g->ntab, NUM_NEIGHBOURS *
         sizeof(uint32_t), NUM_NEIGHBOURS * sizeof(uint32_t),
@@ -107,9 +107,9 @@ void transfer_tables_from_gpu(GPUTables *g, GPUTables *h)
     cudaMemcpy(h->ctree, t, h->nct * sizeof(double),
         cudaMemcpyDeviceToHost);
 
-    t = h->nitab;
-    h->nitab = mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_phase_two);
-    cudaMemcpy(h->nitab, t, (MAX_SFIELD + 1) * sizeof(double),
+    t = h->iltab;
+    h->iltab = mem_typed_alloc(MAX_SFIELD + 1,int8_t,mem_phase_two);
+    cudaMemcpy(h->iltab, t, (MAX_SFIELD + 1) * sizeof(double),
         cudaMemcpyDeviceToHost);
 
     t = h->ntab;
@@ -145,7 +145,8 @@ void print_tables(FILE *f, GPUTables *g)
 
 @ @<Test gpu tables@>=
 {
-	if (false == read_geometry("input.dat")) exit(1);
+	if (false == read_geometry("test_gpu_table.data")) exit(1);
+	print_forest();
 	create_geotab(&geotab);
 	GPUTables *gpu, host;
 	gpu = transfer_tables_to_gpu(&geotab);

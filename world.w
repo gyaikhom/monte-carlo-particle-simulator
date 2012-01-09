@@ -37,23 +37,22 @@ shape. With unequal partitions, we must carry out a lot more
 calculations in order to determine to which neighbouring subcuboid a
 particle has escaped. Even worse, this computational overhead is
 nonuniformly spread differing from one particle to the next, depending
-on their positions. Note, however, that we could still use an octree or a
-$kd$-tree to accelerate the search for a solid inside a subcuboid.
-
-If we were simulating a few thousand particles, the computational
- overhead may be considered acceptable. However, since {\tt
-MCS} is expected to simulate millions, or even billions of
+on their positions. If we were simulating a few thousand particles,
+the computational overhead may be considered acceptable. However,
+since {\tt MCS} is expected to simulate millions, or even billions of
 particles, the overhead becomes significant and therefore
-unacceptable. By using subcuboids of the same size and shape, we can
+unacceptable. By using subcuboids of the same size and shape, we can 
 avoid all of this overhead by using an efficient lookup-table. We
-shall discuss this in the following sections.
+shall discuss this in the following sections. Note, however, that we
+could still use an octree or a $kd$-tree to accelerate the search for
+a solid inside a subcuboid.
 
 @ After the simulation world has been divided, all of the subcuboids
 are stored in a table, with entries as shown below. We shall refer to
 this as the {\sl subcuboids table}. The solid indices buffer stores
 indices of solids that are inside a given subcuboid. Hence, for a
 given subcuboid, the index |s| gives the starting location of the
-solids lists within this buffer, and |c| gives the number of items in
+solids list within this buffer, and |c| gives the number of items in
 that list. For instance, the subcuboid with index 2 contains two
 solids, whose solid indices are 0 and 1. What these solid indices mean
 will become clear when we discuss the solids table in later sections.
@@ -75,9 +74,10 @@ struct subcuboids_table_item *ctab;
 table by filling in the bounding box information for each of the
 subcuboids. The dimension of each subcuboid is determined from the
 size of the original cuboid |bb|, and the number of equal divisions
-in each of the dimensions $x$, $y$ and $z$ is given respectively by
+in each of the dimensions $x$, $y$ and $z$ as given respectively by
 |l|, |m| and |n|.
 @<Global functions@>=
+typedef struct geomtab_struct GeometryTable; /* forward-declaration */
 bool build_subcuboids_table(GeometryTable *g)
 {
 	uint32_t i, j, k, c, t;
@@ -86,8 +86,8 @@ bool build_subcuboids_table(GeometryTable *g)
 	mem_phase_two);
 	if (NULL == g->ctab) return false;
 	t = g->m * g->n;
-	dx = (g->sw.u[0] - g->sw.l[0]) / g->l;
-	dy = (g->sw.u[1] - g->sw.l[1]) / g->m;
+	dx = (g->sw.u[0] - g->sw.l[0]) / g->l; /* determine subcuboid size using upper and lower bound */
+	dy = (g->sw.u[1] - g->sw.l[1]) / g->m; /* of the cuboid which represents the simulation world */
 	dz = (g->sw.u[2] - g->sw.l[2]) / g->n;
         x[0] = g->sw.l[0];
 	for (i = 0; i < g->l; ++i) {
@@ -135,7 +135,7 @@ arises when we are generating primary particles using a particle
 gun. The only way to determine the containing subcuboid is to search
 throughout the simulation world by going through all of the
 subcuboids. Again, for a few thousand particles the computational cost
-for an exhaustive search could be acceptable; however, since {\tt MCS}
+for an exhaustive search would be acceptable; however, since {\tt MCS}
 is expected to simulate millions, we must devise a better strategy.
 
 First of all, we only search for particles that are inside the
@@ -146,13 +146,14 @@ $$\vcenter{\halign{# & #\hfil \cr
 1) & all of the subcuboids are of the same size and shape,\cr
 2) & their union exactly defines the simulation world,\cr
 3) & no two subcuboids intersect, and\cr
-4) & the division into subcuboids is immutable for the entire simulation.\cr
+4) & the division into subcuboids is immutable throughout the entire simulation.\cr
 }}$$
 
 This means that, we can decompose a single search for the subcuboid in
 three-dimensional space into three separate, but faster, searches in
 one-dimensional space. At the end of the three searches, we simply
-combine the results to give the index of the subcuboid.
+combine the separate results to produce the index of the subcuboid
+that contains the particle.
 
 @<Subcuboids related data structures inside the geometry table@>=
 double *ctree; /* stores three binary search trees */
@@ -171,19 +172,23 @@ $O(\lceil \lg n \rceil)$. Finally, we can take advantage of the fact
 that a complete binary search tree can be stored using a
 one-dimensional array. This not only reduces the space requirements
 for storing the binary tree, but also simplifies the tree traversal
-mechanism: Instead of using pointers, we use {\sl binary shift} operators.
+mechanism: Instead of using pointers, we use {\sl bit shift} operators.
 
 @ Function |build_complete_tree(t,n,i)| recursively builds a complete
 binary search tree |t| so that, during an {\sl inorder} traversal, the
 values in the internal nodes will produce the sequence $s = \{s_i, 0
 \le i < n\}$, where $s_0 = \delta$ and $s_j = s_{j-1} + \delta, 0 < j <
 n$. The increment $\delta$ is the dimension of each subcuboid in the
-selected axes. The leaf nodes, on the other hand, store indices of the
-subcuboids that contains the value range defined by the internal nodes.
+selected axes. The leaf nodes, on the other hand, store partial
+indices of the subcuboids that contain the value range defined by the
+internal nodes in the chosen axis. Later on, partial indices from the
+three axes can be combined to produce a complete subcuboid index.
 @<Global functions@>=
-static double build_complete_tree_val = 0.0;
-static double build_complete_tree_inc = 0.0;
-static int build_complete_leaf_idx = 0;
+static double build_complete_tree_val = 0.0; /* upper bound stored in
+internal node */
+static double build_complete_tree_inc = 0.0; /* size of the subcuboid */
+static int build_complete_leaf_idx = 0; /* partial subcuboid index
+stored in leaf */
 void build_complete_tree(double *t, unsigned long n, unsigned long i)
 {
 	unsigned long j;
@@ -199,7 +204,7 @@ void build_complete_tree(double *t, unsigned long n, unsigned long i)
 @ Function |build_subcuboid_search_tree(t,n,u,l)| builds a complete
 binary search tree |t| where the upper and lower bounds of the
 simulation world are respectively |u| and |l| units in the selected
-axis. In the selected dimension, the simulation world has been divided
+axis. On the selected axis, the simulation world has been divided
 into |n| equal subcuboids.
 @<Global functions@>=
 void build_subcuboid_search_tree(double *t, unsigned long n, double u, double l)
@@ -221,7 +226,8 @@ which this function assumes is less than |MAX_SUBCUBOIDS|.
 bool build_subcuboid_trees(GeometryTable *g)
 {
 	double *x, *y, *z;
-	@<Allocate memory for the three cuboid search trees@>;
+	uint32_t nx, ny, nz;
+	@<Allocate memory for the three subcuboid search trees@>;
 	build_subcuboid_search_tree(x, g->l, g->sw.u[0], g->sw.l[0]);
 	build_subcuboid_search_tree(y, g->m, g->sw.u[1], g->sw.l[1]);
 	build_subcuboid_search_tree(z, g->n, g->sw.u[2], g->sw.l[2]);
@@ -233,20 +239,26 @@ bool build_subcuboid_trees(GeometryTable *g)
 search tree with |n| subcuboids only requires |n - 1| internal nodes
 and |n| leaf nodes. However, we allocate one extra element per tree
 because the root only begins at the second element (index 1). Instead
-of wasting this first element, we use it to store the number of nodes.
-@<Allocate memory for the three cuboid search trees@>=
-g->ctree = mem_typed_alloc(2 * (g->l + g->m + g->n), double, mem_phase_two);
+of wasting this first element, we use it to store the number of
+nodes. Hence, to store a binary subcuboid search tree with $k$
+subcuboids, we allocate an array with $2k$ elements. The same is
+calculated and allocated for each of the other two axes.
+@<Allocate memory for the three subcuboid search trees@>=
+nx = 2 * g->l;
+ny = 2 * g->m;
+nz = 2 * g->n;
+g->ctree = mem_typed_alloc(nx + ny + nz, double, mem_phase_two);
 if (NULL == g->ctree) return false;
 x = g->ctree;
-y = x + 2 * g->l;
-z = y + 2 * g->m;
+y = x + nx;
+z = y + ny;
 
 @ Don't forget to store the number of nodes as the first element of
 the tree array.
 @<Finalise the subcuboid search trees@>=
-*(unsigned long *)x = 2 * g->l;
-*(unsigned long *)y = 2 * g->m;
-*(unsigned long *)z = 2 * g->n;
+*(unsigned long *)x = nx;
+*(unsigned long *)y = ny;
+*(unsigned long *)z = nz;
 
 @ Function |print_subcuboid_search_trees(f,t)| prints the three
 complete binary search trees in |t| to the I/O stream that is pointed
@@ -305,29 +317,31 @@ Once inside a simulation, we must determine at each step of
 the particle's trajectory which subcuboid currently encloses the
 particle. This is important because in order to apply physics
 processes to a particle, we must first determine the physical
-properties of the material with which the particle will interacting at
-that given step. However, to determine the materal properties, we must
-know which solid is currently enclosing the particle. We therefore
-start at the subcuboid.
+properties of the material with which the particle will interact in
+that step. To determine the material properties, however, we must
+know which solid is currently enclosing the particle.
 
-For primary particles, we must use the function
-|find_subcuboid(t,v)|to find the subcuboid; however, for particles in
-simulation, we can devise a better strategy. Assume that the planes
-that divide the simulation world also divides the void outside the
-simulation. Then every subcuboid is surrounded by 26 other 
-subcuboids, where each is either part of the simulation world or
-belongs to the void, as shown below:
+For primary particles that are only starting their trajectory, we
+must use the function |find_subcuboid(t,v)| to find the containing
+subcuboid. However, for particles already in simulation, we can devise
+a better strategy which utilises the current particle position
+relative to its position in the previous trajectory step. To do this,
+assume that the planes that divide the simulation world also divide
+the void outside the simulation world cuboid. Then every subcuboid is
+surrounded by 26 neighbouring subcuboids, where each neighbour is
+either part of the simulation world or belongs to the void. This is
+shown below:
 
 \bigskip
 
-\centerline{\epsfig{file=figures/subcuboids,scale=0.4}}
+\centerline{\epsfig{file=figures/subcuboids,scale=0.35}}
 
 \bigskip
 
 For a given subcuboid, we can define all of its 26 neighbours using
 the six faces of the subcuboid. Let $f_i, 0 \le i < 6$ represent the
 six faces so that the intervals $[f_0, f_1]$, $[f_2, f_3]$, and
-$[f_4, f_5]$ respectively define the region inside the subcuboid
+$[f_4, f_5]$ respectively define the region enclosed by the subcuboid
 along the $x$, $y$ and $z$ axes. Now, for every point $(x, y, z)$ in
 the three-dimensional space, we can define a bit-field
 $s = \langle s_5, s_4, s_3, s_2, s_1, s_0 \rangle$, where $s_0$ is the
@@ -366,7 +380,7 @@ void update_sfield(uint8_t *s, BoundingBox *bb, Vector v)
 }
 
 @ While a particle is being tracked, we must check if it continues to
-exists inside the same subcuboid, or if it has exited to a
+exists inside the same subcuboid, or if it has escaped to a
 neighbouring subcuboid. We shall use the $s$-field to efficiently
 determine the relevant case for every particle after applying a
 trajectory step.
@@ -381,17 +395,28 @@ application of a trajectory step, we simply determine the next
 effective subcuboid using the particle's current $s$-field, its
 containing subcuboid, and a neighbourhood table.
 
-The neighbourhood table is an $m \times 26$ two-dimensional array where each
-row represents one of the $m$ subcuboids, and every element of the row
-points to one of the 26 neighbouring subcuboids. Which column index is
-chosen is determined by the relevant $s$-field.
+The subcuboid neighbourhood table is an $m \times 26$ two-dimensional
+array where each row represents one of the $m$ subcuboids, and every
+element of the row points to one of the 26 neighbouring
+subcuboids. During lookup, the relevant $s$-field determines the
+appropriate column to choose. For instance, if a particle escapes to
+one of the 26 neighbouring subcuboids, say the top neighbour, it will
+have the $s$-field $\langle001000\rangle$. To find the subcuboid
+containing the particle in the next step, we use this as the column
+during table lookup. So, if the particle is inside the subcuboid with
+index 10 in the current step, and the $s$-field is
+$\langle001000\rangle$, the index of the containing subcuboid for the
+next step is given by the table entry at row 10 and column 8.
 
-@ If we were to allocate the lookup-table for direct-mapping, the
-table will waste $16 \times |MAX_SUBCUBOIDS|$ table elements. This is
-because, in order to make every valid $s$ value indexable, we must
-allocate |MAX_SFIELD| table elements per row. However, out of this row
-only 26 elements actually contain a valid index to one of the
-neighbouring subcuboids. Direct mapping is therefore space inefficient.
+@ If we were to allocate the subcuboid neighbourhood lookup-table
+using direct-mapping, the table will waste $16 \times
+|MAX_SUBCUBOIDS|$ table elements. This is because, in order to make
+every valid $s$ value indexable, we must allocate |MAX_SFIELD| table
+elements per row. However, out of this row only 26 elements actually
+contain a valid index to one of the neighbouring subcuboids. This is a
+consequence of the fact that the bit pairs $(s_0, s_1)$, $(s_2, s_3)$,
+and $(s_4, s_5)$ will never be both nonzero. Direct mapping is
+therefore space inefficient.
 
 \bigskip
 
@@ -412,13 +437,8 @@ that points to one of the 26 valid neighbouring subcuboids.
 @d MAX_SUBCUBOIDS 1024
 @d NUM_NEIGHBOURS 26 /* number of cuboid neighbours */
 @d MAX_SFIELD 42 /* maximum $s$-field value: $\langle101010\rangle$ */
-@d neighbour_idx_table {-1,  0,  1, -1,  2,  3,  4, -1,  5,  6,
-     7, -1, -1, -1, -1, -1,  8,  9, 10, -1,
-    11, 12, 13, -1, 14, 15, 16, -1, -1, -1,
-    -1, -1, 17, 18, 19, -1, 20, 21, 22, -1,
-    23, 24, 25}
 @<Subcuboids related data structures inside the geometry table@>=
-int8_t nitab[MAX_SFIELD + 1];
+int8_t iltab[MAX_SFIELD + 1]; /* index lookup table */
 uint32_t **ntab; /* each row containing |NUM_NEIGHBOURS| entries */
 
 @ Function |get_neighbour(g,s,i)| returns the next effective subcuboid
@@ -426,11 +446,11 @@ for a particle, where it was previously in subcuboid |i| and the most
 recent application of a trajectory step updated the $s$-field to
 |s|. It uses the neighbourhood table in |g|.
 
-@d cuboid_lookup(g,i,s) ((g)->ntab[(i)][(g)->nitab[s]])
+@d subcuboid_lookup(g,i,s) ((g)->ntab[(i)][(g)->iltab[s]])
 @<Global functions@>=
 uint32_t get_neighbour(GeometryTable *g, uint32_t i, uint8_t s)
 {
-	if (s) return cuboid_lookup(g,i,s);
+	if (s) return subcuboid_lookup(g,i,s);
 	return i; /* particle continues to exist in the same subcuboid */
 }
 
@@ -441,18 +461,22 @@ and |n| equal parts along the $x$, $y$ and $z$ axes. There will be a
 total of $|l| \times |m| \times |n|$ subcuboids, which this function
 assumes is less than |MAX_SUBCUBOIDS|.
 
-@d cuboid_assign(g,r,s,v) (g)->ntab[(r)][(g)->nitab[(int)(s)]] = (v)
+@d subcuboid_assign(g,r,s,v) (g)->ntab[(r)][(g)->iltab[(int)(s)]] = (v)
 @<Global functions@>=
 bool build_neighbour_table(GeometryTable *g)
 {
     uint32_t i, j, k, x, y, z, t = g->m * g->n;
     uint32_t r; /* row for subcuboid currently being filled in */
     uint8_t s, xb, yb, zb; /* $s$-field and extracted bit pairs */
-    int8_t nit[] = neighbour_idx_table;
+    int8_t q[] = {-1,  0,  1, -1,  2,  3,  4, -1,  5,  6,
+     7, -1, -1, -1, -1, -1,  8,  9, 10, -1,
+    11, 12, 13, -1, 14, 15, 16, -1, -1, -1,
+    -1, -1, 17, 18, 19, -1, 20, 21, 22, -1,
+    23, 24, 25}; /* index lookup table data */
     g->ntab = mem_typed_alloc2d(g->nc, NUM_NEIGHBOURS, uint32_t,
     mem_phase_two);
     if (NULL == g->ntab) return false;
-    memcpy(g->nitab, nit, MAX_SFIELD + 1);
+    memcpy(g->iltab, q, MAX_SFIELD + 1);
     for (i = 0; i < g->l; ++i)
         for (j = 0; j < g->m; ++j)
 	    for (k = 0; k < g->n; ++k) { /* set neighbours */
@@ -473,7 +497,7 @@ bool build_neighbour_table(GeometryTable *g)
 @<Adjust index of the neighbour cuboid along the $x$-axis@>;
 @<Adjust index of the neighbour cuboid along the $y$-axis@>;
 @<Adjust index of the neighbour cuboid along the $z$-axis@>;
-cuboid_assign(g, r, s, x * t + y * g->n + z);
+subcuboid_assign(g, r, s, x * t + y * g->n + z);
 }
 
 @ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
@@ -502,7 +526,7 @@ world are given the same subcuboid index |OUTSIDE_WORLD|.
 @d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
 @<Neighbour subcuboid is outside the simulation world@>=
 {
-    cuboid_assign(g,r,s, OUTSIDE_WORLD);
+    subcuboid_assign(g,r,s, OUTSIDE_WORLD);
     continue;
 }
 

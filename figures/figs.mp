@@ -43,7 +43,7 @@ beginfig(1);
   label.lft("1", (0, 1.5)*u);
   label.lft("0", (0, 2.5)*u);
   label.rt(btex $s$-field etex, (14.5, 6.5)*u);
-  label.rt(btex $neighbour\_idx\_table$ etex, (11.5, 4.5)*u);
+  label.rt(btex $index\_lookup\_table$ etex, (11.5, 4.5)*u);
   label.rt(btex $neighbour\_table$ etex, (11.5, 2.5)*u);
   draw (0,4)*u--(11,4)*u--(11,5)*u--(0,5)*u--cycle;
   for c=1 upto 5:
@@ -161,8 +161,10 @@ beginfig(1);
   circleit.i3(btex $\cap$ etex);
   circleit.t1(btex T etex);
   circleit.t2(btex T etex);
+  circleit.t3(btex T etex);
   circleit.r1(btex R etex);
   circleit.r2(btex R etex);
+  circleit.r3(btex R etex);
   circleit.s1(btex S etex);
   boxit.p0(btex 0 etex);
   boxit.p1(btex 1 etex);
@@ -170,7 +172,9 @@ beginfig(1);
   boxit.p3(btex 3 etex);
   boxit.p4(btex 4 etex);
   boxit.p5(btex 5 etex);
-  
+
+  t3.c = (8*q, 5.75*q);
+  r3.c = (7*q, 5.25*q);
   u1.c = (6*q, 4.75*q);
   u2.c = (5*q, 2.5*q);
   i1.c = (2*q, 1.75*q);
@@ -190,13 +194,17 @@ beginfig(1);
 
   fill bpath.t1 withcolor .85white;
   fill bpath.t2 withcolor .85white;
+  fill bpath.t3 withcolor .85white;
   fill bpath.r1 withcolor .85white;
   fill bpath.r2 withcolor .85white;
+  fill bpath.r3 withcolor .85white;
   fill bpath.s1 withcolor .85white;
 
-  drawboxed(u1, u2, i1, i2, i3, t1, t2, r1);
-  drawboxed(r2, s1, p0, p1, p2, p3, p4, p5);
-  
+  drawboxed(t3, r3, u1, u2, i1, i2, i3, t1, t2);
+  drawboxed(r1, r2, s1, p0, p1, p2, p3, p4, p5);
+
+  draw t3.c--r3.c cutbefore bpath.t3 cutafter bpath.r3;
+  draw r3.c--u1.c cutbefore bpath.r3 cutafter bpath.u1;
   draw u1.c--t1.c cutbefore bpath.u1 cutafter bpath.t1;
   draw u1.c--r1.c cutbefore bpath.u1 cutafter bpath.r1;
   draw t1.c--r2.c cutbefore bpath.t1 cutafter bpath.r2;
@@ -212,9 +220,13 @@ beginfig(1);
   draw i2.c--p3.c cutbefore bpath.i2 cutafter bpath.p3;
   draw i3.c--p4.c cutbefore bpath.i3 cutafter bpath.p4;
   draw i3.c--p5.c cutbefore bpath.i3 cutafter bpath.p5;
-  
+  draw (9*q, 6.25*q)--t3.c cutafter bpath.t3;
+
+  drawarrow (9*q, 6.25*q){down}..{left}u1.c cutafter bpath.u1 dashed evenly;
   drawarrow u1.c{left}..i1.c cutbefore bpath.u1 cutafter bpath.i1 dashed evenly;
   drawarrow u1.c{down}..{down}u2.c cutbefore bpath.u1 cutafter bpath.u2 dashed evenly;
+  pickup pencircle scaled 4pt;
+  drawdot (9*q, 6.25*q);
 endfig;
 
 outputtemplate := "geometry-solids.mps";

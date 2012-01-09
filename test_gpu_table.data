@@ -1,0 +1,40 @@
+% Test input file for MCS
+%
+% NOTE: This test data corresponds to the example used
+% in the section concerning shared geometry table.
+%
+% Written by: G. Yaikhom
+% Dated: 9 January 2012
+
+
+S("P0" 10.0)
+S("P1" 10.0)
+u("U1" "P0" "P1")
+S("P2" 10.0)
+S("P3" 10.0)
+u("U2" "P2" "P3")
+i("I1" "U1" "U2")
+t("T1" "I1" 100.0 100.0 0.0)
+r("R1" "T1" -45.0 0.0 1.0 0.0)
++("R1")
+
+S("P4" 10.0)
+S("P5" 10.0)
+d("D1" "P4" "P5")
+t("T3" "D1" 100.0 100.0 0.0)
+t("T4" "T3" -100.0 -100.0 0.0)
++("T4")
+
+S("P6" 10.0)
+S("P7" 10.0)
+u("U3" "P6" "P7")
+S("P8" 10.0)
+S("P9" 10.0)
+d("D2" "P8" "P9")
+i("I2" "U3" "D2")
+t("T2" "I2" 100.0 100.0 0.0)
++("T2")
+
+*(-10000.0 -10000.0 -10000.0 10000.0 10000.0 10000.0 2 2 1)
+
+% End of test data
