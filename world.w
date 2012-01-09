@@ -461,7 +461,7 @@ and |n| equal parts along the $x$, $y$ and $z$ axes. There will be a
 total of $|l| \times |m| \times |n|$ subcuboids, which this function
 assumes is less than |MAX_SUBCUBOIDS|.
 
-@d cuboid_assign(g,r,s,v) (g)->ntab[(r)][(g)->iltab[(int)(s)]] = (v)
+@d subcuboid_assign(g,r,s,v) (g)->ntab[(r)][(g)->iltab[(int)(s)]] = (v)
 @<Global functions@>=
 bool build_neighbour_table(GeometryTable *g)
 {
@@ -497,7 +497,7 @@ bool build_neighbour_table(GeometryTable *g)
 @<Adjust index of the neighbour cuboid along the $x$-axis@>;
 @<Adjust index of the neighbour cuboid along the $y$-axis@>;
 @<Adjust index of the neighbour cuboid along the $z$-axis@>;
-cuboid_assign(g, r, s, x * t + y * g->n + z);
+subcuboid_assign(g, r, s, x * t + y * g->n + z);
 }
 
 @ @<Adjust index of the neighbour cuboid along the $x$-axis@>=
@@ -526,7 +526,7 @@ world are given the same subcuboid index |OUTSIDE_WORLD|.
 @d OUTSIDE_WORLD (MAX_SUBCUBOIDS + 1)
 @<Neighbour subcuboid is outside the simulation world@>=
 {
-    cuboid_assign(g,r,s, OUTSIDE_WORLD);
+    subcuboid_assign(g,r,s, OUTSIDE_WORLD);
     continue;
 }
 
