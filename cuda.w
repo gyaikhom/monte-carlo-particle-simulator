@@ -145,7 +145,8 @@ void print_tables(FILE *f, GPUTables *g)
 
 @ @<Test gpu tables@>=
 {
-	if (false == read_geometry("input.dat")) exit(1);
+	if (false == read_geometry("test_affine_merge.data")) exit(1);
+	print_forest();
 	create_geotab(&geotab);
 	GPUTables *gpu, host;
 	gpu = transfer_tables_to_gpu(&geotab);

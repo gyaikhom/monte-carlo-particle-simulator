@@ -1847,39 +1847,47 @@ CSG_Node *merge_affine(CSG_Node *r)
 {
 	CSG_Node *t, *p; /* temporary node and parent node */
 	Matrix mm, m = IDENTITY_MATRIX; /* accumulated affine matrix */
-	if (is_primitive(r) || is_parameter(r)) return NULL;
+	if (NULL == r || is_parameter(r)) return r;
+	if (r->parent) matrix_copy(m, r->parent->affine); /*
+	initialise with parent's affine matrix */
 	if (is_translate(r) || is_rotate(r) || is_scale(r)) {
 	    @<Merge sequence of affine transformation nodes@>;
-	    @<Detach affine transformations@>;
 	}
-	@<Finalise affine on primitive, or merge affine on subtrees@>;
+        @<Detach accumulated sequence of affine transformations@>;
+	@<Merge affine transformation sequences in subtrees@>;
 	return r; /* return the first non-affine transformation node */
 }
 
 @ @<Merge sequence of affine transformation nodes@>=
-p = r->parent; /* parent of first affine transformation node */
+p = r->parent; /* parent of the first affine transformation node to
+merge */
 do {
         t = r;
 	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate */
 	matrix_copy(m, mm);
 	r = t->internal.left;
 } while (is_translate(r) || is_rotate(r) || is_scale(r));
+r->parent = p; /* update parent for first non-affine node at the end
+of the sequence */
 
-@ @<Detach affine transformations@>=
+@ Since affine merge is carried out only once for the entire CSG solid
+during registration, we do not need to multiply the accumulated affine
+transformation matrix |m| with the affine matrix |r->affine| currently
+available in the node, before replacing the value of
+|r->affine|. This is because, |r->affine| is always initialised to the
+|IDENTITY_MATRIX| matrix when CSG nodes are added to the nodes repository.
+@<Detach accumulated sequence of affine transformations@>=
 matrix_copy(r->affine, m);
 matrix_inverse(r->affine, m);
 matrix_copy(r->inverse, m);
-r->parent = p;
 
-@ @<Finalise affine on primitive, or merge affine on subtrees@>=
-if (is_primitive(r)) {
-    if (r->parent) {
-        matrix_multiply(r->affine, r->parent->affine, mm);
-        matrix_copy(r->affine, mm);
-	matrix_inverse(r->affine, mm);
-	matrix_copy(r->inverse, mm);
-    }
-} else {
+@ After the affine transformations in the subtrees have been merged,
+we must update the left and right daughter nodes, which is returned by
+the recursive subtree merge. It is important to do this because, if
+the previous daughter nodes were affine transformations, they will now
+be unavailable.
+@<Merge affine transformation sequences in subtrees@>=
+if (!is_primitive(r)) {
     if ((t = merge_affine(r->internal.left))) r->internal.left = t;
     if ((t = merge_affine(r->internal.right))) r->internal.right = t;
 }
