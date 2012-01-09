@@ -43,7 +43,7 @@ beginfig(1);
   label.lft("1", (0, 1.5)*u);
   label.lft("0", (0, 2.5)*u);
   label.rt(btex $s$-field etex, (14.5, 6.5)*u);
-  label.rt(btex $neighbour\_idx\_table$ etex, (11.5, 4.5)*u);
+  label.rt(btex $index\_lookup\_table$ etex, (11.5, 4.5)*u);
   label.rt(btex $neighbour\_table$ etex, (11.5, 2.5)*u);
   draw (0,4)*u--(11,4)*u--(11,5)*u--(0,5)*u--cycle;
   for c=1 upto 5:

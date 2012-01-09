@@ -20,10 +20,6 @@ easily reshuffle the sections for easy exposition, while avoiding
 compiler error.
 
 @<Forward declare functions@>=
-typedef struct geomtab_struct GeometryTable;
 void process_and_register_solid(CSG_Node *root);
 Containment recursively_test_containment(CSG_Node *root, Vector v);
-bool build_subcuboid_trees(GeometryTable *g);
-bool build_neighbour_table(GeometryTable *g);
-bool build_subcuboids_table(GeometryTable *g);
 
