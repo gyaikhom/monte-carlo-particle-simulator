@@ -2,12 +2,125 @@
 
 @** Preparing the shared tables.
 
+All of the geometry information must be translated into tables before
+they can be used during the particle simulations. The aim is to
+simplify the data structures so that they are efficient, and also
+allow using devices where management of complex data structures are
+prohibitive. For instance, GPU memory management relies on the host
+application; hence, it is complicated to manage data structures that
+uses pointers.
+
+\.{MCS} maintains all of the simplified data structures as tables
+indside a container of tables, known as |geotab|. This is used as a
+temporary container during the translation and simplification
+process. Once it is ready, the compact form is transferred to a stage
+two memory on the devices that will run the simulations.
+
+To store information defining the forest of solids and the subcuboids
+containing them, we could have opted for a straightforward approach
+where each of the geometry components are stored separately. However,
+most of the components in |geotab| are related to one another during
+processing. For instance, searching for the solid which contains a
+particle requires starting at the simulation world cuboid, and going
+deeper through the subcuboids, and the CSG tree until we find a
+containing primitive. Hence, to take advantage of these relationships,
+the components are stored interlinked using a hierarchcal
+structure. The tabular representation of this hierarchy is designed so
+that the cache utilisation is efficient.
+
+@ Assume that our simulation world is divided into four subcuboids as
+shown below, and that it contains three silids $A$, $B$, and $C$. The
+CSG tree for each of the solids are shown on the left-hand
+side.
+
 \bigskip
 
 \centerline{\epsfig{file=figures/geometry-solids,scale=1}}
 
 \bigskip
 
+According to this diagram, the solid containment scenario is: (0:
+B), (1: B, C), (2: A, B), (3: B). This is stored in a compact form
+using the subcuboids table, which we saw in the previous section. This
+assumes that the solids $A$, $B$ and $C$ have been assigned the
+indices 0, 1, and 2 respectively.
+
+@ We have already seen part of this hierarchical representation when we
+discussed division of the simulation world into subcuboids, which is
+reproduced in the following diagram. This captures the link:
+Simulation world $\rightarrow$ Subcuboids Table $\rightarrow$ Solid
+Indices Buffer.
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-subcuboids-table,scale=1}}
+
+\bigskip
+
+This hierarchical linkage can be expanded until we reach the lowest
+level CSG primitives: Solid Indices $\rightarrow$ Solids Table
+$\rightarrow$ Postfix Expression Buffer $\rightarrow$ Primitives
+Table. We shall now discuss this extension.
+
+@ To simulate a particle, we start by finding the subcuboid that
+contains the particle. Then, we go to the row in the subcuboids table
+and retrieve the start index and solids count. Using these values, we
+retrieve the solids from the solid indices buffer.
+
+For each of the solids indexed by values within the specified range in
+the buffer, we check if that solid contains the particle. To do this,
+we then use the {\it solids table}, which captures information
+concerning the solids, i.e., the corresponding CSG tree.
+
+@ A solids table is a compact form that stores the forest of CSG
+trees. Instead of storing each of the solids separately, we store the
+CSG trees as postfix expressions inside a common {\it postfix
+expression buffer}. Now, as in the case with the subcuboids table, we
+store the corresponding start indices and the expression length inside
+the solids table. This is shown in the following example:
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-solids-table,scale=1}}
+
+@<Type definitions@>=
+struct solids_table_item {
+    uint32_t s, c; /* start index and item count in postfix expression buffer */
+    BoundingBox bb; /* bounding box for the solid */
+};
+
+@ The postfix expression buffer stores indices and operators of a CSG
+tree. All of the negative integers are operators, where -1 represents
+a boolean difference, -2 a boolean intersection, and -3 a boolean
+union. All of the positive integers are indices to the {\it primitives
+table}, which store information concerning the parameters specific to
+the primitive instances.
+
+\bigskip
+
+\centerline{\epsfig{file=figures/geometry-primitives-table,scale=1}}
+
+@<Type definitions@>=
+struct primitives_table_item {
+    Matrix a, i; /* accumulated affine and inverse transformations */
+    Primitive p; /* primitive data */
+};
+
+@ Once we reach the primitives table, we can use the affine
+transformation matrices (|a| or |i|) to transform the particle's
+position vector, and test containment inside the primitive by using
+the primitive's parameters available in |p|. This containment testing
+inside primitives is carried out as we evaluate the boolean postfix
+expression for a given solid.
+
+For instance, if we are testing containment inside the solid $B$, we
+will first evaluate containment inside the primitives using rows 4 and
+5 in the primitives table, which should return boolean values, and
+then calculate the boolean difference of the results.
+
+@ The collection of tables that captures the hierarchical relationship
+is stored inside the following data structure, which is
+defined as the type |GeometryTable|.
 @<Type definitions@>=
 struct geomtab_struct {
     @<Sizes of the geometry table components@>;
@@ -20,34 +133,6 @@ struct geomtab_struct {
     BoundingBox sw; /* the simulation world cuboid */
     uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes */
 } geotab;
-
-@
-
-\bigskip
-
-\centerline{\epsfig{file=figures/geometry-primitives-table,scale=1}}
-
-\bigskip
-
-@<Type definitions@>=
-struct primitives_table_item {
-    Matrix a, i; /* accumulated affine and inverse transformations */
-    Primitive p; /* primtive data */
-};
-
-@
-
-\bigskip
-
-\centerline{\epsfig{file=figures/geometry-solids-table,scale=1}}
-
-\bigskip
-
-@<Type definitions@>=
-struct solids_table_item {
-    uint32_t s, c; /* start index and item count in postfix expression buffer */
-    BoundingBox bb; /* bounding box for the solid */
-};
 
 @ @<Sizes of the geometry table components@>=
 uint32_t np; /* number of entries in primitives table */
