@@ -86,8 +86,8 @@ bool build_subcuboids_table(GeometryTable *g)
 	mem_phase_two);
 	if (NULL == g->ctab) return false;
 	t = g->m * g->n;
-	dx = (g->sw.u[0] - g->sw.l[0]) / g->l; /* determine subcuboid size using upper and lower bound */
-	dy = (g->sw.u[1] - g->sw.l[1]) / g->m; /* of the cuboid which represents the simulation world */
+	dx = (g->sw.u[0] - g->sw.l[0]) / g->l; /* determine subcuboid size using upper and lower bounds */
+	dy = (g->sw.u[1] - g->sw.l[1]) / g->m; /* of the cuboid that represents the simulation world */
 	dz = (g->sw.u[2] - g->sw.l[2]) / g->n;
         x[0] = g->sw.l[0];
 	for (i = 0; i < g->l; ++i) {
@@ -201,13 +201,13 @@ void build_complete_tree(double *t, unsigned long n, unsigned long i)
 	} else *(unsigned long *) &t[i] = build_complete_leaf_idx++;
 }
 
-@ Function |build_subcuboid_search_tree(t,n,u,l)| builds a complete
+@ Function |build_subcuboid_binary_search_tree(t,n,u,l)| builds a complete
 binary search tree |t| where the upper and lower bounds of the
 simulation world are respectively |u| and |l| units in the selected
 axis. On the selected axis, the simulation world has been divided
 into |n| equal subcuboids.
 @<Global functions@>=
-void build_subcuboid_search_tree(double *t, unsigned long n, double u, double l)
+void build_subcuboid_binary_search_tree(double *t, unsigned long n, double u, double l)
 {
 	build_complete_tree_val = 0.0;
 	build_complete_tree_inc = (u - l) / n;
@@ -215,7 +215,7 @@ void build_subcuboid_search_tree(double *t, unsigned long n, double u, double l)
 	build_complete_tree(t, n, 1);
 }
 
-@ Function |build_subcuboid_trees(g)| builds three complete binary
+@ Function |build_subcuboid_search_trees(g)| builds three complete binary
 search trees using the simulation world data inside the geometry table
 |g|. The simulation world is bound by the bounding box |bb|, and is
 divided into |l|, |m| and |n| equal parts along the $x$, $y$ and $z$
@@ -223,14 +223,14 @@ axes. There will be a total of $|l| \times |m| \times |n|$ subcuboids,
 which this function assumes is less than |MAX_SUBCUBOIDS|.
 
 @<Global functions@>=
-bool build_subcuboid_trees(GeometryTable *g)
+bool build_subcuboid_search_trees(GeometryTable *g)
 {
 	double *x, *y, *z;
 	uint32_t nx, ny, nz;
 	@<Allocate memory for the three subcuboid search trees@>;
-	build_subcuboid_search_tree(x, g->l, g->sw.u[0], g->sw.l[0]);
-	build_subcuboid_search_tree(y, g->m, g->sw.u[1], g->sw.l[1]);
-	build_subcuboid_search_tree(z, g->n, g->sw.u[2], g->sw.l[2]);
+	build_subcuboid_binary_search_tree(x, g->l, g->sw.u[0], g->sw.l[0]);
+	build_subcuboid_binary_search_tree(y, g->m, g->sw.u[1], g->sw.l[1]);
+	build_subcuboid_binary_search_tree(z, g->n, g->sw.u[2], g->sw.l[2]);
 	@<Finalise the subcuboid search trees@>;
 	return true;
 }
@@ -415,8 +415,8 @@ every valid $s$ value indexable, we must allocate |MAX_SFIELD| table
 elements per row. However, out of this row only 26 elements actually
 contain a valid index to one of the neighbouring subcuboids. This is a
 consequence of the fact that the bit pairs $(s_0, s_1)$, $(s_2, s_3)$,
-and $(s_4, s_5)$ will never be both nonzero. Direct mapping is
-therefore space inefficient.
+and $(s_4, s_5)$ will never be both nonzero. Direct mapping,
+therefore, is space inefficient.
 
 \bigskip
 
@@ -531,7 +531,7 @@ world are given the same subcuboid index |OUTSIDE_WORLD|.
 }
 
 @ @<Build tables and search trees for managing the subcuboids@>=
-build_subcuboid_trees(g);
+build_subcuboid_search_trees(g);
 build_neighbour_table(g);
 build_subcuboids_table(g);
 
@@ -583,7 +583,7 @@ this sections.
 	       scanf("%u %u %u", &geotab.l, &geotab.m, &geotab.n);
 	       geotab.nc = geotab.l * geotab.m * geotab.n;
 	} while (geotab.nc > MAX_SUBCUBOIDS);	
-	build_subcuboid_trees(&geotab);
+	build_subcuboid_search_trees(&geotab);
 	print_subcuboid_search_trees(stdout, geotab.ctree);
 	@<Search subcuboid for all points in each of the subcuboids@>;
 
