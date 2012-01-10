@@ -2878,7 +2878,7 @@ exit_error:
 	print_geom_statistics(stdout);
 	print_sim_world(stdout);
 	print_forest();
-	if ((f = fopen("test/test_geometry_input.data", "r")) == NULL)
+	if ((f = fopen("test/test_geometry_input_points.data", "r")) == NULL)
                exit(1);
 	input_file_current_line = 1;
 	while ((c = fgetc(f)) != EOF) {
