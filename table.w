@@ -344,7 +344,7 @@ void print_geotab(FILE *f, GeometryTable *g)
 
 @ @<Test geometry table generation@>=
 {
-        if (false == read_geometry("input.dat")) exit(1);
+        if (false == read_geometry("test/test_geotab_gen.data")) exit(1);
 	print_geom_statistics(stdout);
 	create_geotab(&geotab);
 	print_geotab(stdout, &geotab);

@@ -145,7 +145,7 @@ void print_tables(FILE *f, GPUTables *g)
 
 @ @<Test gpu tables@>=
 {
-	if (false == read_geometry("test_gpu_table.data")) exit(1);
+	if (false == read_geometry("test/test_gpu_table.data")) exit(1);
 	print_forest();
 	create_geotab(&geotab);
 	GPUTables *gpu, host;

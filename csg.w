@@ -2874,11 +2874,11 @@ exit_error:
 	char c;
 	bool t;
 
-        if (false == read_geometry("input.dat")) exit(1);
+        if (false == read_geometry("test/test_geometry_input.data")) exit(1);
 	print_geom_statistics(stdout);
 	print_sim_world(stdout);
 	print_forest();
-	if ((f = fopen("points.dat", "r")) == NULL)
+	if ((f = fopen("test/test_geometry_input.data", "r")) == NULL)
                exit(1);
 	input_file_current_line = 1;
 	while ((c = fgetc(f)) != EOF) {
