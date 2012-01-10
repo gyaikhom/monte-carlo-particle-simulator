@@ -1,4 +1,4 @@
-@q This file is part of the Monte Carlo Simulator (c) Cardiff University 2011 @>
+@q This file is part of the Monte Carlo Simulator (c) G. Yaikhom, Cardiff University 2011, 2012 @>
 
 @** Constructive Solid Geometry.
 During a simulation event, the tracking of a particle's trajectory
@@ -1863,9 +1863,9 @@ p = r->parent; /* parent of the first affine transformation node to
 merge */
 do {
         t = r;
-	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate */
+	matrix_multiply(m, t->internal.right->affine, mm); /* accumulate using parameter on the right */
 	matrix_copy(m, mm);
-	r = t->internal.left;
+	r = t->internal.left; /* only left points to the next non-parameter node */
 } while (is_translate(r) || is_rotate(r) || is_scale(r));
 r->parent = p; /* update parent for first non-affine node at the end
 of the sequence */
@@ -1882,10 +1882,10 @@ matrix_inverse(r->affine, m);
 matrix_copy(r->inverse, m);
 
 @ After the affine transformations in the subtrees have been merged,
-we must update the left and right daughter nodes, which is returned by
-the recursive subtree merge. It is important to do this because, if
+we must update the left and right daughter nodes, which are returned by
+the recursive subtree merges. It is important to do this because, if
 the previous daughter nodes were affine transformations, they will now
-be unavailable.
+be unavailable after the merge.
 @<Merge affine transformation sequences in subtrees@>=
 if (!is_primitive(r)) {
     if ((t = merge_affine(r->internal.left))) r->internal.left = t;
@@ -2874,11 +2874,11 @@ exit_error:
 	char c;
 	bool t;
 
-        if (false == read_geometry("input.dat")) exit(1);
+        if (false == read_geometry("test/test_geometry_input.data")) exit(1);
 	print_geom_statistics(stdout);
 	print_sim_world(stdout);
 	print_forest();
-	if ((f = fopen("points.dat", "r")) == NULL)
+	if ((f = fopen("test/test_geometry_input_points.data", "r")) == NULL)
                exit(1);
 	input_file_current_line = 1;
 	while ((c = fgetc(f)) != EOF) {

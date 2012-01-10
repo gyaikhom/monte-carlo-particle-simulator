@@ -1,4 +1,4 @@
-@q This file is part of the Monte Carlo Simulator (c) Cardiff University 2011 @>
+@q This file is part of the Monte Carlo Simulator (c) G. Yaikhom, Cardiff University 2011, 2012 @>
 
 @** Common. This section defines common types, physical constants,
 data-structures and functions that are used in various sections. 

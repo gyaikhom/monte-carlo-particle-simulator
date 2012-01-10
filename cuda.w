@@ -1,4 +1,4 @@
-@q This file is part of the Monte Carlo Simulator (c) Cardiff University 2011 @>
+@q This file is part of the Monte Carlo Simulator (c) G. Yaikhom, Cardiff University 2011, 2012 @>
 
 @*1 Memory organisation.
 
@@ -145,7 +145,7 @@ void print_tables(FILE *f, GPUTables *g)
 
 @ @<Test gpu tables@>=
 {
-	if (false == read_geometry("test_gpu_table.data")) exit(1);
+	if (false == read_geometry("test/test_gpu_table.data")) exit(1);
 	print_forest();
 	create_geotab(&geotab);
 	GPUTables *gpu, host;

@@ -1,4 +1,4 @@
-@q This file is part of the Monte Carlo Simulator (c) Cardiff University 2011 @>
+@q This file is part of the Monte Carlo Simulator (c) G. Yaikhom, Cardiff University 2011, 2012 @>
 
 @*1 Memory management. Memory space must be allocated to store the
 data that are required by the simulations. This include data
