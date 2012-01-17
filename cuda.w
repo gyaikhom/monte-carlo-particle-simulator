@@ -14,9 +14,9 @@ typedef struct gpu_table {
     uint32_t nsb; /* number of entries in solid indices buffer */
     uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes */
     uint32_t nct; /* number of items in the subcuboids search tree */
-    struct subcuboids_table_item *ctab;
-    struct solids_table_item *s;
-    struct primitives_table_item *p;
+    struct subcuboids_table_item *ctab; /* subcuboids lookup table */
+    struct solids_table_item *s; /* solids lookup table */
+    struct primitives_table_item *p; /* primitives lookup table */
     int32_t *pb; /* pointer to the postfix expression buffer */
     uint32_t *sb; /* pointer to the solid indices buffer */
     double *ctree; /* subcuboid search tree */
