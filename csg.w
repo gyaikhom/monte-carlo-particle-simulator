@@ -631,45 +631,20 @@ if ('\n' == c) {
 
 @ @<Process input command@>=
 switch(c) {
-case 'B':
-	@<Read block geometry@>;
-     	break;
-case 'S':
-	@<Read sphere geometry@>;
-     	break;
-case 'C':
-	@<Read cylinder geometry@>;
-        break;
-case 'T':
-        @<Read torus geometry@>;
-        break;
-case 'u':
-        @<Read union operation@>;
-        break;
-case 'i':
-        @<Read intersection operation@>;
-        break;
-case 'd':
-        @<Read difference operation@>;
-        break;
-case 't':
-        @<Read translation operation@>;
-        break;
-case 'r':
-        @<Read rotation operation@>;
-        break;
-case 's':
-        @<Read scaling operation@>;
-        break;
-case '+':
-        @<Read solid registration@>;
-	break;
-case '*':
-        @<Read simulation world specification@>;
-	break;
-default:
-	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n",
-	input_file_name, input_file_current_line, c);
+case 'B': @<Read block geometry@>;@+ break;
+case 'S': @<Read sphere geometry@>;@+ break;
+case 'C': @<Read cylinder geometry@>;@+ break;
+case 'T': @<Read torus geometry@>;@+ break;
+case 'u': @<Read union operation@>;@+ break;
+case 'i': @<Read intersection operation@>;@+ break;
+case 'd': @<Read difference operation@>;@+ break;
+case 't': @<Read translation operation@>;@+ break;
+case 'r': @<Read rotation operation@>;@+ break;
+case 's': @<Read scaling operation@>;@+ break;
+case '+': @<Read solid registration@>;@+ break;
+case '*': @<Read simulation world specification@>;@+ break;
+default:@/
+	fprintf(stderr, "%s[%u] Invalid command '%c' in input file\n", input_file_name, input_file_current_line, c);
         goto error_invalid_file;
 }
 
@@ -1567,10 +1542,10 @@ calculated successfully; otherwise, |false| is returned.
 bool primitive_bb(Primitive *p, BoundingBox *bb)
 {
     switch(p->type) {
-    case BLOCK: @<Calculate bounding box of primitive block@>;
-    case SPHERE: @<Calculate bounding box of primitive sphere@>;
-    case CYLINDER: @<Calculate bounding box of primitive cylinder@>;
-    case TORUS: @<Calculate bounding box of primitive torus@>;
+    case BLOCK: @<Calculate bounding box of primitive block@>;@+ break;
+    case SPHERE: @<Calculate bounding box of primitive sphere@>;@+ break;
+    case CYLINDER: @<Calculate bounding box of primitive cylinder@>;@+ break;
+    case TORUS: @<Calculate bounding box of primitive torus@>;@+ break;
     default: return false; /* invalid primitive */
     }
     return true;
@@ -1588,13 +1563,11 @@ bb->l[1] = -p->b.height;
 bb->u[1] = p->b.height;
 bb->l[2] = -p->b.width;
 bb->u[2] = p->b.width;
-break;
 
 @ The sphere is centered at the origin of the world coordinate frame.
 @<Calculate bounding box of primitive sphere@>=
 bb->l[0] = bb->l[1] = bb->l[2] = -p->s.radius;
 bb->u[0] = bb->u[1] = bb->u[2] = p->s.radius;
-break;
 
 @ The centroid of the cylinder is centered at the origin of the world
 coordinate frame, and the normals at the center of the two circular
@@ -1604,7 +1577,6 @@ bb->l[0] = bb->l[2] = -p->c.radius;
 bb->u[0] = bb->u[2] = p->c.radius;
 bb->l[1] = -p->c.height;
 bb->u[1] = p->c.height;
-break;
 
 @ The torus is centered at the origin so that its center coincides
 with the origin of the world coordinate frame. Furthermore, the radial
@@ -1614,7 +1586,6 @@ bb->l[0] = bb->l[2] = -(p->t.major + p->t.minor);
 bb->u[0] = bb->u[2] = p->t.major + p->t.minor;
 bb->l[1] = -p->t.minor;
 bb->u[1] = p->t.minor;
-break;
 
 @ Function |intersection_bb(n, l, r, a)| calculates the bounding
 box |n| of the intersection node along the supplied axis |a| using the
@@ -1743,9 +1714,9 @@ for (i = 0; i < 8; ++i) n->bb.l[3] = n->bb.u[3] = 1.0; /* homogenise bound vecto
 l = n->internal.left;
 r = n->internal.right;
 switch(BIT_MASK_NODE & n->op) {
-case UNION: @<Calculate bounding box of union@>;
-case INTERSECTION: @<Calculate bounding box of intersection@>;
-case DIFFERENCE: @<Calculate bounding box of difference@>;
+case UNION: @<Calculate bounding box of union@>;@+ break;
+case INTERSECTION: @<Calculate bounding box of intersection@>;@+ break;
+case DIFFERENCE: @<Calculate bounding box of difference@>;@+ break;
 default: return false;
 }
 
@@ -1761,7 +1732,6 @@ n->bb.l[2] = (l->bb.l[2] < r->bb.l[2]) ? l->bb.l[2] : r->bb.l[2];
 n->bb.u[0] = (l->bb.u[0] > r->bb.u[0]) ? l->bb.u[0] : r->bb.u[0];
 n->bb.u[1] = (l->bb.u[1] > r->bb.u[1]) ? l->bb.u[1] : r->bb.u[1];
 n->bb.u[2] = (l->bb.u[2] > r->bb.u[2]) ? l->bb.u[2] : r->bb.u[2];
-break;
 
 @ When the left and right subtrees do not intersect, a bounding box
 must not be defined for the node. This is represented simply by making
@@ -1783,7 +1753,6 @@ if (no_intersection_bb(l->bb,r->bb)) {
     intersection_bb(&n->bb, &l->bb, &r->bb, Y_AXIS);
     intersection_bb(&n->bb, &l->bb, &r->bb, Z_AXIS);
 }
-break;
 
 @ For a solid defined by a boolean difference, the bounding box of the
 node should be the bounding box of the left subtree before we subtract
@@ -1791,7 +1760,6 @@ the right subtree.
 
 @<Calculate bounding box of difference@>=
 n->bb = l->bb;
-break;
 
 @*2 Merge affine transformations.
 Every node has an affine transformation matrix, which is initialised
@@ -1917,16 +1885,20 @@ void print_csg_tree(CSG_Node *t, uint32_t l) {
 @<Print indentation@>;
 p = t->leaf.p;
 switch(p->type) {
-case BLOCK: printf("BLOCK (%u): \"%s\" %lf %lf %lf", get_line(t),
+case BLOCK:@/
+     printf("BLOCK (%u): \"%s\" %lf %lf %lf", get_line(t),
         t->name, p->b.length, p->b.width, p->b.height);
         break;
-case SPHERE: printf("SPHERE (%u): \"%s\" %lf", get_line(t),
+case SPHERE:@/
+     printf("SPHERE (%u): \"%s\" %lf", get_line(t),
         t->name, p->s.radius);
         break;
-case CYLINDER: printf("CYLINDER (%u): \"%s\" %lf %lf", get_line(t),
+case CYLINDER:@/
+     printf("CYLINDER (%u): \"%s\" %lf %lf", get_line(t),
         t->name, p->c.radius, p->c.height);
         break;
-case TORUS: printf("TORUS (%u): \"%s\" %lf %lf %lf %lf %lf %lf",
+case TORUS:@/
+     printf("TORUS (%u): \"%s\" %lf %lf %lf %lf %lf %lf",
         get_line(t), t->name, p->t.phi, p->t.phi_start,
         p->t.theta, p->t.theta_start, p->t.major, p->t.minor);
         break;
@@ -1951,16 +1923,16 @@ matrix_print(stdout, t->inverse, 4, 4, l + 1);
 @ @<Print affine transformation parameters@>=
 @<Print indentation@>;
 switch(BIT_MASK_NODE & t->parent->op) {
-case TRANSLATE:
+case TRANSLATE:@/
         printf("displacement: (%lf, %lf, %lf)",
 	t->leaf.t.displacement[0], t->leaf.t.displacement[1],
 	t->leaf.t.displacement[2]);
         break;
-case ROTATE:
+case ROTATE:@/
         printf("angle: %lf, axis: (%lf, %lf, %lf)", t->leaf.r.theta,
 	t->leaf.r.axis[0], t->leaf.r.axis[1], t->leaf.r.axis[2]);
         break;
-case SCALE:
+case SCALE:@/
         printf("scaling factor: (%lf, %lf, %lf)", t->leaf.s.scale[0],
 	t->leaf.s.scale[1], t->leaf.s.scale[2]);
         break;
@@ -1971,12 +1943,12 @@ printf("\n");
 @ @<Print intermediate node information@>=
 @<Print indentation@>;
 switch(BIT_MASK_NODE & t->op) {
-case UNION: printf("UNION (%u): %s", get_line(t), t->name); break;
-case INTERSECTION: printf("INTERSECTION (%u): %s", get_line(t), t->name); break;
-case DIFFERENCE: printf("DIFFERENCE (%u): %s", get_line(t), t->name); break;
-case TRANSLATE: printf("TRANSLATE (%u): %s", get_line(t), t->name); break;
-case ROTATE: printf("ROTATE (%u): %s", get_line(t), t->name); break;
-case SCALE: printf("SCALE (%u): %s", get_line(t), t->name); break;
+case UNION: printf("UNION (%u): %s", get_line(t), t->name);@+ break;
+case INTERSECTION: printf("INTERSECTION (%u): %s", get_line(t), t->name);@+ break;
+case DIFFERENCE: printf("DIFFERENCE (%u): %s", get_line(t), t->name);@+ break;
+case TRANSLATE: printf("TRANSLATE (%u): %s", get_line(t), t->name);@+ break;
+case ROTATE: printf("ROTATE (%u): %s", get_line(t), t->name);@+ break;
+case SCALE: printf("SCALE (%u): %s", get_line(t), t->name);@+ break;
 default: printf("unknown");
 }
 @<Print bounding box information@>;
@@ -2486,15 +2458,9 @@ containment testing is easier with $s$ than it is with $s'$.
 
 @<Test containment after affine transformations@>=
 switch(BIT_MASK_NODE & root->op) {
-case TRANSLATE:
-        affine_inverse(root->internal.right, v, r);
-        break;
-case ROTATE:
-        affine_inverse(root->internal.right, v, r);
-        break;
-case SCALE:
-        affine_inverse(root->internal.right, v, r);
-        break;
+case TRANSLATE: affine_inverse(root->internal.right, v, r);@+ break;
+case ROTATE: affine_inverse(root->internal.right, v, r);@+ break;
+case SCALE: affine_inverse(root->internal.right, v, r);@+ break;
 default: return INVALID;
 }
 return recursively_test_containment(root->internal.left, r);
@@ -2644,26 +2610,17 @@ if (EOF == n || 4 != n) {
 
 @ @<Validate the test-case@>=
 temp_node = find_csg_node(op_solid);
-if (NULL == temp_node) {
-        printf("[%d] Solid '%s' not found\n",
-	input_file_current_line, op_solid);
-} else {
+if (NULL == temp_node)
+   printf("[%d] Solid '%s' not found\n", input_file_current_line, op_solid);
+else {
         vector_homogenise(point);
         flag = solid_contains_vector(temp_node, point);
         t = false;
         switch(flag) {
-        case INSIDE:
-                if ('i' == c) t = true;
-                break;
-        case SURFACE:
-                if ('s' == c) t = true;
-                break;
-        case OUTSIDE:
-                if ('o' == c) t = true;
-                break;
-        case INVALID:
-                printf("error: ");
-                break;
+        case INSIDE:@+ if ('i' == c) t = true;@+ break;
+        case SURFACE:@+ if ('s' == c) t = true;@+ break;
+        case OUTSIDE:@+ if ('o' == c) t = true;@+ break;
+        case INVALID: printf("error: ");@+ break;
         }
 	printf("[%4d] %s test: %s\n", input_file_current_line,@/
             'i' == c ? "inside" :

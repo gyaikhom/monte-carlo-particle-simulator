@@ -16,10 +16,10 @@ bool is_inside_primitive(const Vector v, const Primitive *p)
 {
 	Containment c;
 	switch(p->type) {
-	case BLOCK: c = is_inside_block(v, p); break;
-	case SPHERE: c = is_inside_sphere(v, p); break;
-	case CYLINDER: c = is_inside_cylinder(v, p); break;
-	case TORUS: c = is_inside_torus(v, p); break;
+	case BLOCK: c = is_inside_block(v, p);@+ break;
+	case SPHERE: c = is_inside_sphere(v, p);@+ break;
+	case CYLINDER: c = is_inside_cylinder(v, p);@+ break;
+	case TORUS: c = is_inside_torus(v, p);@+ break;
 	default: c = INVALID; /* invalid solid */
 	}
 	if (INSIDE == c || SURFACE == c) return true;
@@ -113,18 +113,11 @@ bool l, r; /* left and right operands */
 if (!boolean_stack_pop(&stack, &r)) goto stack_empty;
 if (!boolean_stack_pop(&stack, &l)) goto stack_empty;
 switch (item) {
-case BOOLEAN_DIFFERENCE:
-        if (!boolean_stack_push(&stack, l && !r)) goto stack_full;
-	break;
-case BOOLEAN_INTERSECTION:
-        if (!boolean_stack_push(&stack, l && r)) goto stack_full;
-        break;
-case BOOLEAN_UNION:
-	if (!boolean_stack_push(&stack, l || r)) goto stack_full;
-        break;
+case BOOLEAN_DIFFERENCE:@+ if (!boolean_stack_push(&stack, l && !r)) goto stack_full;@+ break;
+case BOOLEAN_INTERSECTION:@+ if (!boolean_stack_push(&stack, l && r)) goto stack_full;@+ break;
+case BOOLEAN_UNION:@+ if (!boolean_stack_push(&stack, l || r)) goto stack_full;@+ break;
 default:
-	fprintf(stderr, "Invalid value '%d' in expression\n", item);
-	return false;
+	fprintf(stderr, "Invalid value '%d' in expression\n", item);@+ return false;
 }
 
 @ A CSG boolean expression is valid if the stack is empty after the
@@ -142,16 +135,9 @@ for valid CSG expressions.
 }
 
 @ @<Handle irrecoverable error: |is_inside(v, s, result)|@>=
-stack_empty:
-	fprintf(stderr, "Boolean stack is empty... ");
-	goto exit_error;
-
-stack_full:
-	fprintf(stderr, "Boolean stack is full... ");
-	goto exit_error;
-
-exit_error:
-	fprintf(stderr, "while evaluating '%d' at index %d\n", item, i);
+stack_empty: fprintf(stderr, "Boolean stack is empty... ");@+ goto exit_error;
+stack_full: fprintf(stderr, "Boolean stack is full... ");@+ goto exit_error;
+exit_error: fprintf(stderr, "while evaluating '%d' at index %d\n", item, i);
 
 @ Function |solid_contains_particle(s,p)| checks if the solid |s|
 contains the particle |p|. If it does, |true| is returned; 

@@ -161,15 +161,9 @@ void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     fill_geotab_csg_table(g, n->internal.left);
     fill_geotab_csg_table(g, n->internal.right);
     switch(BIT_MASK_NODE & n->op) {
-    case UNION:
-        g->pb[g->ipb++] = BOOLEAN_UNION;
-        break;
-    case INTERSECTION:
-        g->pb[g->ipb++] = BOOLEAN_INTERSECTION;
-        break;
-    case DIFFERENCE:
-        g->pb[g->ipb++] = BOOLEAN_DIFFERENCE;
-        break;
+    case UNION: g->pb[g->ipb++] = BOOLEAN_UNION;@+ break;
+    case INTERSECTION: g->pb[g->ipb++] = BOOLEAN_INTERSECTION;@+ break;
+    case DIFFERENCE: g->pb[g->ipb++] = BOOLEAN_DIFFERENCE;@+ break;
     default: ;
     }
 }
@@ -306,9 +300,7 @@ if (i) {
        if (is_primitive(s)) {
            ++p;
        	   fprintf(stderr, "\tPrimitive \"%s\" at line %u\n", s->name, get_line(s));
-       } else {
-           fprintf(stderr, "\tOperator \"%s\" at line %u\n", s->name, get_line(s));
-       }
+       } else fprintf(stderr, "\tOperator \"%s\" at line %u\n", s->name, get_line(s));
        --i;
    }
    g->np -= p; /* correct the number of active primitives */
