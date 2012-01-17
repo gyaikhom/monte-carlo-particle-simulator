@@ -2103,7 +2103,7 @@ of the inside test. This avoids boolean conjuctions. Furthermore, we
 validate the surface test by doing an outside test first.
 
 @<Global functions@>=
-Containment is_inside_block(Vector v, Primitive *p)
+Containment is_inside_block(const Vector v, const Primitive *p)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
 	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
@@ -2116,7 +2116,7 @@ Containment is_inside_block(Vector v, Primitive *p)
 
 @ The CUDA kernel will also use this code.
 @(mcs.cu@>=
-__device__ Containment cuda_is_inside_block(Vector v, Primitive *p)
+__device__ Containment cuda_is_inside_block(const Vector v, const Primitive *p)
 {
         if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
 	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
@@ -2150,7 +2150,7 @@ to occupy a large volume of the simulation space. Thus, it is highly
 likely that a particle is outside the sphere most of the time.
 
 @<Global functions@>=
-Containment is_inside_sphere(Vector v, Primitive *p)
+Containment is_inside_sphere(const Vector v, const Primitive *p)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
@@ -2159,7 +2159,7 @@ Containment is_inside_sphere(Vector v, Primitive *p)
 }
 
 @ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_sphere(Vector v, Primitive *p)
+__device__ Containment cuda_is_inside_sphere(const Vector v, const Primitive *p)
 {
 	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
@@ -2206,7 +2206,7 @@ Note here that calculation of $\delta$ is delayed until it is
 absolutely necessary.
 
 @<Global functions@>=
-Containment is_inside_cylinder(Vector v, Primitive *p)
+Containment is_inside_cylinder(const Vector v, const Primitive *p)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -2219,7 +2219,7 @@ Containment is_inside_cylinder(Vector v, Primitive *p)
 }
 
 @ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_cylinder(Vector v, Primitive *p)
+__device__ Containment cuda_is_inside_cylinder(const Vector v, const Primitive *p)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -2313,7 +2313,7 @@ the torus is partial (i.e., we do not need to test the condition
 |p->t.phi < 360.0| explicitly).
 
 @<Global functions@>=
-Containment is_inside_torus(Vector v, Primitive *p)
+Containment is_inside_torus(const Vector v, const Primitive *p)
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial;
 	Vector tube_center, from_tube_center_to_v, temp;
@@ -2374,7 +2374,7 @@ if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
         return SURFACE;
 
 @ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_torus(Vector v, Primitive *p)
+__device__ Containment cuda_is_inside_torus(const Vector v, const Primitive *p)
 {
 	double gamma, gamma_deg, tau, tau_deg, delta, radial;
 	Vector tube_center, from_tube_center_to_v, temp;

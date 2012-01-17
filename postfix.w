@@ -6,18 +6,13 @@ This section is concerned with checking if a three-dimensional point
 lies inside a solid, where the solid is represented by a postfix
 boolean expression.
 
-NOTE:
-The performance of this evaluator can be improved significantly by
-first normalising the CSG tree into sum-of-product form. We have not
-pursue this optimisation here due to time constraints. Normalisation
-to sum-of-product form can be done using the algorithm described by
-Jack Goldfeather, Steven Molnar, Greg Turk, and Henry Fuchs in {\sl
-Near Real-Time CSG Rendering Using Tree Normalization and Geometric
-Pruning} [IEEE Computer Graphics and Applications, pp. 20--28, May
-{\bf 1989}].
+@ Function |is_inside_primitive(v,p)| checks if the vector |v| lies
+inside the primtive |p|. It returns |true| is |v| is inside |p|, or
+|false|, otherwise. The value of |v| and |p| are both left
+unmodified.
 
-@ @<Global functions@>=
-bool is_inside_primitive(Vector v, Primitive *p)
+@<Global functions@>=
+bool is_inside_primitive(const Vector v, const Primitive *p)
 {
 	Containment c;
 	switch(p->type) {
@@ -47,6 +42,17 @@ __device__ bool cuda_is_inside_primitive(Vector v, Primitive *p)
 }
 
 @
+
+NOTE:
+The performance of this evaluator can be improved significantly by
+first normalising the CSG tree into sum-of-product form. We have not
+pursue this optimisation here due to time constraints. Normalisation
+to sum-of-product form can be done using the algorithm described by
+Jack Goldfeather, Steven Molnar, Greg Turk, and Henry Fuchs in {\sl
+Near Real-Time CSG Rendering Using Tree Normalization and Geometric
+Pruning} [IEEE Computer Graphics and Applications, pp. 20--28, May
+{\bf 1989}].
+
 @d BOOLEAN_DIFFERENCE -1
 @d BOOLEAN_INTERSECTION -2
 @d BOOLEAN_UNION -3

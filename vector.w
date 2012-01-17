@@ -26,7 +26,7 @@ typedef double Vector[4];
 |v| to the I/O stream pointed to by |f|. Vector |v| is left
 unmodified.
 @<Global functions@>=
-void vector_print(FILE *f, Vector v)
+void vector_print(FILE *f, const Vector v)
 {
 	fprintf(f, "(%lf, %lf, %lf, %lf)", v[0], v[1], v[2], v[3]);
 }
@@ -82,7 +82,7 @@ the components of vector |v| to vector |u|. Vector |v| is left
 unmodified. We may prefer to use the macro |vector_copy(X, Y)| instead.
 @d vector_copy(X, Y) memcpy((X), (Y), 4*sizeof(double))
 @<Global functions@>=
-void vector_copy_f(Vector u, Vector v)
+void vector_copy_f(Vector u, const Vector v)
 {
 	u[0] = v[0];
         u[1] = v[1];
@@ -91,7 +91,7 @@ void vector_copy_f(Vector u, Vector v)
 }
 
 @ @(mcs.cu@>=
-__device__ void cuda_vector_copy(Vector u, Vector v)
+__device__ void cuda_vector_copy(Vector u, const Vector v)
 {
 	u[0] = v[0];
         u[1] = v[1];
@@ -103,7 +103,7 @@ __device__ void cuda_vector_copy(Vector u, Vector v)
 @ Function |vector_magnitude(v)| returns the {\sl vector magnitude} of
 the vector |v|. Vector |v| is left unmodified.@^vector magnitude@>
 @<Global functions@>=
-double vector_magnitude(Vector v)
+double vector_magnitude(const Vector v)
 {
 	return sqrt(v[0] * v[0] +
 		    v[1] * v[1] +
@@ -111,7 +111,7 @@ double vector_magnitude(Vector v)
 }
 
 @ @(mcs.cu@>=
-__device__ double cuda_vector_magnitude(Vector v)
+__device__ double cuda_vector_magnitude(const Vector v)
 {
 	return sqrt(v[0] * v[0] +
 		    v[1] * v[1] +
@@ -126,7 +126,7 @@ function assumes that the $w$-component of |v| is already 1.
 @^unit vector@>
 @^vector normalisation@>
 @<Global functions@>=
-void vector_normalize(Vector v, Vector r)
+void vector_normalize(const Vector v, Vector r)
 {
 	double m = vector_magnitude(v);
 	/* assumes r[3] = 1.0 */
@@ -142,7 +142,7 @@ void vector_normalize(Vector v, Vector r)
 }
 
 @ @(mcs.cu@>=
-__device__ void cuda_vector_normalize(Vector v, Vector r)
+__device__ void cuda_vector_normalize(const Vector v, Vector r)
 {
 	double m = cuda_vector_magnitude(v);
 	/* assumes r[3] = 1.0 */
@@ -163,7 +163,7 @@ result in vector |r|. Both vectors |u| and |v| are left unmodified. This
 function assumes that the $w$-components in |v| and |u| are already 1.
 @^vector difference@>
 @<Global functions@>=
-void vector_difference(Vector u, Vector v, Vector r)
+void vector_difference(const Vector u, const Vector v, Vector r)
 {
 	r[0] = u[0] - v[0];
 	r[1] = u[1] - v[1];
@@ -172,7 +172,7 @@ void vector_difference(Vector u, Vector v, Vector r)
 }
 
 @ @(mcs.cu@>=
-__device__ void cuda_vector_difference(Vector u, Vector v, Vector r)
+__device__ void cuda_vector_difference(const Vector u, const Vector v, Vector r)
 {
 	r[0] = u[0] - v[0];
 	r[1] = u[1] - v[1];
@@ -187,13 +187,13 @@ are left unmodified. Vector dot products are {\sl
 commutative}@^commutative@>---the order of the parameters are
 irrelevant.@^dot product@>@^scalar product@>
 @<Global functions@>=
-double vector_dot(Vector u, Vector v)
+double vector_dot(const Vector u, const Vector v)
 {
 	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
 
 @ @(mcs.cu@>=
-__device__ double cuda_vector_dot(Vector u, Vector v)
+__device__ double cuda_vector_dot(const Vector u, const Vector v)
 {
 	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
@@ -212,7 +212,7 @@ that the vectors span from |u| towards |v|. Vector cross products are
 significant.
 @^cross product@>
 @<Global functions@>=
-void vector_cross(Vector u, Vector v, Vector r)
+void vector_cross(const Vector u, const Vector v, Vector r)
 {
 	r[0] = (u[1] * v[2] - u[2] * v[1]);
 	r[1] = (u[2] * v[0] - u[0] * v[2]);
@@ -220,7 +220,7 @@ void vector_cross(Vector u, Vector v, Vector r)
 }
 
 @ @(mcs.cu@>=
-__device__ void cuda_vector_cross(Vector u, Vector v, Vector r)
+__device__ void cuda_vector_cross(const Vector u, const Vector v, Vector r)
 {
 	r[0] = (u[1] * v[2] - u[2] * v[1]);
 	r[1] = (u[2] * v[0] - u[0] * v[2]);
@@ -235,7 +235,7 @@ Vectors |u| and |v| are left unmodified.
 
 @d TWICE_PI 6.283185307
 @<Global functions@>=
-double vector_angle_radian(Vector u, Vector v)
+double vector_angle_radian(const Vector u, const Vector v)
 {
         Vector a, b, c = ZERO_VECTOR;
 	double angle;
@@ -248,7 +248,7 @@ double vector_angle_radian(Vector u, Vector v)
 }
 
 @ @(mcs.cu@>=
-__device__ double cuda_vector_angle_radian(Vector u, Vector v)
+__device__ double cuda_vector_angle_radian(const Vector u, const Vector v)
 {
         Vector a, b, c = ZERO_VECTOR;
 	double angle;
@@ -266,13 +266,13 @@ degrees between the vectors |u| and |v|, where rotation began
 at vector |u|. The value of $\theta$ is in the range $[0^\circ, 
 360^\circ]$.  Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
-double vector_angle_degree(Vector u, Vector v)
+double vector_angle_degree(const Vector u, const Vector v)
 {
 	return RADIAN_TO_DEGREE * vector_angle_radian(u, v);
 }
 
 @ @(mcs.cu@>=
-__device__ double cuda_vector_angle_degree(Vector u, Vector v)
+__device__ double cuda_vector_angle_degree(const Vector u, const Vector v)
 {
 	return RADIAN_TO_DEGREE * vector_angle_radian(u, v);
 }
@@ -282,7 +282,7 @@ __device__ double cuda_vector_angle_degree(Vector u, Vector v)
 three-dimensional points represented by the vectors |u| and
 |v|. Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
-double vector_distance(Vector u, Vector v)
+double vector_distance(const Vector u, const Vector v)
 {
 	double x, y, z;
 	x = u[0] - v[0];
@@ -292,7 +292,7 @@ double vector_distance(Vector u, Vector v)
 }
 
 @ @(mcs.cu@>=
-__device__ double cuda_vector_distance(Vector u, Vector v)
+__device__ double cuda_vector_distance(const Vector u, const Vector v)
 {
 	double x, y, z;
 	x = u[0] - v[0];
