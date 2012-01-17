@@ -7,7 +7,7 @@ lies inside a solid, where the solid is represented by a postfix
 boolean expression.
 
 @ Function |is_inside_primitive(v,p)| checks if the vector |v| lies
-inside the primtive |p|. It returns |true| is |v| is inside |p|, or
+inside the primtive |p|. It returns |true| if |v| is inside |p|; or
 |false|, otherwise. The value of |v| and |p| are both left
 unmodified.
 
@@ -41,7 +41,15 @@ __device__ bool cuda_is_inside_primitive(Vector v, Primitive *p)
 	return false;
 }
 
-@
+@ Function |is_inside(v,s,r)| checks if the vector |v| is inside the
+solid which may be retrieved from the {\it solid indices buffer} using
+the index |s|. To carry out the containment test, the boolean postfix
+expression that corresponds to the CSG tree of the solid is evaluated
+against the vector |v|. If this evaluation was successful, the
+function returns |true|, and the actual containment result is stored
+in |r|. If there was an error, however, e.g., the stack was full, the
+function will return a |false|. In this case, value in |r| must be
+discarded.
 
 NOTE:
 The performance of this evaluator can be improved significantly by
@@ -160,7 +168,13 @@ stack_full:
 exit_error:
 	fprintf(stderr, "while evaluating '%d' at index %d\n", item, i);
 
-@ @<Global functions@>=
+@ Function |solid_contains_particle(s,p)| checks if the solid |s|
+contains the particle |p|. If it does, |true| is returned; 
+otherwise, |false| is returned. To carry out the actual check, this
+function tests the containment of the particle's position vector
+|p->v| against the CSG expression that defines the solid.
+
+@<Global functions@>=
 bool solid_contains_particle(uint32_t s, Particle *p)
 {
       bool result;
