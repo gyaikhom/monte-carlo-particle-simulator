@@ -43,13 +43,6 @@ void vector_zero(Vector v)
 	v[3] = 1.0;
 }
 
-@ @(mcs.cu@>=
-__device__ void cuda_vector_zero(Vector v)
-{
-	v[0] = v[1] = v[2] = 0.0;
-	v[3] = 1.0;
-}
-
 @ Function |vector_homogenise(v)| modifies the vector |v|, so that its
 $w$-component equals 1.
 @<Global functions@>=
@@ -64,19 +57,6 @@ void vector_homogenise(Vector v)
         }
 }
 
-@ @(mcs.cu@>=
-__device__ void cuda_vector_homogenise(Vector v)
-{
-	if (1.0 == v[3]) return; /* already homogenised */
-	if (0.0 != v[3]) {
-	        v[0] /= v[3];
-	        v[1] /= v[3];
-	        v[2] /= v[3];
-		v[3] = 1.0;
-        }
-}
-
-
 @ Function |vector_copy_f(u,v)| modifies vector |u| by copying all of
 the components of vector |v| to vector |u|. Vector |v| is left
 unmodified. We may prefer to use the macro |vector_copy(X, Y)| instead.
@@ -90,16 +70,6 @@ void vector_copy_f(Vector u, const Vector v)
 	u[3] = v[3];
 }
 
-@ @(mcs.cu@>=
-__device__ void cuda_vector_copy(Vector u, const Vector v)
-{
-	u[0] = v[0];
-        u[1] = v[1];
-        u[2] = v[2];
-	u[3] = v[3];
-}
-
-
 @ Function |vector_magnitude(v)| returns the {\sl vector magnitude} of
 the vector |v|. Vector |v| is left unmodified.@^vector magnitude@>
 @<Global functions@>=
@@ -109,15 +79,6 @@ double vector_magnitude(const Vector v)
 		    v[1] * v[1] +
 		    v[2] * v[2]);
 }
-
-@ @(mcs.cu@>=
-__device__ double cuda_vector_magnitude(const Vector v)
-{
-	return sqrt(v[0] * v[0] +
-		    v[1] * v[1] +
-		    v[2] * v[2]);
-}
-
 
 @ Function |vector_normalize(v,r)| {\sl normalises} the vector |v| and
 stores the result in |r|. Vector |v| is left unmodified. The
@@ -129,22 +90,6 @@ function assumes that the $w$-component of |v| is already 1.
 void vector_normalize(const Vector v, Vector r)
 {
 	double m = vector_magnitude(v);
-	/* assumes r[3] = 1.0 */
-	if (m > 0.0) {
-		r[0] = v[0] / m;
-		r[1] = v[1] / m;
-		r[2] = v[2] / m;
-	} else {
-		r[0] = 0.0;
-		r[1] = 0.0;
-		r[2] = 0.0;
-	}
-}
-
-@ @(mcs.cu@>=
-__device__ void cuda_vector_normalize(const Vector v, Vector r)
-{
-	double m = cuda_vector_magnitude(v);
 	/* assumes r[3] = 1.0 */
 	if (m > 0.0) {
 		r[0] = v[0] / m;
@@ -171,16 +116,6 @@ void vector_difference(const Vector u, const Vector v, Vector r)
 	r[3] = 1.0;
 }
 
-@ @(mcs.cu@>=
-__device__ void cuda_vector_difference(const Vector u, const Vector v, Vector r)
-{
-	r[0] = u[0] - v[0];
-	r[1] = u[1] - v[1];
-	r[2] = u[2] - v[2];
-	r[3] = 1.0;
-}
-
-
 @ Function |vector_dot(u,v)| returns the {\sl dot} (also known as the
 {\sl scalar}) product of the two vectors |u| and |v|. Vectors |u| and |v|
 are left unmodified. Vector dot products are {\sl
@@ -188,12 +123,6 @@ commutative}@^commutative@>---the order of the parameters are
 irrelevant.@^dot product@>@^scalar product@>
 @<Global functions@>=
 double vector_dot(const Vector u, const Vector v)
-{
-	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-}
-
-@ @(mcs.cu@>=
-__device__ double cuda_vector_dot(const Vector u, const Vector v)
 {
 	return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
@@ -219,15 +148,6 @@ void vector_cross(const Vector u, const Vector v, Vector r)
 	r[2] = (u[0] * v[1] - u[1] * v[0]);
 }
 
-@ @(mcs.cu@>=
-__device__ void cuda_vector_cross(const Vector u, const Vector v, Vector r)
-{
-	r[0] = (u[1] * v[2] - u[2] * v[1]);
-	r[1] = (u[2] * v[0] - u[0] * v[2]);
-	r[2] = (u[0] * v[1] - u[1] * v[0]);
-}
-
-
 @ Function |vector_angle_radian(u,v)| returns the angle $\theta$ in
 radians between the vectors |u| and |v|, where rotation started
 at vector |u|. The value of $\theta$ is in the range $[0, 2\pi]$.
@@ -247,20 +167,6 @@ double vector_angle_radian(const Vector u, const Vector v)
 	return angle;
 }
 
-@ @(mcs.cu@>=
-__device__ double cuda_vector_angle_radian(const Vector u, const Vector v)
-{
-        Vector a, b, c = ZERO_VECTOR;
-	double angle;
-        cuda_vector_normalize(u, a);
-	cuda_vector_normalize(v, b);
-        angle = acos(vector_dot(a, b));
-        cuda_vector_cross(u, v, c);
-	if (c[3] < 0.0) return (TWICE_PI - angle);
-	return angle;
-}
-
-
 @ Function |vector_angle_degree(u,v)| returns the angle $\theta$ in
 degrees between the vectors |u| and |v|, where rotation began
 at vector |u|. The value of $\theta$ is in the range $[0^\circ, 
@@ -271,28 +177,11 @@ double vector_angle_degree(const Vector u, const Vector v)
 	return RADIAN_TO_DEGREE * vector_angle_radian(u, v);
 }
 
-@ @(mcs.cu@>=
-__device__ double cuda_vector_angle_degree(const Vector u, const Vector v)
-{
-	return RADIAN_TO_DEGREE * vector_angle_radian(u, v);
-}
-
-
 @ Function |vector_distance(u, v)| returns the distance between the
 three-dimensional points represented by the vectors |u| and
 |v|. Vectors |u| and |v| are left unmodified.
 @<Global functions@>=
 double vector_distance(const Vector u, const Vector v)
-{
-	double x, y, z;
-	x = u[0] - v[0];
-	y = u[1] - v[1];
-	z = u[2] - v[2];
-	return sqrt(x * x + y * y + z * z);
-}
-
-@ @(mcs.cu@>=
-__device__ double cuda_vector_distance(const Vector u, const Vector v)
 {
 	double x, y, z;
 	x = u[0] - v[0];

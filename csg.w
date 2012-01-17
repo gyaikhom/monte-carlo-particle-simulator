@@ -2114,19 +2114,6 @@ Containment is_inside_block(const Vector v, const Primitive *p)
 	return INSIDE;
 }
 
-@ The CUDA kernel will also use this code.
-@(mcs.cu@>=
-__device__ Containment cuda_is_inside_block(const Vector v, const Primitive *p)
-{
-        if (v[0] < p->b.x0 || v[0] > p->b.x1 || v[1] < p->b.y0 || v[1]
-	> p->b.y1 || v[2] < p->b.z0 || v[2] > p->b.z1) 
-                return OUTSIDE;
-        if (v[0] == p->b.x0 || v[0] == p->b.x1 || v[1] == p->b.y0 || v[1]
-	== p->b.y1 || v[2] == p->b.z0 || v[2] == p->b.z1)
-                return SURFACE;
-	return INSIDE;
-}
-
 @*2 Containment inside a solid sphere.
 We determine the containment of a point inside a sphere by calculating
 the distance of the point from the sphere's origin. Let $\delta$ be
@@ -2157,16 +2144,6 @@ Containment is_inside_sphere(const Vector v, const Primitive *p)
 	if (delta == p->s.radius) return SURFACE; /* least likely */
 	return INSIDE;
 }
-
-@ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_sphere(const Vector v, const Primitive *p)
-{
-	double delta = sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-	if (delta > p->s.radius) return OUTSIDE; /* highly likely */
-	if (delta == p->s.radius) return SURFACE; /* least likely */
-	return INSIDE;
-}
-
 
 @*2 Containment inside a solid cylinder.
 During containment testing, the origin of the cylinder coincides with
@@ -2207,19 +2184,6 @@ absolutely necessary.
 
 @<Global functions@>=
 Containment is_inside_cylinder(const Vector v, const Primitive *p)
-{
-        double delta;
-	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
-	@<Calculate distance of the two-dimensional $xz$-projection@>;
-	if (delta > p->c.radius) return OUTSIDE;
-	if (v[1] == p->c.y0 || v[1] == p->c.y1 || delta ==
-	p->c.radius)
-                return SURFACE;
-	return INSIDE;
-}
-
-@ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_cylinder(const Vector v, const Primitive *p)
 {
         double delta;
 	if (v[1] < p->c.y0 || v[1] > p->c.y1) return OUTSIDE;
@@ -2372,43 +2336,6 @@ if (p->t.phi < 360.0 && (gamma == p->t.phi_start || gamma == p->t.phi_end))
         return SURFACE;
 if (p->t.theta < 360.0 && (tau == p->t.theta_start || tau == p->t.theta_end))
         return SURFACE;
-
-@ @(mcs.cu@>=
-__device__ Containment cuda_is_inside_torus(const Vector v, const Primitive *p)
-{
-	double gamma, gamma_deg, tau, tau_deg, delta, radial;
-	Vector tube_center, from_tube_center_to_v, temp;
-	@<Calculate the projected distance $\delta$ of |v| on the $xz$-plane@>;
-	if (delta < p->t.r0 || delta > p->t.r1) return OUTSIDE; /* check radial
-	containment on $xz$-plane */
-	@<CUDA: Calculate $\gamma$ subtended by |v| on the $xz$-plane@>;
-	if (angle_outside_range(gamma_deg, p->t.phi_start, p->t.phi_end))
-                return OUTSIDE;
-	@<CUDA: Check if |v| is outside the tube@>;
-	@<Check if |v| is on the surface of the tube@>;
-	return INSIDE;
-}
-
-@ @<CUDA: Calculate $\gamma$ subtended by |v| on the $xz$-plane@>=
-cuda_vector_copy(temp, v);
-temp[1] = 0.0; /* angle must be on the $xz$-plane */
-gamma = cuda_vector_angle_radian(positive_xaxis_unit_vector, temp);
-gamma_deg = cuda_convert_radian_to_degree(gamma);
-
-@ @<CUDA: Check if |v| is outside the tube@>=
-@<Calculate vector |tube_center| on the center of the tube at $\gamma$@>;
-@<CUDA: Calculate radial distance of |v| from |tube_center|@>;
-if (radial > p->t.minor) return OUTSIDE;
-@<CUDA: Calculate the radial angle of |v| on the cross-section at |tube_center|@>;
-if (angle_outside_range(tau, p->t.theta_start, p->t.theta_end)) return OUTSIDE;
-
-@ @<CUDA: Calculate radial distance of |v| from |tube_center|@>=
-cuda_vector_difference(v, tube_center, from_tube_center_to_v);
-radial = cuda_vector_magnitude(from_tube_center_to_v);
-
-@ @<CUDA: Calculate the radial angle of |v| on the cross-section at |tube_center|@>=
-tau = cuda_vector_angle_radian(tube_center, from_tube_center_to_v);
-tau_deg = cuda_convert_radian_to_degree(tau);
 
 @*2 Test containment inside a solid primitive.
 Containment testing uses different approaches depending on the type

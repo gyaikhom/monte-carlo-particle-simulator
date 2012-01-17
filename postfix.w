@@ -26,21 +26,6 @@ bool is_inside_primitive(const Vector v, const Primitive *p)
 	return false;
 }
 
-@ @(mcs.cu@>=
-__device__ bool cuda_is_inside_primitive(Vector v, Primitive *p)
-{
-	Containment c;
-	switch(p->type) {
-	case BLOCK: c = cuda_is_inside_block(v, p); break;
-	case SPHERE: c = cuda_is_inside_sphere(v, p); break;
-	case CYLINDER: c = cuda_is_inside_cylinder(v, p); break;
-	case TORUS: c = cuda_is_inside_torus(v, p); break;
-	default: c = INVALID; /* invalid solid */
-	}
-	if (INSIDE == c || SURFACE == c) return true;
-	return false;
-}
-
 @ Function |is_inside(v,s,r)| checks if the vector |v| is inside the
 solid which may be retrieved from the {\it solid indices buffer} using
 the index |s|. To carry out the containment test, the boolean postfix

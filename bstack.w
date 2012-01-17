@@ -36,31 +36,3 @@ bool boolean_stack_pop(boolean_stack *s, bool *v)
 	return true;
 }
 
-@ The boolean stack will also be used by CUDA threads.
-
-@(mcs.cu@>=
-#define MAX_BOOLEAN_STACK_SIZE 1024
-typedef struct {
-	int tos, size;
-	bool v[MAX_BOOLEAN_STACK_SIZE];
-} boolean_stack;
-__device__ bool boolean_stack_init(boolean_stack *s)
-{
-	if (NULL == s) return false;
-	s->tos = 0;
-	s->size = MAX_BOOLEAN_STACK_SIZE;
-	return true;
-}
-__device__ bool boolean_stack_push(boolean_stack *s, bool v)
-{
-	if (s->tos == s->size) return false;
-	s->v[s->tos++] = v;
-	return true;
-}
-__device__ bool boolean_stack_pop(boolean_stack *s, bool *v)
-{
-	if (0 == s->tos) return false;
-	*v = s->v[--s->tos];
-	return true;
-}
-
