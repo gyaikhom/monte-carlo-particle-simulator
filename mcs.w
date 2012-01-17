@@ -115,6 +115,7 @@ parallelisation on GPUs.
 @i csg.w
 @i world.w
 @i table.w
+@i bstack.w
 @i postfix.w
 @i cuda.w
 @i heap.w
