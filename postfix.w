@@ -53,7 +53,7 @@ Pruning} [IEEE Computer Graphics and Applications, pp. 20--28, May
 @<Global functions@>=
 bool is_inside(Vector v, uint32_t solid, bool *result)
 {
-	uint32_t i, c; /* start index and length of the postfix expression */
+	uint32_t start, end; /* start and end indices */
 	int item = BOOLEAN_INVALID; /* current postfix item */
 	boolean_stack stack;
 	boolean_stack_init(&stack);
@@ -72,8 +72,8 @@ expression representing the solid. These values will then be used to
 retrieve the boolean expression from the {\sl postfix expression buffer}.
  
 @<Retrieve start index and length of the postfix expression@>=
-i = geotab.s[solid].s;
-c = geotab.s[solid].c;
+start = geotab.s[solid].s;
+end = start + geotab.s[solid].c;
 
 @ The CSG expression is an array of integers, where all of the
 positive values give an index inside the {\sl primitives table}
@@ -85,13 +85,14 @@ postfix representation for the boolean expression $((A \cap D) - B)
 \cup (C \cap D)$, where the primitives array $p = \{A, B, C, D\}$.
 
 @<Evaluate the boolean postfix expression using the stack@>=
-while (c--) {
-      item = geotab.pb[i++]; /* lookup current item, and move to next item */
+while (start < end) {
+      item = geotab.pb[start]; /* lookup current item */
       if (BOOLEAN_DIFFERENCE < item) {
         @<Push to stack the boolean containment of $v$ inside primitive@>;
       } else {
 	@<Evaluate boolean operator and push result into stack@>;
       }
+      ++start;
 }
 
 @ We lookup the {\sl primitives table} component of the
@@ -137,7 +138,7 @@ for valid CSG expressions.
 @ @<Handle irrecoverable error: |is_inside(v, s, result)|@>=
 stack_empty: fprintf(stderr, "Boolean stack is empty... ");@+ goto exit_error;
 stack_full: fprintf(stderr, "Boolean stack is full... ");@+ goto exit_error;
-exit_error: fprintf(stderr, "while evaluating '%d' at index %d\n", item, i);
+exit_error: fprintf(stderr, "while evaluating '%d' at index %d\n", item, start);
 
 @ Function |solid_contains_particle(s,p)| checks if the solid |s|
 contains the particle |p|. If it does, |true| is returned; 
