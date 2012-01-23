@@ -30,7 +30,9 @@ struct particle_struct {
        @<Auxilliary data for managing a particle@>;
 };
 
-@ These are the properties used by the physics processes.
+@ These are the properties used by the physics processes. Some of
+these must be initialised using a randomiser, thus satisfying the
+principle requirement for a Monte Carlo simulation.
 
 @<Physical properties of a particle @>=
 Vector v; /* position */
