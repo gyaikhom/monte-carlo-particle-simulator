@@ -49,10 +49,10 @@ a solid inside a subcuboid.
 
 @ After the simulation world has been divided, all of the subcuboids
 are stored in a table, with entries as shown below. We shall refer to
-this as the {\sl subcuboids table}. The solid indices buffer stores
+this as the {\sl subcuboids table}. The {\sl solid indices buffer} stores
 indices of solids that are inside a given subcuboid. Hence, for a
 given subcuboid, the index |s| gives the starting location of the
-solids list within this buffer, and |c| gives the number of items in
+solids list inside this buffer, and |c| gives the number of items in
 that list. For instance, the subcuboid with index 2 contains two
 solids, whose solid indices are 0 and 1. What these solid indices mean
 will become clear when we discuss the solids table in later sections.
@@ -64,10 +64,11 @@ will become clear when we discuss the solids table in later sections.
 @<Type definitions@>=
 struct subcuboids_table_item {
     uint32_t s, c;  /* start index and item count in solid indices buffer */
-    BoundingBox bb;
+    BoundingBox bb; /* enclosing bounding box (coincides with subcuboid boundary) */
 };
 
-@ @<Subcuboids related data structures inside the geometry table@>=
+@ This defines the subcuboids table |ctab| as a component of the geometry table.
+@<Subcuboids related data structures inside the geometry table@>=
 struct subcuboids_table_item *ctab;
 
 @ Function |build_subcuboids_table(bb,l,m,n)| builds the subcuboids
