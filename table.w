@@ -177,8 +177,10 @@ void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
 which consists of all the geometry tables.
 
 @<Global functions@>=
+bool fill_geotab_subcuboids_table(GeometryTable *g); /* forward declaration */
 void create_geotab(GeometryTable *g)
 {
+    uint32_t i;
     @<Initialise the geometry table@>;
     @<Build tables and search trees for managing the subcuboids@>;
     @<Fill in the primitives table, the solids table and postfix buffer@>;
@@ -218,7 +220,7 @@ fill in this information into the respective tables and buffers for
 each of the solids.
 
 @<Fill in the primitives table, the solids table and postfix buffer@>=
-for (uint32_t i = 0; i < forest_of_solids.n; ++i) {
+for (i = 0; i < forest_of_solids.n; ++i) {
     CSG_Node *s = forest_of_solids.s[i];
     if (NULL == s) continue;
     @<Fill table entries for this solid@>;
@@ -245,7 +247,7 @@ if (i) {
    uint32_t j, p = 0;
    fprintf(stderr, "! There are %u stray nodes that are not in any of the solids:\n", i);
    for (j = 0; i && j < MAX_CSG_NODES; ++j) {
-       s = nodes_repo->table[j];
+       CSG_Node *s = nodes_repo->table[j];
        if (NULL == s || is_inuse(s)) continue;
        if (is_primitive(s)) {
            ++p;
