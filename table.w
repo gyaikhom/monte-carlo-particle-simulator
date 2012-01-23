@@ -29,7 +29,7 @@ structure. The tabular representation of this hierarchy is designed so
 that the cache utilisation is efficient.
 
 @ Assume that our simulation world is divided into four subcuboids as
-shown below, and that it contains three silids $A$, $B$, and $C$. The
+shown below, and that it contains three solids $A$, $B$, and $C$. The
 CSG tree for each of the solids are shown on the left-hand
 side.
 
@@ -69,15 +69,15 @@ retrieve the solids from the solid indices buffer.
 
 For each of the solids indexed by values within the specified range in
 the buffer, we check if that solid contains the particle. To do this,
-we then use the {\it solids table}, which captures information
+we then use the {\sl solids table}, which captures information
 concerning the solids, i.e., the corresponding CSG tree.
 
-@ A solids table is a compact form that stores the forest of CSG
-trees. Instead of storing each of the solids separately, we store the
-CSG trees as postfix expressions inside a common {\it postfix
-expression buffer}. Now, as in the case with the subcuboids table, we
-store the corresponding start indices and the expression length inside
-the solids table. This is shown in the following example:
+@ A {\sl solids table} is a compact data structure that stores the
+forest of CSG trees. Instead of storing each of the solids separately,
+we store the CSG trees as postfix expressions inside a common {\sl
+postfix expression buffer}. Now, as in the case with the subcuboids
+table, we store the corresponding start indices and the expression
+length inside the solids table. This is shown in the following example:
 
 \bigskip
 
@@ -85,14 +85,14 @@ the solids table. This is shown in the following example:
 
 @<Type definitions@>=
 struct solids_table_item {
-    uint32_t s, c; /* start index and item count in postfix expression buffer */
+    uint32_t s, c; /* start index and expression length in postfix expression buffer */
     BoundingBox bb; /* bounding box for the solid */
 };
 
 @ The postfix expression buffer stores indices and operators of a CSG
 tree. All of the negative integers are operators, where -1 represents
 a boolean difference, -2 a boolean intersection, and -3 a boolean
-union. All of the positive integers are indices to the {\it primitives
+union. All of the positive integers are indices to the {\sl primitives
 table}, which store information concerning the parameters specific to
 the primitive instances.
 
@@ -103,14 +103,14 @@ the primitive instances.
 @<Type definitions@>=
 struct primitives_table_item {
     Matrix a, i; /* accumulated affine and inverse transformations */
-    Primitive p; /* primitive data */
+    Primitive p; /* parameters specific to a primitive instance */
 };
 
 @ Once we reach the primitives table, we can use the affine
 transformation matrices (|a| or |i|) to transform the particle's
 position vector, and test containment inside the primitive by using
-the primitive's parameters available in |p|. This containment testing
-inside primitives is carried out as we evaluate the boolean postfix
+the primitive's parameters available in |p|. The containment testing
+inside a primitive is carried out as we evaluate the boolean postfix
 expression for a given solid.
 
 For instance, if we are testing containment inside the solid $B$, we
@@ -119,7 +119,7 @@ will first evaluate containment inside the primitives using rows 4 and
 then calculate the boolean difference of the results.
 
 @ The collection of tables that captures the hierarchical relationship
-is stored inside the following data structure, which is
+is stored inside a collective data structure, which is
 defined as the type |GeometryTable|.
 @<Type definitions@>=
 struct geomtab_struct {
@@ -131,24 +131,29 @@ struct geomtab_struct {
     int32_t *pb; /* pointer to the postfix expression buffer */
     uint32_t *sb; /* pointer to the solid indices buffer */
     BoundingBox sw; /* the simulation world cuboid */
-    uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes */
+    uint32_t l, m, n; /* divisions along $x$, $y$ and $z$ axes of the
+    simulation world */
 } geotab;
 
 @ @<Sizes of the geometry table components@>=
-uint32_t np; /* number of entries in primitives table */
-uint32_t ns; /* number of entries in solids table */
-uint32_t nc; /* number of entries in subcuboids table */
-uint32_t npb; /* number of entries in postfix expression buffer */
-uint32_t nsb; /* number of entries in solid indices buffer */
+uint32_t np; /* number of rows in the primitives table */
+uint32_t ns; /* number of rows in the solids table */
+uint32_t nc; /* number of rows in the subcuboids table */
+uint32_t npb; /* number of entries in the postfix expression buffer */
+uint32_t nsb; /* number of entries in the solid indices buffer */
 
 @ @<Counters used during geometry table generation@>=
-uint32_t ip; /* index within primitives table */
-uint32_t is; /* index within solids table */
-uint32_t ic; /* index within subcuboids table */
+uint32_t ip; /* row index within primitives table */
+uint32_t is; /* row index within solids table */
+uint32_t ic; /* row index within subcuboids table */
 uint32_t ipb; /* index within postfix expression buffer */
 uint32_t isb; /* index within solid indics buffer */
 
-@ @<Global functions@>=
+@ Function |fill_geotab_csg_table(g,n)| fill in the CSG tree
+information for a solid with CSG root |s| inside the geometry table
+|g|. It uses recursive post-order tree traversal.
+
+@<Global functions@>=
 void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     if (NULL == g || NULL == n) return;
     if (is_primitive(n)) {
@@ -168,97 +173,28 @@ void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
     }
 }
 
-@ A solid with a long postfix expression will take longer to evaluate,
-compared to shorter expressions. Hence, we use |compare_solids(a,b)|
-to sort the solids table in ascending order using the postfix expression
-length as the comparison key.
+@ Function |create_geotab(g)| generates a compact data structure |g|,
+which consists of all the geometry tables.
+
 @<Global functions@>=
-static int compare_solids(const void *a, const void *b)
-{
-	struct solids_table_item *ap = (struct solids_table_item *) a;
-	struct solids_table_item *bp = (struct solids_table_item *) b;
-	return (ap->c - bp->c);
-}
-
-@ @<Global functions@>=
-bool fill_geotab_subcuboids_table(GeometryTable *g)
-{
-    Area t, r; /* temporary paged solids indices buffer */
-    uint32_t m = 3; /* maximum number of items per page */
-    uint32_t c = 0; /* number of items in current page */
-    uint32_t *sb; /* current solid indices buffer page */
-    uint32_t i, j;
-    mem_init(t);
-    mem_init(r);
-    @<Fill in the subcuboids table and create a paged solid indices buffer@>;
-    @<Finalise solid indices buffer by moving paged data to contiguous memory@>;
-    return true;
-
-exit_error: mem_free(t);
-    return false;
-}
-
-@ @<Fill in the subcuboids table and create a paged solid indices buffer@>=
-sb = mem_typed_alloc(m, uint32_t, t);
-if (NULL == sb) goto exit_error;
-qsort(g->s, g->ns, sizeof(struct solids_table_item), compare_solids);
-for (i = 0; i < g->nc; ++i) {
-    g->ctab[i].s = g->isb;
-    for (j = 0; j < g->ns; ++j) {
-        if (no_intersection_bb(g->ctab[i].bb, g->s[j].bb)) continue;
-        if (c == m) {
-           sb = mem_typed_alloc(m, uint32_t, t);
-           if (NULL == sb) goto exit_error;
-	   c = 0;
-	}
-    	sb[c++] = j;
-	++g->isb;
-    }
-    g->ctab[i].c = g->isb - g->ctab[i].s;
-}
-
-@ @<Finalise solid indices buffer by moving paged data to contiguous memory@>=
-g->nsb = g->isb;
-if (*t) {
-    g->sb = mem_typed_alloc(g->nsb, uint32_t, mem_phase_two);
-    if (NULL == g->sb) goto exit_error;
-    @<Transfer the last page of the solid indices buffer@>;
-    @<Transfer the remaining pages of the solid indices buffer@>;
-}
-
-@ Note that the memory pages are maintained inside the memory area as
-a reverse linked list.
-
-@<Transfer the last page of the solid indices buffer@>=
-i = g->nsb - c; /* index in contiguous memory for the last page */
-memcpy(&(g->sb[i]), (*t)->first, sizeof(uint32_t) * c);
-*r = (*t)->next;
-free((*t)->first);
-*t = *r;
-i -= m;
-
-@ @<Transfer the remaining pages of the solid indices buffer@>=
-while (*t) {
-    *r = (*t)->next;
-    memcpy(&(g->sb[i]), (*t)->first, sizeof(uint32_t) * m);
-    free((*t)->first);
-    *t = *r;
-    i -= m;
-}
-
-@ @<Global functions@>=
 void create_geotab(GeometryTable *g)
 {
-    uint32_t i;
-    CSG_Node *s;
     @<Initialise the geometry table@>;
     @<Build tables and search trees for managing the subcuboids@>;
     @<Fill in the primitives table, the solids table and postfix buffer@>;
     @<Check if there are stray node@>;
-    fill_geotab_subcuboids_table(g);
+    @<Finalise the geometry table@>;
 }
 
-@ @<Initialise the geometry table@>=
+@ To build the geometry table, we must consolidate all of the
+information concerning the simulation world, subcuboid divisions,
+solids and their CSG trees, into a coherent and integrated data
+structure. But before we can do that, we must first initialise the
+geometry table with the information we collected while processing the
+user supplied input files. Any inconsistencies (e.g., stray CSG nodes,
+etc.) will be corrected by later processes.
+
+@<Initialise the geometry table@>=
 g->ip = g->is = g->ic = g->ipb = g->isb = g->nsb = 0;
 g->sw = sim_world;
 g->nc = num_subcuboids;
@@ -275,22 +211,36 @@ g->p = mem_typed_alloc(g->np, struct primitives_table_item, mem_phase_two);
 g->pb = mem_typed_alloc(g->npb, int32_t, mem_phase_two); 
 g->s = mem_typed_alloc(g->ns, struct solids_table_item, mem_phase_two);
 
-@ @<Fill in the primitives table, the solids table and postfix buffer@>=
-for (i = 0; i < forest_of_solids.n; ++i) {
-    s = forest_of_solids.s[i];
+@ After processing the geometry specification from the user supplied
+input file, \.{MCS} stores all of the solids as a forst of CSG trees,
+irrespective of the enclosing subcuboids. Hence, we can immediately
+fill in this information into the respective tables and buffers for
+each of the solids.
+
+@<Fill in the primitives table, the solids table and postfix buffer@>=
+for (uint32_t i = 0; i < forest_of_solids.n; ++i) {
+    CSG_Node *s = forest_of_solids.s[i];
+    if (NULL == s) continue;
     @<Fill table entries for this solid@>;
 }
 
 @ @<Fill table entries for this solid@>=
-if (NULL == s) continue;
 g->s[g->is].bb = s->bb;
-g->s[g->is].s = g->ipb;
-fill_geotab_csg_table(g, s);
-g->s[g->is].c = g->ipb - g->s[g->is].s;
-++(g->is);
+g->s[g->is].s = g->ipb; /* current index in the postfix buffer */
+fill_geotab_csg_table(g, s); /* fill in CSG tree data */
+g->s[g->is].c = g->ipb - g->s[g->is].s; /* set postfix expression length */
+++(g->is); /* moved to next row in solids table */
 
-@ @<Check if there are stray node@>=
-i = g->npb - g->ipb;
+@ At the beginning, we initialised the geometry table with tentative
+information collected sequentially while processing the user supplied
+input files. However, some of this information may be inconsistent
+with information specified in later segments of the input file. For
+instance, the user specified stray CSG nodes that are not used in any
+of the solids. We must correct these errors before finalising the
+geometry table.
+
+@<Check if there are stray node@>=
+i = g->npb - g->ipb; /* number of stray nodes */
 if (i) {
    uint32_t j, p = 0;
    fprintf(stderr, "! There are %u stray nodes that are not in any of the solids:\n", i);
@@ -305,6 +255,111 @@ if (i) {
    }
    g->np -= p; /* correct the number of active primitives */
    g->npb = g->ipb; /* correct the number of items in postfix buffer */
+}
+
+@ We are now ready to integrate the solids table with the rest of the
+simulation world. We will do this by grouping the solids and then
+assigning them to their enclosing subcuboid.
+
+@<Finalise the geometry table@>=
+fill_geotab_subcuboids_table(g);
+
+@ A solid with a long postfix expression will take longer to evaluate,
+compared to shorter expressions. Hence, we use |compare_solids(a,b)|
+to sort the solids table in ascending order using the postfix expression
+length as the comparison key.
+@<Global functions@>=
+static int compare_solids(const void *a, const void *b)
+{
+	struct solids_table_item *ap = (struct solids_table_item *) a;
+	struct solids_table_item *bp = (struct solids_table_item *) b;
+	return (ap->c - bp->c);
+}
+
+@ Until all of the solids have been grouped based on their enclosing
+subcuboids, we do not know the actual size of the {\sl solid indices
+buffer}. This is because, a subcuboid can enclose multiple solids, and
+each of the solids can be enclosed partially by multiple
+subcuboids. Hence, we cannot build the solid indices buffer
+immediately in one go; instead, we will build a temporary paged-memory
+solid indices buffer, and transfer the complete information to the
+actual geometry table when done.
+
+@<Global functions@>=
+bool fill_geotab_subcuboids_table(GeometryTable *g)
+{
+    Area t, r; /* memory area for paged solid indices buffer, and a temporary pointer */
+    uint32_t m = 32; /* maximum number of items per page */
+    uint32_t c = 0; /* number of items in current page */
+    uint32_t *sb; /* current solid indices buffer page */
+    uint32_t i, j;
+    mem_init(t);
+    mem_init(r);
+    @<Fill in the subcuboids table and create a paged solid indices buffer@>;
+    @<Finalise solid indices buffer by moving paged data to contiguous memory@>;
+    return true;
+
+exit_error: mem_free(t);
+    return false;
+}
+
+@ We first allocate a solid indices buffer page. Then, we sort the
+solids in ascending order of the length of their boolean CSG postfix
+expression. For each of the subcuboids, we then find all of the
+solids that it encloses. The corresponding indices are then filled
+into the subcuboids table. When the page is full, we create a new page
+and continue the process. A subcuboid encloses a solid if their
+bounding boxes intersect.
+
+@<Fill in the subcuboids table and create a paged solid indices buffer@>=
+sb = mem_typed_alloc(m, uint32_t, t); /* allocate page */
+if (NULL == sb) goto exit_error;
+qsort(g->s, g->ns, sizeof(struct solids_table_item), compare_solids);
+for (i = 0; i < g->nc; ++i) {
+    g->ctab[i].s = g->isb; /* current index inside the actual solid indices buffer */
+    for (j = 0; j < g->ns; ++j) {
+        if (no_intersection_bb(g->ctab[i].bb, g->s[j].bb)) continue;
+        if (c == m) {
+           sb = mem_typed_alloc(m, uint32_t, t); /* allocate new page */
+           if (NULL == sb) goto exit_error;
+	   c = 0;
+	}
+    	sb[c++] = j; /* fill in the index inside the solid indices buffer */
+	++g->isb; /* move to the next available slot */
+    }
+    g->ctab[i].c = g->isb - g->ctab[i].s; /* fill in number of solids
+    enclosed by the subcuboid */
+}
+
+@ @<Finalise solid indices buffer by moving paged data to contiguous memory@>=
+g->nsb = g->isb;
+if (*t) {
+    g->sb = mem_typed_alloc(g->nsb, uint32_t, mem_phase_two);
+    if (NULL == g->sb) goto exit_error;
+    @<Transfer the last page of the solid indices buffer@>;
+    @<Transfer the remaining pages of the solid indices buffer@>;
+}
+
+@ Note that the memory pages are maintained inside the memory area as
+a reverse linked list. Furthermore, we free up the pages after the
+data have been transferred to the actual solid indices buffer. We must
+ensure that only the valid contents of the last page is transferred.
+
+@<Transfer the last page of the solid indices buffer@>=
+i = g->nsb - c; /* index in contiguous memory for the last page */
+memcpy(&(g->sb[i]), (*t)->first, sizeof(uint32_t) * c);
+*r = (*t)->next;
+free((*t)->first);
+*t = *r;
+i -= m;
+
+@ @<Transfer the remaining pages of the solid indices buffer@>=
+while (*t) {
+    *r = (*t)->next;
+    memcpy(&(g->sb[i]), (*t)->first, sizeof(uint32_t) * m);
+    free((*t)->first);
+    *t = *r;
+    i -= m;
 }
 
 @ @<Global functions@>=
