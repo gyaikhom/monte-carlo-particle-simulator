@@ -7,7 +7,7 @@ lies inside a solid, where the solid is represented by a postfix
 boolean expression.
 
 @ Function |is_inside_primitive(v,p)| checks if the vector |v| lies
-inside the primtive |p|. It returns |true| if |v| is inside |p|; or
+inside the primitive |p|. It returns |true| if |v| is inside |p|; or
 |false|, otherwise. The value of |v| and |p| are both left
 unmodified.
 
@@ -20,21 +20,21 @@ bool is_inside_primitive(const Vector v, const Primitive *p)
 	case SPHERE: c = is_inside_sphere(v, p);@+ break;
 	case CYLINDER: c = is_inside_cylinder(v, p);@+ break;
 	case TORUS: c = is_inside_torus(v, p);@+ break;
-	default: c = INVALID; /* invalid solid */
+	default: return false; /* invalid solid */
 	}
 	if (INSIDE == c || SURFACE == c) return true;
 	return false;
 }
 
 @ Function |is_inside(v,s,r)| checks if the vector |v| is inside the
-solid which may be retrieved from the {\it solid indices buffer} using
-the index |s|. To carry out the containment test, the boolean postfix
-expression that corresponds to the CSG tree of the solid is evaluated
-against the vector |v|. If this evaluation was successful, the
-function returns |true|, and the actual containment result is stored
-in |r|. If there was an error, however, e.g., the stack was full, the
-function will return a |false|. In this case, value in |r| must be
-discarded.
+solid that is indexed by the value stored at index |s| inside the
+{\sl solid indices buffer}. To carry out the containment test, the
+boolean postfix expression that corresponds to the CSG tree of the
+solid is evaluated against the vector |v|. If this evaluation was
+successful, the function returns |true|, and the actual containment
+result is stored in |r|. If there was an error, however, e.g., the
+stack was full, the function will return a |false|. In this case,
+value in |r| must be discarded.
 
 NOTE:
 The performance of this evaluator can be improved significantly by
@@ -66,17 +66,17 @@ bool is_inside(Vector v, uint32_t solid, bool *result)
 	return false;
 }
 
-@ We use the {\it solids table} component of the geometry table to
+@ We use the {\sl solids table} component of the geometry table to
 retrieve the start index and length of the boolean postfix
 expression representing the solid. These values will then be used to
-retrieve the boolean expression from the postfix expression buffer.
+retrieve the boolean expression from the {\sl postfix expression buffer}.
  
 @<Retrieve start index and length of the postfix expression@>=
 i = geotab.s[solid].s;
 c = geotab.s[solid].c;
 
 @ The CSG expression is an array of integers, where all of the
-positive values give an index inside the {\it primitives table}
+positive values give an index inside the {\sl primitives table}
 component of the geomatry table. Any negative value must be either -1,
 -2, or -3, denoting respectively a boolean difference, intersection,
 or union. Any other value in the expression is invalid. For instance,
@@ -94,7 +94,7 @@ while (c--) {
       }
 }
 
-@ We lookup the {\it primitives table} component of the
+@ We lookup the {\sl primitives table} component of the
 geometry table to retrieve the primitive |p| that corresponds to the
 current postfix item. We then call |is_inside_primitive(v,p)| to check if
 the vector |v| is inside the primitive |p|. The returned value is then
