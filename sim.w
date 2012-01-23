@@ -223,16 +223,17 @@ uint32_t simulate_particle(Particle *p, uint32_t j, Particle *s, uint32_t k)
 
 @ @<Find the solid which contains the particle@>=
 {
-	uint32_t start_idx, count, sc;
+	uint32_t sc, start, end;
 	sc = p[j].subcuboid;
-	start_idx = geotab.ctab[sc].s; /* lookup subcuboids table and retrieve start index */
-	count = geotab.ctab[sc].c; /* and count to the solid indices buffer */
-	while (count--) {
-	      solid = geotab.sb[start_idx++]; /* lookup solid indices buffer and retrieve solid index */
+	start = geotab.ctab[sc].s; /* lookup subcuboids table and retrieve start index */
+	end = start + geotab.ctab[sc].c; /* and count to the solid indices buffer */
+	while (start < end) {
+	      solid = geotab.sb[start]; /* lookup solid indices buffer and retrieve solid index */
 	      if (solid_contains_particle(solid, &p[j])) {
 	          found_solid = true;
 		  break;
 	      }
+	      ++start;
 	}
 }
 
