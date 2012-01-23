@@ -289,7 +289,7 @@ actual geometry table when done.
 bool fill_geotab_subcuboids_table(GeometryTable *g)
 {
     Area t, r; /* memory area for paged solid indices buffer, and a temporary pointer */
-    uint32_t m = 32; /* maximum number of items per page */
+    uint32_t m = 256; /* maximum number of items per page */
     uint32_t c = 0; /* number of items in current page */
     uint32_t *sb; /* current solid indices buffer page */
     uint32_t i, j;
