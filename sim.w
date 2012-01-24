@@ -235,6 +235,7 @@ uint32_t simulate_particle(Particle *p, uint32_t j, Particle *s, uint32_t k)
 	      }
 	      ++start;
 	}
+	info("\t\tFound solid: %d\n", solid);
 }
 
 @ @<Find the material properties of the containing solid@>=
@@ -494,7 +495,7 @@ int simulate_batch(Batch *b)
 	uint32_t i = 0, j, k;
 	info("Simulating batch %d with %d particles\n", current_batch, b->np);
 	while(i < b->nb) {
-	    info("\tSimulating block with %d particles... ", b->b[i].np);
+	    info("\tSimulating block %d with %d particles\n", i, b->b[i].np);
 	    j = 0;
 	    k = 0;
 	    while(j < b->b[i].np) {
@@ -507,8 +508,8 @@ int simulate_batch(Batch *b)
 	    }
 	    b->b[i].ns = k;
 	    b->b[i].np = 0;
+	    info("\tBlock %d simulated\n", i);
 	    ++i;
-	    info("[ done ]\n");
 	}
 	info("Batch %d simulated\n\n", current_batch++);
 	return 0;
