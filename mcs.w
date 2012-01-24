@@ -113,6 +113,7 @@ August 2011, uses data structures and algorithms that are designed
 for multithreaded parallelisation on multicore GPUs and CPUs.
 
 @i types.w
+@i error.w
 @i common.w
 @i csg.w
 @i world.w

@@ -6,6 +6,12 @@ handling and reporting errors.
 There are three message categories, which are printed using the
 following macros: |fatal|, |warn|, and |info|.
 
-@d fatal(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
-@d warn(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
-@d info(X) fprintf(stderr, "%s[%5d] %s\n", __FILE__, __LINE__, X);
+@d fatal(...) fprintf(stderr, __VA_ARGS__)
+@d warn(...) if (verbose) {
+     fprintf(stderr, __VA_ARGS__ );
+}
+@d info(...)  if (verbose) {
+     fprintf(stderr, __VA_ARGS__ );
+}
+@<Global variables@>=
+bool verbose = false; /* verbose output */
