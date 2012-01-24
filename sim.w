@@ -245,6 +245,12 @@ uint32_t simulate_particle(Particle *p, uint32_t j, Particle *s, uint32_t k)
 
 
 @*1 Batch simulation.
+All of the particle simulations are run in batches of particle
+blocks. The following global variables are used to maintain the
+current batch and block information.
+
+@<Global variables@>=
+uint16_t current_batch = 0; /* current batch */
 
 @ Function |generate_primaries()| fills up the particles repository
 with primary partices generated using a particle gun. It returns zero
@@ -295,6 +301,7 @@ int generate_primaries()
 	}
     }
     heap_is_full:
+    info("\tGenerated %d primary particles\n", n);
     return n;
 }
 
@@ -356,7 +363,8 @@ devices to be quite simple and compact.
 @d MAX_BLOCKS_BATCH 4 /* must depend on available compute blocks */
 @<Type definitions@>=
 typedef struct sim_batch_struct {
-	uint16_t n; /* number of blocks with particles in them */
+	uint16_t nb; /* number of blocks with particles in them */
+	uint32_t np; /* number of particles in all of the blocks */
 	Block b[MAX_BLOCKS_BATCH]; /* array of blocks */
 } Batch;
 
@@ -386,12 +394,13 @@ int create_batch(Batch *b)
 	uint32_t n; /* number of particles in batch */
 	uint32_t i, j; /* current block, and current slot within block */
 	i = j = 0; /* start at first slot of first block */
-	b->n = n = 0; /* reset block and particle count */
+	b->nb = b->np = 0; /* reset block and particle count */
+	info("Creating simulation batch %d\n", current_batch);
 	if (get_particle(&p)) {
 	    b->b[i].subcuboid = p.subcuboid; /* subcuboid index for the block */
 	    b->b[i].p[j++] = p; /* add particle to block */
-	    b->n++; /* increment number of active blocks */
-	    ++n;
+	    ++b->nb; /* increment number of active blocks */
+	    ++b->np; /* increment number of particles in batch */
 	    while (get_particle(&p)) {
 	        if (b->b[i].subcuboid != p.subcuboid ||
 		    MAX_PRIMARIES_BLOCK == j) { /* change block */
@@ -402,17 +411,17 @@ int create_batch(Batch *b)
 		        goto batch_is_full;
 		    }
 		    b->b[i].subcuboid = p.subcuboid; /* subcuboid index for the new block */
-                    b->n++; /* increment number of active blocks */
+                    ++b->nb; /* increment number of active blocks */
 		    j = 0; /* first slot of new block */
 	        }
 	        b->b[i].p[j++] = p; /* add particle to block */
-		++n;
+		++b->np; /* increment number of particles in batch */
 	    }
     	    b->b[i].np = j; /* finalise current block */
 	    b->b[i].ns = 0;
     	}
 batch_is_full:
-	return n;
+	return b->np;
 }
 
 @ Function |update_repository(b)| updates the max-heap, following a
@@ -425,7 +434,7 @@ int update_repository(Batch *b)
 {
     uint16_t i, j;
     Particle p;
-    for (i = 0; i < b->n; ++i) {
+    for (i = 0; i < b->nb; ++i) {
 	@<Move unprocessed primary particles to repository@>;
 	@<Process particles in the secondary particles array after a batch simulation@>;
     }
@@ -483,7 +492,9 @@ p.id = 0; /* get a new identifier from particle repository */
 int simulate_batch(Batch *b)
 {
 	uint32_t i = 0, j, k;
-	while(i < b->n) {
+	info("Simulating batch %d with %d particles\n", current_batch, b->np);
+	while(i < b->nb) {
+	    info("\tSimulating block with %d particles... ", b->b[i].np);
 	    j = 0;
 	    k = 0;
 	    while(j < b->b[i].np) {
@@ -497,7 +508,9 @@ int simulate_batch(Batch *b)
 	    b->b[i].ns = k;
 	    b->b[i].np = 0;
 	    ++i;
+	    info("[ done ]\n");
 	}
+	info("Batch %d simulated\n\n", current_batch++);
 	return 0;
 }
 
@@ -510,15 +523,18 @@ int run_simulation()
 {
 	int i = 0;
 	Batch b;
+	info("Running simulations now...\n");
+	current_batch = 0;
 	while ((i = create_batch(&b))) {
 	    if (i < 0) goto handle_error;
 	    if (simulate_batch(&b)) goto handle_error;
 	    else if (update_repository(&b)) goto handle_error;
 	}
+	info("Completed simulating %d batches without errors\n\n", current_batch);
 	return 0; /* simulation done */
 
 handle_error:
-	fprintf(stderr, "Error\n");
+	info("Completed simulating %d batches with errors!\n\n", current_batch);
 	return 1;
 }
 
@@ -526,6 +542,14 @@ handle_error:
 {
 	Event *e, *ee;
 	Vertex *v, *vv;
+
+	verbose = true;
+
+	/* initialise the geometry table */
+        if (false == read_geometry("test/test_gpu_table.data")) exit(1);
+	print_geom_statistics(stdout);
+	create_geotab(&geotab);
+	print_geotab(stdout, &geotab);
 
 	/* first event */
 	ee = create_event();
@@ -552,18 +576,7 @@ handle_error:
 	e->next = ee;
 	ee = e;
 
-	e = ee;
-	while (e) {
-	    v = e->v;
-	    while (v) {
-	        fprintf(stderr, "%u %u\n", e->id, v->np);
-	        v = v->next;
-	    }
-	    e = e->next;
-	}
 	gpfile = stdout;
-	BoundingBox bb = {{100.0, 100.0, 1000.0, 1.0},{0.0, 0.0, 0.0, 1.0}};
-	build_subcuboid_trees(&bb, 4, 4, 4);
 	heap_init(&particles);
 	ge = ee;
 	if (ge) {
