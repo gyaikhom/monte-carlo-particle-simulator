@@ -2354,13 +2354,13 @@ of {\sl An Integrated Introduction to Computer Graphics and Geometric
 Modelling} by Ronald Goldman [CRC Press (2009)]. The function
 |solid_contains_vector(root, v)| returns |true| if the vector |v| is
 inside the solid defined by the CSG tree rooted at |root|; otherwise,
-|false| is returned.
+|false| is returned. This function assumes that vector |v| is a
+homogeneous vector.
 
 @<Global functions@>=
 Containment solid_contains_vector(CSG_Node *root, Vector v)
 {
 	if (NULL == root || NULL == v) return INVALID;
-	vector_homogenise(v);
 	return recursively_test_containment(root, v);
 }
 
