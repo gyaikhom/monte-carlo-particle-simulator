@@ -97,18 +97,20 @@ undergoing a {\sl depth-first tree traversal}@^depth-first traversal@>.
 @* History.
 The {\sl Monte Carlo Simulator} project began in June 2011, when
 Dr.~Gagarine Yaikhom was a WIMCS Research Fellow under Prof.~David
-W. Walker at Cardiff University. The initial aim of the project was to
-port the Geant4 system to run on CUDA GPUs. However, after studying
-the Geant4 code-base, we concluded that it will be prohibitive to port
-the entire Geant4 system given the short duration of the funding (8
-months, from June 2011 until January 2012) and that only Dr.~Yaikhom
-will be carrying out the design and implementation. We, therefore,
-decided to use the Geant4 system only as a guideline system
-architecture, and to reimplement the performance-intensive concepts
-and their dependencies for a simplified simulator. This
-implementation, which began on 5 August 2011, uses data structures
-and algorithms that are more appropriate for eventual multithreaded
-parallelisation on GPUs.
+W. Walker at Cardiff University. This project was conceived as a study
+on the parallelisation of Monte Carlo particle simulations that would
+find eventual use in radiotherapy treatment planning. The initial aim
+of the project was to port the Geant4 system to run on Nvidia Tesla
+GPUs. However, after studying the Geant4 code-base, by the end of July
+2011 it became clear that it will be prohibitive to port the entire
+Geant4 system given the short duration of the funding left (6 months,
+from August 2011 until January 2012) and that only Dr.~Yaikhom will be
+carrying out the design and implementation. We therefore decided to
+use the Geant4 system only as a guideline system architecture, and to
+reimplement the performance-intensive concepts and their dependencies
+for a simplified simulator. This implementation, which began on 5
+August 2011, uses data structures and algorithms that are designed
+for multithreaded parallelisation on multicore GPUs and CPUs.
 
 @i types.w
 @i common.w
