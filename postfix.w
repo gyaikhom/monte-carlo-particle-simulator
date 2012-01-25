@@ -87,11 +87,8 @@ postfix representation for the boolean expression $((A \cap D) - B)
 @<Evaluate the boolean postfix expression using the stack@>=
 while (start < end) {
       item = geotab.pb[start]; /* lookup current item */
-      if (BOOLEAN_DIFFERENCE < item) {
-        @<Push to stack the boolean containment of $v$ inside primitive@>;
-      } else {
-	@<Evaluate boolean operator and push result into stack@>;
-      }
+      if (BOOLEAN_DIFFERENCE < item) @<Push to stack the boolean containment of $v$ inside primitive@>;
+      else @<Evaluate boolean operator and push result into stack@>;
       ++start;
 }
 
@@ -102,14 +99,17 @@ the vector |v| is inside the primitive |p|. The returned value is then
 pushed to the stack, to be retrieved later as an operand to a subsequent
 boolean operator.
 @<Push to stack the boolean containment of $v$ inside primitive@>=
+{
 bool t = is_inside_primitive(v, &geotab.p[item].p);
 if (!boolean_stack_push(&stack, t)) goto stack_full;
+}
 
 @ The first stack pop gives the right operand |r|, and the second
 gives the left operand |l|. Since, boolean difference is
 noncommutative, we must preserve the order during its evaluation.
 
 @<Evaluate boolean operator and push result into stack@>=
+{
 bool l, r; /* left and right operands */
 if (!boolean_stack_pop(&stack, &r)) goto stack_empty;
 if (!boolean_stack_pop(&stack, &l)) goto stack_empty;
@@ -119,6 +119,7 @@ case BOOLEAN_INTERSECTION:@+ if (!boolean_stack_push(&stack, l && r)) goto stack
 case BOOLEAN_UNION:@+ if (!boolean_stack_push(&stack, l || r)) goto stack_full;@+ break;
 default:
 	fprintf(stderr, "Invalid value '%d' in expression\n", item);@+ return false;
+}
 }
 
 @ A CSG boolean expression is valid if the stack is empty after the
