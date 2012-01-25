@@ -149,35 +149,12 @@ uint32_t ic; /* row index within subcuboids table */
 uint32_t ipb; /* index within postfix expression buffer */
 uint32_t isb; /* index within solid indics buffer */
 
-@ Function |fill_geotab_csg_table(g,n)| fill in the CSG tree
-information for a solid with CSG root |s| inside the geometry table
-|g|. It uses recursive post-order tree traversal.
-
-@<Global functions@>=
-void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
-    if (NULL == g || NULL == n) return;
-    if (is_primitive(n)) {
-        matrix_copy(g->p[g->ip].a, n->affine);
-	matrix_copy(g->p[g->ip].i, n->inverse);
-	g->p[g->ip].p = *(n->leaf.p);
-	g->pb[(g->ipb)++] = (g->ip)++;
-        return;
-    }
-    fill_geotab_csg_table(g, n->internal.left);
-    fill_geotab_csg_table(g, n->internal.right);
-    switch(BIT_MASK_NODE & n->op) {
-    case UNION: g->pb[g->ipb++] = BOOLEAN_UNION;@+ break;
-    case INTERSECTION: g->pb[g->ipb++] = BOOLEAN_INTERSECTION;@+ break;
-    case DIFFERENCE: g->pb[g->ipb++] = BOOLEAN_DIFFERENCE;@+ break;
-    default: ;
-    }
-}
-
-@ Function |create_geotab(g)| generates a compact data structure |g|,
+@ Function |create_geotab(g)| generates a data structure |g|,
 which consists of all the geometry tables.
 
 @<Global functions@>=
 bool fill_geotab_subcuboids_table(GeometryTable *g); /* forward declaration */
+void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n);
 void create_geotab(GeometryTable *g)
 {
     uint32_t i;
@@ -362,6 +339,30 @@ while (*t) {
     free((*t)->first);
     *t = *r;
     i -= m;
+}
+
+@ Function |fill_geotab_csg_table(g,n)| fill in the CSG tree
+information for a solid with CSG root |s| inside the geometry table
+|g|. It uses recursive post-order tree traversal.
+
+@<Global functions@>=
+void fill_geotab_csg_table(GeometryTable *g, CSG_Node *n) {
+    if (NULL == g || NULL == n) return;
+    if (is_primitive(n)) {
+        matrix_copy(g->p[g->ip].a, n->affine);
+	matrix_copy(g->p[g->ip].i, n->inverse);
+	g->p[g->ip].p = *(n->leaf.p);
+	g->pb[(g->ipb)++] = (g->ip)++;
+        return;
+    }
+    fill_geotab_csg_table(g, n->internal.left);
+    fill_geotab_csg_table(g, n->internal.right);
+    switch(BIT_MASK_NODE & n->op) {
+    case UNION: g->pb[g->ipb++] = BOOLEAN_UNION;@+ break;
+    case INTERSECTION: g->pb[g->ipb++] = BOOLEAN_INTERSECTION;@+ break;
+    case DIFFERENCE: g->pb[g->ipb++] = BOOLEAN_DIFFERENCE;@+ break;
+    default: ;
+    }
 }
 
 @ @<Global functions@>=
