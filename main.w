@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 
 @ @<Clean up the system@>=
 mem_free(mem_phase_one);
-cuda_mem_free(mem_gpu); /* call before freeing |mem_phase_two| */
+/* cuda_mem_free(mem_gpu); call before freeing |mem_phase_two| */
 mem_free(mem_phase_two);
 
 @ @<Include system libraries@>=
@@ -36,7 +36,9 @@ mem_free(mem_phase_two);
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "cuda_runtime_api.h"
+
+/* #include "cuda_runtime_api.h" not now */
+
 
 @ @<Global variables@>=
 Vector positive_xaxis_unit_vector = { 1.0, 0.0, 0.0, 1.0 };

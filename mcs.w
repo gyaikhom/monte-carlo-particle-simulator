@@ -120,7 +120,7 @@ for multithreaded parallelisation on multicore GPUs and CPUs.
 @i table.w
 @i bstack.w
 @i postfix.w
-@i cuda.w
+@q @i cuda.w @>
 @i heap.w
 @i sim.w
 @i main.w
