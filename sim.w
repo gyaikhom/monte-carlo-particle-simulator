@@ -392,7 +392,6 @@ particles that belong in the same subcuboid.
 int create_batch(Batch *b)
 {
 	Particle p; /* particle retrieved from heap */
-	uint32_t n; /* number of particles in batch */
 	uint32_t i, j; /* current block, and current slot within block */
 	i = j = 0; /* start at first slot of first block */
 	b->nb = b->np = 0; /* reset block and particle count */
