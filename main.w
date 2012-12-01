@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 
 @ @<Clean up the system@>=
 mem_free(mem_phase_one);
-/* cuda_mem_free(mem_gpu); call before freeing |mem_phase_two| */
+cuda_mem_free(mem_gpu); /* call before freeing |mem_phase_two| */
 mem_free(mem_phase_two);
 
 @ @<Include system libraries@>=
@@ -37,7 +37,7 @@ mem_free(mem_phase_two);
 #include <stdlib.h>
 #include <string.h>
 
-/* #include "cuda_runtime_api.h" not now */
+#include "cuda_runtime_api.h"
 
 
 @ @<Global variables@>=

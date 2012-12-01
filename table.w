@@ -10,7 +10,7 @@ prohibitive. For instance, GPU memory management relies on the host
 application; hence, it is complicated to manage data structures that
 uses pointers.
 
-\.{MCS} maintains all of the simplified data structures as tables
+\texttt{MCS} maintains all of the simplified data structures as tables
 indside a container of tables, known as |geotab|. This is used as a
 temporary container during the translation and simplification
 process. Once it is ready, the compact form is transferred to a stage
@@ -191,7 +191,7 @@ g->pb = mem_typed_alloc(g->npb, int32_t, mem_phase_two);
 g->s = mem_typed_alloc(g->ns, struct solids_table_item, mem_phase_two);
 
 @ After processing the geometry specification from the user supplied
-input file, \.{MCS} stores all of the solids as a forst of CSG trees,
+input file, \texttt{MCS} stores all of the solids as a forst of CSG trees,
 irrespective of the enclosing subcuboids. Hence, we can immediately
 fill in this information into the respective tables and buffers for
 each of the solids.

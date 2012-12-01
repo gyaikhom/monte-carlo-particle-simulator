@@ -4,26 +4,25 @@
 handling and reporting errors. There are three message categories,
 which are printed using the following macros:
 
-{\narrower\narrower
-\item{$\bullet$} We use the |fatal| macro to advise the user of irrecoverable
+\begin{itemize}
+\item We use the |fatal| macro to advise the user of irrecoverable
 errors. They are usally commnicated before the application is about to
 exit due to the errors. Fatal messages must provide enough information
 to help the user diagnose the issues that caused the exit. Messages
 communicated with the |fatal| macro should never is suppressed, even
 when |verbose == true|.
 
-\item{$\bullet$} We use the |warn| macro to advise the user of non-fatal
+\item We use the |warn| macro to advise the user of non-fatal
 recoverable issues, such as wrong input data. They are usually
 communicated without exiting the application. Messages communicated
 with the |warn| macro are suppressed when |verbose == false|.
 
-\item{$\bullet$} We use the |info| macro to advise the user on the general state
+\item We use the |info| macro to advise the user on the general state
 of the application, for instance, the current stage in the
 processing. They are usually communicated without exiting the
 application. Messages communicated with the |info| macro are
 suppressed when |verbose == false|.
-
-}
+\end{itemize}
 
 NOTE:
 Some of the messaging facilities are defined as {\sl variadic macros},

@@ -15,11 +15,11 @@ particles, etc.
 
 @*1 Particle.
 A {\sl particle}@^particle@> is the lowest-level data structure that
-\.{MCS} manipulates. This data structure represents a fundamental
+\texttt{MCS} manipulates. This data structure represents a fundamental
 particle in physics, which interacts with the materials in the
 world.
 
-In \.{MCS}, all of the primary particles to be simulated are generated
+In \texttt{MCS}, all of the primary particles to be simulated are generated
 by the particle gun. The origin of these particles are specified by the
 vertex used by the particle gun. A particle gun can generate particles
 from various vertices.

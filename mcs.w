@@ -1,10 +1,26 @@
-\input miniltx 
-\input epsfig.sty 
-\resetatcatcode
+\documentclass[baseclass=report,11pt]{cweb}
+\usepackage[letterpaper,twoside,includehead,includefoot,top=2cm,bottom=3cm,inner=1cm,outer=5cm,bindingoffset=2cm]{geometry}
+\usepackage{epsfig}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\renewcommand{\sectionmark}[1]{\markright{\thesection\ #1}}
+\fancyhead[LE,RO]{\thepage}
+\fancyhead[LO]{\scshape \rightmark}
+\fancyhead[RE]{\scshape FlockMC: Monte Carlo Particle Simulator}
+\fancyfoot{}
+\usepackage[Sonny]{fncychap}
 
 \def\hash{\char35}
+\def\CEE{C}
 
-@* Introduction. The {\sl Monte Carlo Simulator}, \.{MCS} in short, is
+\begin{document}
+\title{FlockMC: Monte Carlo Particle Simulator}
+\author{Gagarine Yaikhom}
+\maketitle
+\tableofcontents
+
+
+@* Introduction. The {\sl Monte Carlo Simulator}, \texttt{MCS} in short, is
 a simulation package for high-energy physics. It uses Monte Carlo
 techniques for the randomised simulation of particle interactions. The
 system borrows concepts defined in the Geant4 system; however, they
@@ -12,7 +28,7 @@ have been reimplemented in ISO C99 using new data structures and
 algorithms with the aim that the system will be ported eventually to
 GPGPUs.
 
-The \.{MCS} system is in effect an event processor. The user specifies
+The \texttt{MCS} system is in effect an event processor. The user specifies
 the number of events they wish to simulate, and provides the system
 with the necessary details to process each of the events. These
 details include procedures and data for generating the particles for
@@ -27,7 +43,7 @@ the properties of the materials the components are made of. In this
 document, these input data will be referred to {\sl simulation
 parameters}@^simulation parameters@>.
 
-Once the \.{MCS} system is supplied with a valid set of simulation
+Once the \texttt{MCS} system is supplied with a valid set of simulation
 parameters, it processes the geometries and creates a data structure
 that allows efficient location of an interaction point. This is an
 important step because, to process a large number of interactions
@@ -55,7 +71,7 @@ Once a particle has been generated, it travels through the materials
 until it either comes to a stop, or exits the closed three-dimensional
 world. Throughout this journey, the {\sl trajectory}@^trajectory@> of
 the particle changes depending on its interaction with the
-materials. Hence, the \.{MCS} system uses a {\sl tracker}@^tracker@>
+materials. Hence, the \texttt{MCS} system uses a {\sl tracker}@^tracker@>
 to track each of the particles throughout its journey.
 A snapshot of the particle in its trajectory is referred to as a
 {\sl track}@^track@>, and is processed independently of any previous
@@ -120,10 +136,12 @@ for multithreaded parallelisation on multicore GPUs and CPUs.
 @i table.w
 @i bstack.w
 @i postfix.w
-@q @i cuda.w @>
+@i cuda.w
 @i heap.w
 @i sim.w
 @i main.w
 
 @**Index.
 
+@
+\end{document}

@@ -7,7 +7,7 @@ mcs.c: ${SOURCES}
 	ctangle mcs.w
 
 mcs.pdf: mcs.tex
-	pdftex mcs.tex
+	pdflatex mcs.tex
 
 mcs.tex: ${SOURCES}
 	cweave mcs.w
