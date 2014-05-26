@@ -19,8 +19,9 @@ requires a [C compiler](http://gcc.gnu.org/) for compilation.
 
 ### Compilation of source
 
-Please note that `cuda.w` requires Nvidia CUDA SDK for
-compilation.
+Please note that `cuda.w` requires
+[Nvidia CUDA SDK](http://www.nvidia.co.uk/object/cuda_home_new.html)
+for compilation.
 
 Here are the steps for compilation:
 
