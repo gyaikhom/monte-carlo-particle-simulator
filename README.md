@@ -60,8 +60,10 @@ To generate the source code documentation, do the following:
 ## History
 
 The _Monte Carlo Simulator_ project began in June 2011, when I was
-a WIMCS Research Fellow under Prof.~David W. Walker at Cardiff
-University. This project was conceived as a study on the
+a [WIMCS](http://www.wimcs.ac.uk/) Research Fellow under
+[Prof. David W. Walker](http://users.cs.cf.ac.uk/David.W.Walker/) at
+[Cardiff University](http://www.cardiff.ac.uk/).
+This project was conceived as a study on the
 parallelisation of Monte Carlo particle simulations that would find
 eventual use in radiotherapy treatment planning. The initial aim of
 the project was to port the Geant4 system to run on Nvidia Tesla
