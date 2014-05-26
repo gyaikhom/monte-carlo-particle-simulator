@@ -26,19 +26,19 @@ Here are the steps for compilation:
 
 1. Run `ctangle` to generate `mcs.c`.
 
-    $ make mcs.c
+     $ make mcs.c
 
 2. Create build directory, and copy source code.
 
-    $ mkdir build
-    $ cp mcs.c build/
+     $ mkdir build
+     $ cp mcs.c build/
 
 3. Generate Cmake files, build application and test
 
-    $ cd build
-    $ cmake -G "Unix Makefiles" ..
-    $ make
-    $ ./mcs
+     $ cd build
+     $ cmake -G "Unix Makefiles" ..
+     $ make
+     $ ./mcs
 
 
 ### Generate documentation
@@ -47,13 +47,13 @@ To generate the source code documentation, do the following:
 
 1. Generate the figures using [Metapost](http://ctan.org/pkg/metapost)
 
-    $ cd figures
-    $ ./genfigs.sh
+     $ cd figures
+     $ ./genfigs.sh
 
 
 2. Generate the documentation
 
-    $ make mcs.pdf
+     $ make mcs.pdf
 
 
 ## History
