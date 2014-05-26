@@ -161,5 +161,3 @@ interactions, and the leaves represent interactions which resulted in
 the particle to either stop, or exit the closed three-dimensional
 world, then the tracker is simply undergoing a _depth-first tree
 traversal_.
-
-
