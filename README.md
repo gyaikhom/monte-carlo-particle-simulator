@@ -3,10 +3,10 @@
 The _Monte Carlo Simulator_, `MCS` in short, is a simulation package
 for high-energy physics. It uses Monte Carlo techniques for the
 randomised simulation of particle interactions. The system borrows
-concepts defined in the Geant4 system; however, they have been
-reimplemented in ISO C99 using new data structures and algorithms with
-the aim that the system will be ported eventually to multi-core CPUs
-and GPGPUs.
+concepts defined in the [Geant4](http://geant4.cern.ch/) system;
+however, they have been reimplemented in ISO C99 using new data
+structures and algorithms with the aim that the system will be ported
+eventually to multi-core CPUs and GPGPUs.
 
 _The project is currently on hold. See history for details._
 
