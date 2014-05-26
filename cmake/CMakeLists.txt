@@ -6,7 +6,10 @@ SET(SOURCE_FILES
     mcs.c
 )
 MESSAGE( "SOURCE_FILES = " ${SOURCE_FILES} )
-#SET(CUDA_SDK_ROOT_DIR /home/scmgy2/work/sdks/cuda)
+
+# Set CUDA SDK path
+#SET(CUDA_SDK_ROOT_DIR /home/user/sdks/cuda)
+
 INCLUDE(FindCUDA)
 include_directories(${CUDA_TOOLKIT_INCLUDE})
 CUDA_ADD_EXECUTABLE(mcs ${SOURCE_FILES})
