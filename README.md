@@ -11,6 +11,75 @@ and GPGPUs.
 _The project is currently on hold. See history for details._
 
 
+## Compilation
+
+`MCS` is written in
+[CWEB](http://www-cs-faculty.stanford.edu/~uno/cweb.html), and
+requires a [C compiler](http://gcc.gnu.org/) for compilation.
+
+### Compilation of source
+
+Please note that `cuda.w` requires Nvidia CUDA SDK for
+compilation.
+
+Here are the steps for compilation:
+
+1. Run `ctangle` to generate `mcs.c`.
+
+    $ make mcs.c
+
+2. Create build directory, and copy source code.
+
+    $ mkdir build
+    $ cp mcs.c build/
+
+3. Generate Cmake files, build application and test
+
+    $ cd build
+    $ cmake -G "Unix Makefiles" ..
+    $ make
+    $ ./mcs
+
+
+### Generate documentation
+
+To generate the source code documentation, do the following:
+
+1. Generate the figures using [Metapost](http://ctan.org/pkg/metapost)
+
+    $ cd figures
+    $ ./genfigs.sh
+
+
+2. Generate the documentation
+
+    $ make mcs.pdf
+
+
+## History
+
+The _Monte Carlo Simulator_ project began in June 2011, when I was
+a WIMCS Research Fellow under Prof.~David W. Walker at Cardiff
+University. This project was conceived as a study on the
+parallelisation of Monte Carlo particle simulations that would find
+eventual use in radiotherapy treatment planning. The initial aim of
+the project was to port the Geant4 system to run on Nvidia Tesla
+GPUs. However, after studying the Geant4 code-base, by the end of July
+2011 it became clear that it will be prohibitive to port the entire
+Geant4 system given the short duration of the funding left (6 months,
+from August 2011 until January 2012) and that only I would be
+carrying out the design and implementation. We therefore decided to
+use the Geant4 system only as a guideline system architecture, and to
+reimplement the performance-intensive concepts and their dependencies
+for a simplified simulator. This implementation, which began on 5
+August 2011, uses data structures and algorithms that are designed
+for multithreaded parallelisation on multicore GPUs and CPUs.
+
+After my funding expired, I had to stop working on this
+project. However, I hope that I will be able to work on this project 
+again at some point in the future.
+
+
 ## Introduction
 
 The `MCS` system is in effect an event processor. The user specifies
@@ -90,27 +159,4 @@ the particle to either stop, or exit the closed three-dimensional
 world, then the tracker is simply undergoing a _depth-first tree
 traversal_.
 
-
-## History
-
-The _Monte Carlo Simulator_ project began in June 2011, when I was
-a WIMCS Research Fellow under Prof.~David W. Walker at Cardiff
-University. This project was conceived as a study on the
-parallelisation of Monte Carlo particle simulations that would find
-eventual use in radiotherapy treatment planning. The initial aim of
-the project was to port the Geant4 system to run on Nvidia Tesla
-GPUs. However, after studying the Geant4 code-base, by the end of July
-2011 it became clear that it will be prohibitive to port the entire
-Geant4 system given the short duration of the funding left (6 months,
-from August 2011 until January 2012) and that only I would be
-carrying out the design and implementation. We therefore decided to
-use the Geant4 system only as a guideline system architecture, and to
-reimplement the performance-intensive concepts and their dependencies
-for a simplified simulator. This implementation, which began on 5
-August 2011, uses data structures and algorithms that are designed
-for multithreaded parallelisation on multicore GPUs and CPUs.
-
-After my funding expired, I had to stop working on this
-project. However, I hope that I will be able to work on this project
-again at some point in the future.
 
