@@ -13,5 +13,5 @@ mcs.tex: ${SOURCES}
 	cweave mcs.w
 
 clean:
-	rm -f *~ mcs.tex *.ps *.dvi *.pdf *.scn *.log *.toc *.idx *.c mcs
+	rm -f *~ mcs.tex *.aux *.out *.ps *.dvi *.pdf *.scn *.log *.toc *.idx *.c mcs
 
